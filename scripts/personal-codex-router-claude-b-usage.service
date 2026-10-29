@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch Claude B subscription usage with its setup-token
+
+[Service]
+Type=oneshot
+Environment=CLAUDE_B_EMAIL=account-b@example.com
+Environment="CLAUDE_B_PLAN=Max (5x)"
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/collect-claude-usage.py --account b
+UMask=0027
+TimeoutStartSec=120
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+LockPersonality=true

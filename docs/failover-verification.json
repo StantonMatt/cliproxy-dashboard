@@ -1,0 +1,39 @@
+{
+  "tested_at": "2026-09-22T20:44:19.774664+00:00",
+  "binary": "/opt/cliproxyapi/7.3.11/cli-proxy-api",
+  "scope": "isolated loopback instance using copied OAuth access credentials",
+  "fault": "deliberately invalid copied access token causing an authentication failure",
+  "production_policy_used": {
+    "request-retry": 0,
+    "max-retry-credentials": 2,
+    "max-retry-interval": 0,
+    "routing": "round-robin",
+    "session-affinity": true,
+    "session-affinity-ttl": "1h",
+    "session-affinity-subagents": true
+  },
+  "tests": [
+    {
+      "from": "account-a@example.com",
+      "to": "account-b@example.com",
+      "baseline_stream": true,
+      "failed_attempt_observed": true,
+      "same_request_stream_recovered": true,
+      "followup_stayed_on_alternate": true,
+      "model": "gpt-6-astra"
+    },
+    {
+      "from": "account-b@example.com",
+      "to": "account-a@example.com",
+      "baseline_stream": true,
+      "failed_attempt_observed": true,
+      "same_request_stream_recovered": true,
+      "followup_stayed_on_alternate": true,
+      "model": "gpt-6-astra"
+    }
+  ],
+  "production_files_unchanged": true,
+  "temporary_instances_stopped_and_credentials_removed": true,
+  "quota_exhaustion_429_tested": false,
+  "mid_stream_failure_tested": false
+}

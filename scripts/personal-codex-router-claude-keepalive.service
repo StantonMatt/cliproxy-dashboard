@@ -1,0 +1,11 @@
+[Unit]
+Description=Let Claude Code renew its expiring OAuth token
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/claude-token-keepalive.py
+UMask=0077
+TimeoutStartSec=110
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+LockPersonality=true

@@ -1,0 +1,15 @@
+[Unit]
+Description=Personal Router localhost address proxy
+Requires=personal-codex-router-dashboard.service
+After=personal-codex-router-dashboard.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:8320
+DynamicUser=yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost

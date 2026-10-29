@@ -1,0 +1,102 @@
+{
+  "upstream_revision": "5be2cdab0869cbaa3d401891f740aebf7e15aa99",
+  "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+  "stage": {
+    "live_config_sha256": "f4659fc43eeaba1385bbc6f1022db45a5fdc4cca06163366d986fb7fe7e30852",
+    "candidate_sha256": "62ff7346440e98f12db2dcef414eae5a89534485a28451629b33584e4518c996",
+    "key_name_diff": {
+      "added": [
+        "upstream.claude.disable-claude-cloak-mode",
+        "upstream.claude.disable-cloaking-model-list",
+        "upstream.claude.header-defaults.anthropic-beta-append",
+        "upstream.claude.header-defaults.anthropic-beta-strip",
+        "upstream.claude.header-defaults.client-request-id",
+        "upstream.claude.header-defaults.inject-diagnostics",
+        "upstream.claude.header-defaults.stabilize-device-profile",
+        "upstream.claude.model-level-cooling"
+      ],
+      "changed": [
+        "access.api-keys"
+      ],
+      "removed": []
+    },
+    "routing_unchanged": true,
+    "owner_mode_match": true
+  },
+  "isolated": {
+    "baseline": {
+      "routing": {
+        "cooldown": {
+          "disable-cooling": false,
+          "save-cooldown-status": true
+        },
+        "force-model-prefix": false,
+        "retry": {
+          "max-retry-credentials": 2,
+          "max-retry-interval": 0,
+          "request-retry": 0
+        },
+        "session-affinity": true,
+        "session-affinity-subagents": true,
+        "session-affinity-ttl": "1h",
+        "strategy": "round-robin"
+      },
+      "empty_auth_dir": true,
+      "strict_v8_patch_accepted": true,
+      "loopback": true
+    },
+    "candidate": {
+      "routing": {
+        "cooldown": {
+          "disable-cooling": false,
+          "save-cooldown-status": true
+        },
+        "force-model-prefix": false,
+        "retry": {
+          "max-retry-credentials": 2,
+          "max-retry-interval": 0,
+          "request-retry": 0
+        },
+        "session-affinity": true,
+        "session-affinity-subagents": true,
+        "session-affinity-ttl": "1h",
+        "strategy": "round-robin"
+      },
+      "empty_auth_dir": true,
+      "strict_v8_patch_accepted": true,
+      "loopback": true,
+      "claude_settings_consumed": true
+    },
+    "routing_consumed_equal": true,
+    "processes": [
+      {
+        "case": "baseline",
+        "pid": 1115907,
+        "port": 54269,
+        "stopped": true
+      },
+      {
+        "case": "candidate",
+        "pid": 1115929,
+        "port": 57509,
+        "stopped": true
+      }
+    ]
+  },
+  "focused_tests_passed": 247,
+  "live_claude_login_performed": false,
+  "deployed": false,
+  "client_settings_applied": false,
+  "final_checks": {
+    "live_config_unchanged": true,
+    "candidate_unchanged": true,
+    "live_gateway_pid": 1083839,
+    "live_auth_types": [
+      "codex",
+      "codex"
+    ],
+    "python_compilation_passed": true,
+    "documented_python_procedures_parse": true,
+    "git_diff_check_passed": true
+  }
+}

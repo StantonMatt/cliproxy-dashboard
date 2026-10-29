@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch for a request to move gateway conversations
+# No ordering on the dashboard: path units come before paths.target, which the
+# dashboard follows through basic.target, so After= would form a boot cycle.
+
+[Path]
+PathExists=/run/personal-codex-router-move-request/request
+Unit=personal-codex-router-move.service
+
+[Install]
+WantedBy=multi-user.target

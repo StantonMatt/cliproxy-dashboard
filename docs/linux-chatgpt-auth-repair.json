@@ -1,0 +1,70 @@
+{
+  "date": "2026-09-22",
+  "host": "user-desktop",
+  "problem": "Gateway returned 401 Invalid API key after user changed Linux profile from API-key auth to ChatGPT auth",
+  "final_change": "Added X-Api-Key provider header using the existing router key",
+  "requires_openai_auth": true,
+  "personal_auth_file_modified_by_repair": false,
+  "configured_defaults": {
+    "provider": "personal_codex_gateway",
+    "model": "gpt-6-astra",
+    "reasoning": "xhigh",
+    "base_url": "http://127.0.0.1:8317/v1"
+  },
+  "validation": {
+    "executable": "/usr/lib/chatgpt/resources/codex",
+    "version": "0.155.0-alpha.9.2",
+    "fresh_app_server_account_type": "chatgpt",
+    "fresh_app_server_plan": "pro",
+    "fresh_app_server_requires_openai_auth": true,
+    "fresh_exec_shell_command": "uname -s",
+    "fresh_exec_shell_output": "Linux",
+    "fresh_exec_final_marker": "LINUX_ROUTER_CHATGPT_OK",
+    "fresh_exec_exit_code": 0,
+    "fresh_exec_stderr_contains_401": false,
+    "gateway_dashboard_tailscale_active": true
+  },
+  "temporary_flag_test": "requires_openai_auth=false allowed inference but hid the ChatGPT account from account/read; reverted",
+  "existing_task_repair": {
+    "thread_id": "00000000-0000-4000-8000-000000000001",
+    "previous_provider": "openai",
+    "cause": "Historical task used built-in provider and did not inherit custom provider key header",
+    "method": "Supported thread/resume API with modelProvider override after user closed desktop app",
+    "fresh_resume_without_override": true,
+    "verified_stored_provider": "personal_codex_gateway",
+    "verified_runtime_provider": "personal_codex_gateway",
+    "verified_model": "gpt-6-astra",
+    "verified_reasoning": "xhigh",
+    "verified_account_type": "chatgpt",
+    "new_user_turn_submitted": false,
+    "desktop_ui_retry_verified": false
+  },
+  "limits": {
+    "existing_desktop_process_restarted": false,
+    "desktop_ui_retry_verified": false,
+    "phone_pairing_verified": false,
+    "gateway_restarted": false
+  },
+  "private_backup_directory": "/home/user/.codex/gateway-integration/chatgpt-signin-repair-20260922T214113Z",
+  "user_confirmation": {
+    "date": "2026-09-22",
+    "linux_desktop_retry_succeeded": true,
+    "phone_remote_connected_directly_to_linux": true,
+    "source": "User confirmation after reopening Linux desktop app; phone UI not independently inspected"
+  },
+  "live_routing_check": {
+    "checked_at": "2026-09-22T22:16:30Z",
+    "linux_default_provider": "personal_codex_gateway",
+    "repaired_task_provider": "personal_codex_gateway",
+    "both_accounts_active": true,
+    "strategy": "round-robin",
+    "session_affinity": true,
+    "affinity_ttl": "1h",
+    "subagent_affinity": true,
+    "gateway_successes_since_2026_09_22_21_00_utc": {
+      "account-a@example.com": 63,
+      "account-b@example.com": 20
+    },
+    "usage_scope": "Shared gateway, including Mac and Linux clients; not Linux-only counts"
+  }
+}

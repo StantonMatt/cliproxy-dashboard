@@ -1,0 +1,34 @@
+host: 127.0.0.1
+port: 53135
+auth-dir: /tmp/router-config-fixture-_rlndy6t/auth
+api-keys:
+- dummy-fixture-client-key
+proxy-url: http://127.0.0.1:56637
+remote-management:
+  allow-remote: false
+  secret-key: $2b$12$kNSacZKjHH.cMVJ0MyU1OOaLjGeZV3QVS5dTzbYt3OphdZIVGQ7bK
+  disable-control-panel: true
+  disable-auto-update-panel: true
+usage-statistics-enabled: false
+debug: false
+logging-to-file: false
+request-log: false
+discovery:
+  enabled: false
+pprof:
+  enable: false
+request-retry: 0
+max-retry-credentials: 2
+max-retry-interval: 0
+disable-cooling: true
+save-cooldown-status: true
+force-model-prefix: true
+routing:
+  strategy: round-robin
+  session-affinity: true
+  session-affinity-ttl: 1h
+  session-affinity-subagents: true
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: true
+  antigravity-credits: true

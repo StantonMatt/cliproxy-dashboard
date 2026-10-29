@@ -1,0 +1,709 @@
+{
+  "prepared_at": "2026-10-15T18:58:13.439422+00:00",
+  "status": "active since 2026-10-15T19:09:48Z by user decision; dashboard sign-in import incompatibility accepted and unresolved; fast-mode verifier fixed",
+  "production_version": "8.0.30",
+  "target_version": "8.0.30",
+  "release_published_at": "2026-10-15T13:55:09Z",
+  "release_url": "https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.30",
+  "upstream_revision": "5be2cdab0869cbaa3d401891f740aebf7e15aa99",
+  "asset": "CLIProxyAPI_8.0.30_linux_amd64.tar.gz",
+  "archive_sha256": "fd5a4bcb59b1f55b88b48575940fb0e4f920bfd4a9f96a6e9b755fc4c5b6fecc",
+  "checksums_sha256": "79c1c6dd7a1db26d6b35eeee6b18659fcf337649155828bdea99e00139885935",
+  "published_checksum_matches": true,
+  "github_asset_digest_matches": true,
+  "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+  "binary_sha256": "87226b1da29006d96b13eea3da7a7b3b8a8761a7dad52207d3a44e51b32fb663",
+  "staged_dropin": "/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.30.conf.staged",
+  "config_candidate": null,
+  "config_key_diff": {
+    "added": [],
+    "removed": [],
+    "renamed": []
+  },
+  "compatibility": {
+    "isolation": "private network and mount namespaces; real auth masked; live config readonly",
+    "runs": [
+      {
+        "version": "8.0.7",
+        "pid": 1007713,
+        "port": 18347,
+        "checks": 37,
+        "passed": 37,
+        "warnings_count": 4,
+        "unknown_deprecated_warnings": 0,
+        "legacy_config_keys": [
+          "antigravity",
+          "api-keys",
+          "auth-auto-refresh-workers",
+          "claude",
+          "claude-api-key",
+          "claude-code",
+          "claude-header-defaults",
+          "codex",
+          "codex-api-key",
+          "codex-header-defaults",
+          "commercial-mode",
+          "credential-concurrency",
+          "credential-in-flight",
+          "debug",
+          "devin",
+          "disable-claude-cloak-mode",
+          "disable-cooling",
+          "disable-image-generation",
+          "discovery",
+          "error-logs-max-files",
+          "force-model-prefix",
+          "gemini-api-key",
+          "interactions-api-key",
+          "logging-to-file",
+          "logs-max-total-size-mb",
+          "max-retry-credentials",
+          "max-retry-interval",
+          "meta-api-key",
+          "openai-compatibility",
+          "passthrough-headers",
+          "payload",
+          "plugins",
+          "pprof",
+          "proxy-url",
+          "quota-exceeded",
+          "redis-usage-queue-retention-seconds",
+          "request-log",
+          "request-retry",
+          "routing",
+          "save-cooldown-status",
+          "streaming",
+          "tls",
+          "transient-error-cooldown-seconds",
+          "trusted-proxies",
+          "usage-statistics-enabled",
+          "vertex-api-key",
+          "ws-auth",
+          "xai",
+          "xai-api-key"
+        ],
+        "auth_row_keys": [
+          "account",
+          "account_type",
+          "auth_index",
+          "cooldowns",
+          "created_at",
+          "disabled",
+          "email",
+          "failed",
+          "id",
+          "id_token",
+          "label",
+          "modtime",
+          "name",
+          "path",
+          "priority",
+          "provider",
+          "quota",
+          "recent_requests",
+          "runtime_only",
+          "size",
+          "source",
+          "status",
+          "status_message",
+          "success",
+          "type",
+          "unavailable",
+          "updated_at"
+        ],
+        "usage_queue_shape": "list",
+        "process_stopped": true
+      },
+      {
+        "version": "8.0.30",
+        "pid": 1007949,
+        "port": 18347,
+        "checks": 37,
+        "passed": 33,
+        "warnings_count": 5,
+        "unknown_deprecated_warnings": 0,
+        "legacy_config_keys": [
+          "antigravity",
+          "api-keys",
+          "auth-auto-refresh-workers",
+          "claude",
+          "claude-api-key",
+          "claude-code",
+          "claude-header-defaults",
+          "client",
+          "codex",
+          "codex-api-key",
+          "codex-header-defaults",
+          "commercial-mode",
+          "credential-concurrency",
+          "credential-in-flight",
+          "debug",
+          "devin",
+          "disable-claude-cloak-mode",
+          "disable-cooling",
+          "disable-image-generation",
+          "discovery",
+          "error-logs-max-files",
+          "force-model-prefix",
+          "gemini-api-key",
+          "interactions-api-key",
+          "logging-to-file",
+          "logs-max-total-size-mb",
+          "max-request-body-bytes",
+          "max-retry-credentials",
+          "max-retry-interval",
+          "meta-api-key",
+          "models",
+          "openai-compatibility",
+          "passthrough-headers",
+          "payload",
+          "plugins",
+          "pprof",
+          "proxy-url",
+          "quota-exceeded",
+          "redis-usage-queue-retention-seconds",
+          "request-log",
+          "request-retry",
+          "routing",
+          "save-cooldown-status",
+          "streaming",
+          "tls",
+          "tls-handshake-timeout-seconds",
+          "transient-error-cooldown-seconds",
+          "trusted-proxies",
+          "usage-statistics-enabled",
+          "vertex-api-key",
+          "ws-auth",
+          "xai",
+          "xai-api-key"
+        ],
+        "auth_row_keys": [
+          "account",
+          "account_type",
+          "auth_index",
+          "cooldowns",
+          "created_at",
+          "disabled",
+          "email",
+          "failed",
+          "id",
+          "id_token",
+          "label",
+          "modtime",
+          "name",
+          "path",
+          "priority",
+          "provider",
+          "quota",
+          "recent_requests",
+          "runtime_only",
+          "size",
+          "source",
+          "status",
+          "status_message",
+          "success",
+          "type",
+          "unavailable",
+          "updated_at"
+        ],
+        "usage_queue_shape": "list",
+        "process_stopped": true
+      }
+    ],
+    "checks": [
+      {
+        "name": "8.0.7: startup with empty auth",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: no-key denied /v0/management/config",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: no-key denied /v1/models",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: pinned panel served",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: empty auth-files shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: legacy routing consumed fields",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: effective request-retry",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: effective max-retry-credentials",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: effective max-retry-interval",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: effective disable-cooling",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: effective save-cooldown-status",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: legacy quota-exceeded preserved",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: usage enabled",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: native config shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: strict native config validation",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: file-backed Codex list shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: projected plan and account identity",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: no raw tokens in auth list",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: credential download shape (synthetic only)",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: priority PATCH shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: priority readback",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: status PATCH True",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: status readback True",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: status PATCH False",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: status readback False",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: sign-in token fields PATCH",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: sign-in plan and stable identity readback",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: auth-file compatibility and metadata preserved",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: delayed sign-in plan readback",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: delayed token persistence",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: refresh missing-file error contract",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: api-call GET envelope",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: api-call POST envelope",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: usage queue shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: model catalog shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: plugin loaded",
+        "passed": true
+      },
+      {
+        "name": "8.0.7: no unknown or deprecated config warnings",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: startup with empty auth",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: no-key denied /v0/management/config",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: no-key denied /v1/models",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: pinned panel served",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: empty auth-files shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: legacy routing consumed fields",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: effective request-retry",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: effective max-retry-credentials",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: effective max-retry-interval",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: effective disable-cooling",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: effective save-cooldown-status",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: legacy quota-exceeded preserved",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: usage enabled",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: native config shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: strict native config validation",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: file-backed Codex list shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: projected plan and account identity",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: no raw tokens in auth list",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: credential download shape (synthetic only)",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: priority PATCH shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: priority readback",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: status PATCH True",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: status readback True",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: status PATCH False",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: status readback False",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: sign-in token fields PATCH",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: sign-in plan and stable identity readback",
+        "passed": false
+      },
+      {
+        "name": "8.0.30: auth-file compatibility and metadata preserved",
+        "passed": false
+      },
+      {
+        "name": "8.0.30: delayed sign-in plan readback",
+        "passed": false
+      },
+      {
+        "name": "8.0.30: delayed token persistence",
+        "passed": false
+      },
+      {
+        "name": "8.0.30: refresh missing-file error contract",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: api-call GET envelope",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: api-call POST envelope",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: usage queue shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: model catalog shape",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: plugin loaded",
+        "passed": true
+      },
+      {
+        "name": "8.0.30: no unknown or deprecated config warnings",
+        "passed": true
+      }
+    ],
+    "all_passed": false,
+    "all_children_stopped": true,
+    "warning_classifications": [
+      "isolated blocked Antigravity version updater (both versions)",
+      "isolated blocked npm Grok updater (8.0.30)",
+      "intentional no-key 401 requests",
+      "intentional missing-auth refresh 404"
+    ]
+  },
+  "fast_mode": {
+    "unmodified_integration": "passed with repository verifier fix: 53 HTTP cases on each of 8.0.7 and 8.0.30; no log rewriting",
+    "scratch_adaptation": "only normalize those two log source locations for existing verifier; repository unchanged",
+    "adapted_http_cases_passed": 53,
+    "adapted_failover": [
+      {
+        "account": "A",
+        "tier": "<absent>"
+      },
+      {
+        "account": "B",
+        "tier": "priority"
+      }
+    ],
+    "adapted_websocket_warning_count": 1,
+    "adapted_status_restart_current_pid": true,
+    "adapted_cleanup": {
+      "gateway_pid": 1028289,
+      "gateway_exit": 0,
+      "mock_server_stopped": true
+    },
+    "original_cleanup": {
+      "gateway_pid": 1021834,
+      "gateway_exit": 0,
+      "mock_server_stopped": true
+    },
+    "pre_fix_unmodified_integration": "failed: installer pins host.go:381/408; new binary uses host.go:383/410",
+    "verified_runs_after_fix": [
+      {
+        "version": "8.0.7",
+        "http_cases_passed": 53,
+        "hot_registration_and_library_replacement_passed": true,
+        "log_location_adaptation_used": false,
+        "gateway_port": 59523,
+        "mock_port": 36689,
+        "cleanup": {
+          "gateway_pid": 98,
+          "gateway_exit": 0,
+          "mock_server_stopped": true
+        }
+      },
+      {
+        "version": "8.0.30",
+        "http_cases_passed": 53,
+        "hot_registration_and_library_replacement_passed": true,
+        "log_location_adaptation_used": false,
+        "gateway_port": 60903,
+        "mock_port": 39759,
+        "cleanup": {
+          "gateway_pid": 100,
+          "gateway_exit": 0,
+          "mock_server_stopped": true
+        }
+      }
+    ]
+  },
+  "production_dashboard_sources_match_repository": [
+    "dashboard/server.py",
+    "dashboard/routing_policy.py",
+    "dashboard/signin.py"
+  ],
+  "real_oauth_credentials_used_in_tests": false,
+  "live_gateway_model_request_performed": false,
+  "production_services_changed": false,
+  "live_config_changed": false,
+  "active_dropin_changed": false,
+  "routing_changed": false,
+  "private_evidence": "/var/lib/cliproxyapi-upgrade-backups/prepare-8.0.30-20261015",
+  "probe_script_sha256": "d7b672a3b65d3a1593a48c065f07bb226b790b5f8064f0f88910a6dfe4cd08d9",
+  "not_covered": [
+    "production cutover and subsequent startup",
+    "real OAuth validation/refresh/device sign-in",
+    "real upstream quota exhaustion",
+    "browser walkthrough",
+    "full repo/upstream suites",
+    "original v8.0.7 quota-disconnect matrix (h2 unavailable; plugin mock failover passed)"
+  ],
+  "latest_stable_checked_at": "2026-10-15T18:59:34.933113+00:00",
+  "latest_stable_at_final_check": "v8.0.30",
+  "final_production_verification": {
+    "config_unchanged": true,
+    "active_dropin_unchanged": true,
+    "old_binary_unchanged": true,
+    "ancient_binary_unchanged": true,
+    "panel_unchanged": true,
+    "gateway_pid_unchanged": true,
+    "gateway_pid": 6969,
+    "gateway_active": true,
+    "stage_not_active": true,
+    "timers_active": true,
+    "remaining_task_gateway_pids": [],
+    "live_config_metadata": {
+      "uid": 0,
+      "gid": 975,
+      "mode": "0o640"
+    },
+    "verified_at": "2026-10-15T19:00:06.241215+00:00"
+  },
+  "prospective_unit_verification": {
+    "returncode": 0,
+    "diagnostics": "two unrelated XFS units use removed CPUAccounting option"
+  },
+  "implementation_followup": {
+    "checked_at": "2026-10-15T19:07:04.034382+00:00",
+    "scope": "implementation worker; no agents, review loop, commits, pushes, branches or deployment",
+    "fast_mode_verifier": "fixed: match exact host message, plugin id, version and path; ignore source line numbers",
+    "focused_tests": {
+      "test_install_fast_mode_plugin.py": {
+        "passed": 47,
+        "failed": 0
+      },
+      "test_signin_fields.py": {
+        "passed": 16,
+        "failed": 0
+      }
+    },
+    "compatibility_rerun": {
+      "runs": [
+        {
+          "version": "8.0.7",
+          "checks": 37,
+          "passed": 37,
+          "process_stopped": true
+        },
+        {
+          "version": "8.0.30",
+          "checks": 37,
+          "passed": 33,
+          "process_stopped": true
+        }
+      ],
+      "failed_checks": [
+        "8.0.30: sign-in plan and stable identity readback",
+        "8.0.30: auth-file compatibility and metadata preserved",
+        "8.0.30: delayed sign-in plan readback",
+        "8.0.30: delayed token persistence"
+      ],
+      "all_children_stopped": true
+    },
+    "signin_diagnostics": [
+      {
+        "version": "8.0.7",
+        "pid_in_namespace": 7,
+        "port": 18348,
+        "dashboard_import": "persisted_and_verified",
+        "dashboard_tokens_persisted": true,
+        "identity_preserved": true,
+        "metadata_preserved": true,
+        "upload_overwrites_while_credential_lock_held": true,
+        "upload_response_before_lock_release": true,
+        "upload_completed_after_lock_release": true,
+        "upload_final_persistence": true,
+        "gateway_stopped": true
+      },
+      {
+        "version": "8.0.30",
+        "pid_in_namespace": 27,
+        "port": 18348,
+        "dashboard_import": "verification_rejected",
+        "dashboard_tokens_persisted": false,
+        "identity_preserved": true,
+        "metadata_preserved": true,
+        "upload_overwrites_while_credential_lock_held": true,
+        "upload_response_before_lock_release": false,
+        "upload_completed_after_lock_release": true,
+        "upload_final_persistence": true,
+        "gateway_stopped": true
+      }
+    ],
+    "signin_fix_implemented": false,
+    "signin_blocker": "fields PATCH has no creation intent; upload writes before credential lock and lacks CAS; built-in OAuth derives filename with no target-existing-file option",
+    "needed": "reviewed gateway-side explicit token replacement operation with identity/version validation, metadata preservation and refresh serialization/fencing; compatible dashboard integration",
+    "dashboard_deployment_executed": false,
+    "dashboard_deployment_commands_documented": "future gated step; existing install-operations.py --account-access-only --apply, before gateway restart; no compatible dashboard patch exists yet",
+    "private_evidence": "/var/lib/cliproxyapi-upgrade-backups/prepare-8.0.30-20261015/implementation-followup-20261015",
+    "post_cutover_verification": "TODO; cutover not performed",
+    "production_final_verification": {
+      "config_unchanged": true,
+      "dropin_unchanged": true,
+      "panel_unchanged": true,
+      "gateway_pid": 6969,
+      "gateway_active": true,
+      "installed_server.py_matches_repository": true,
+      "installed_routing_policy.py_matches_repository": true,
+      "installed_signin.py_matches_repository": true,
+      "remaining_task_gateway_pids": [],
+      "checked_at": "2026-10-15T19:07:25.100008+00:00"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "email": "account-a@example.com",
+    "auth_index": "example-index-a",
+    "status": 200,
+    "plan": "pro",
+    "limits": {
+      "primary_window": {
+        "used_percent": 1,
+        "reset_at": 1790644016,
+        "reset_after_seconds": 549672,
+        "limit_window_seconds": 604800
+      }
+    }
+  },
+  {
+    "email": "account-b@example.com",
+    "auth_index": "example-index-b",
+    "status": 200,
+    "plan": "pro",
+    "limits": {
+      "primary_window": {
+        "used_percent": 56,
+        "reset_at": 1790426577,
+        "reset_after_seconds": 332233,
+        "limit_window_seconds": 604800
+      }
+    }
+  }
+]

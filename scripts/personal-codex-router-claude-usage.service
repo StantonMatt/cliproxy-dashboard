@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch Claude subscription usage with the current Claude Code token
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/collect-claude-usage.py
+UMask=0027
+TimeoutStartSec=30
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+LockPersonality=true

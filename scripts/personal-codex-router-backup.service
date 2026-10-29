@@ -1,0 +1,21 @@
+[Unit]
+Description=Verified private router and shared Codex settings backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=root
+Group=cliproxyapi
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/router-backup.py run
+TimeoutStartSec=5min
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/personal-codex-router-backups /var/lib/personal-codex-router-ops
+# Online read-only SQLite access may require an existing WAL shared-memory file.
+ReadWritePaths=/var/lib/personal-codex-router
+RestrictAddressFamilies=AF_UNIX

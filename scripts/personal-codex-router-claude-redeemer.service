@@ -1,0 +1,16 @@
+[Unit]
+Description=Redeem Claude reset grants through a private selector socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/claude-redeemer.py serve
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,30 @@
+[Unit]
+Description=Private project previews for personal Tailscale devices
+After=tailscaled.service tailscale-host-guard.service
+Requires=tailscale-host-guard.service
+
+[Service]
+Type=simple
+DynamicUser=true
+ExecStart=/usr/bin/node /opt/personal-codex-router/router-preview.mjs
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=100.64.0.10/32
+IPAddressAllow=100.64.0.11/32
+IPAddressAllow=100.64.0.12/32
+
+[Install]
+WantedBy=multi-user.target

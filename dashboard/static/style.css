@@ -1,0 +1,319 @@
+:root{--bg:#0b0e13;--surface:#10151d;--raised:#141b25;--line:#252d38;--line-soft:#1c242f;--text:#edf1f7;--muted:#8c98aa;--faint:#647287;--blue:#87c3ff;--mint:#83d8be;--amber:#e5bd80;--track:#202d3d;--codex:#9d82f1;--codex-2:#d0bcfb;--claude:#d97757;--claude-2:#f8bf8c;--shadow:0 8px 32px #00000014;--font:'Manrope',sans-serif;--mono:'IBM Plex Mono',monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}button,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}a{color:inherit;text-decoration:none}button{cursor:pointer}button:disabled{cursor:wait;opacity:.5}button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:5px}svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.symbols{position:absolute;width:0;height:0;overflow:hidden}[hidden]{display:none!important}.topbar{height:86px;padding:0 4.3%;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:56px}.brand{display:flex;align-items:center;gap:12px;letter-spacing:-.45px;font-size:18px;white-space:nowrap}.brand b{font-weight:700}.brand-icon{display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;color:var(--blue);background:var(--raised)}.brand-icon svg{width:26px;height:26px}.topbar nav{height:100%;display:flex;gap:30px}.topbar nav a{display:flex;align-items:center;color:var(--muted);font-size:13px;font-weight:600;border-bottom:2px solid transparent;padding-top:2px;transition:color .15s}.topbar nav a:hover{color:var(--text)}.topbar nav a.active{color:var(--text);border-bottom-color:var(--blue)}.header-right{margin-left:auto;display:flex;align-items:center;gap:22px}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;font-weight:600}.status i,.tiny-dot,.pulse-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--mint)}.status.connecting i{background:var(--amber)}.status.offline i{background:#ee987e}.icon-button{height:34px;width:34px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);transition:background .15s,color .15s}.icon-button:hover{background:var(--raised);color:var(--text)}.icon-button svg{width:16px;height:16px}main{max-width:1232px;padding:0 38px;margin:auto}.pool-name{display:flex;align-items:center;gap:14px;min-width:0}.provider-icon{width:40px;height:40px;border-radius:12px;background:#30264d;color:var(--codex);display:flex;align-items:center;justify-content:center}.pool-name strong{display:block;font-size:15px;letter-spacing:-.3px}.pool-name>div>span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.pool-stat{display:flex;flex-direction:column;padding-left:27px;border-left:1px solid var(--line);gap:5px}.pool-stat>span{font-size:10px;color:var(--muted);white-space:nowrap}.pool-stat strong{font-family:var(--mono);font-size:18px;font-weight:400;white-space:nowrap}.section-label{display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;gap:20px}.section-label h2{font-size:13px;font-weight:600;margin:0;letter-spacing:-.1px}.section-label h2>span{color:var(--faint);font-size:10px;margin-left:8px;font-family:var(--mono)}.section-label>span{font-size:10px;color:var(--faint)}.account-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.account-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:25px 28px 23px;box-shadow:var(--shadow);position:relative;overflow:hidden;min-height:280px}.account-top{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.account-name{font-size:14px;font-weight:650;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}.account-email{font-size:10px;color:var(--muted);margin-top:5px}.small-badge{border:1px solid var(--line);color:var(--muted);padding:3px 9px;font-size:9px;letter-spacing:.25px;border-radius:5px;white-space:nowrap}.quota-label{margin-top:25px;color:var(--muted);font-size:10px;display:flex;gap:8px;align-items:center}.quota-value{font-size:52px;letter-spacing:-2px;font-weight:500;line-height:1.3;color:var(--accent);font-variant-numeric:tabular-nums}.quota-value .percent{font-size:25px;letter-spacing:-1px;margin-left:3px}.quota-value .remaining-word{font-size:10px;letter-spacing:0;color:var(--muted);margin-left:11px}.quota-track{height:5px;border-radius:3px;background:var(--track);margin:15px 0 9px;overflow:hidden}.quota-track>span{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .5s}.quota-used{font-size:9px;color:var(--faint);text-align:right;font-family:var(--mono)}.account-bottom{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line-soft);padding-top:16px;margin-top:17px;font-size:10px}.reset-block>span{color:var(--faint);font-size:9px;display:block;margin-bottom:3px}.reset-block strong{font-size:11px;font-weight:500}.account-state{color:var(--muted);display:flex;align-items:center;gap:6px}.account-state svg{width:13px;height:13px;color:var(--mint)}.quota-warning{color:var(--amber);font-size:10px;margin-top:10px}.secondary-quota{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin:10px 0}.activity-title{margin-top:33px}.text-link{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10px}.text-link:hover{color:var(--blue)}.text-link svg{height:12px;width:12px}.activity-grid{display:grid;grid-template-columns:1fr 1.55fr;gap:20px}.activity-card,.traffic-card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:22px 25px;min-height:204px}.card-eyebrow{font:9px var(--mono);letter-spacing:1.2px;color:var(--muted)}.activity-value{font:33px var(--mono);letter-spacing:-1.2px;margin:11px 0 5px}.activity-card p,.chart-header p{font-size:10px;color:var(--faint);margin:4px 0 0}.token-track{height:4px;background:var(--track);border-radius:3px;margin:23px 0 8px;overflow:hidden}.token-track span{background:var(--blue);height:100%;display:block;max-width:100%}.track-label{display:flex;justify-content:space-between;font-size:9px;color:var(--faint)}.track-label b{font-family:var(--mono);font-weight:400;color:var(--muted)}.chart-header{display:flex;justify-content:space-between;align-items:center}.legend{display:flex;gap:15px;font-size:9px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:5px;height:5px;border-radius:50%;display:inline-block}.codex-one{background:var(--codex)}.codex-two{background:var(--codex-2)}.claude-one{background:var(--claude)}.claude-two{background:var(--claude-2)}.chart{margin-top:20px}.bars{height:96px;display:flex;align-items:flex-end;gap:5px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(to top,transparent 0,transparent 31px,var(--line-soft) 31px,var(--line-soft) 32px)}.bar-slot{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative;min-width:1px}.bar-slot:focus-visible{outline:1px solid var(--blue)}.bar-slot>span{display:block;min-height:0;opacity:.85;transition:height .5s}.bar-slot>span:first-child{border-radius:2px 2px 0 0}.bar-slot:hover>span{opacity:1}.chart-labels{display:flex;justify-content:space-between;color:var(--faint);font:8px var(--mono);margin-top:8px}.table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto;background:var(--surface)}table{width:100%;border-collapse:collapse;text-align:left;font-size:11px}th{font-size:9px;color:var(--faint);font-weight:500;padding:13px 20px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:12px 20px;border-bottom:1px solid var(--line-soft);white-space:nowrap}tr:last-child td{border-bottom:0}.mono{font-family:var(--mono);font-size:10px;color:var(--muted)}.number{text-align:right;font-family:var(--mono);font-size:10px}.account-chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px}.account-chip i{width:5px;height:5px;border-radius:50%;display:inline-block}.outcome{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--muted)}.outcome svg{width:12px;height:12px;color:var(--mint)}.failed{color:#e69887}.empty-state{padding:34px;text-align:center;color:var(--muted);font-size:12px}.segmented{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}.segmented button{border:0;color:var(--muted);background:transparent;padding:6px 12px;border-radius:4px;font-size:10px}.segmented button.selected{color:var(--text);background:var(--raised)}.usage-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin:22px 0}.metric-card{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:23px}.metric-card span{font-size:10px;color:var(--muted)}.metric-card strong{font:28px var(--mono);display:block;margin-top:12px;letter-spacing:-1px}.full-chart .bars{height:165px}.system-card{padding:29px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:20px}.system-heading{display:flex;align-items:center;gap:14px}.system-heading h2,.advanced h2{font-size:15px;margin:0;letter-spacing:-.3px}.system-heading p,.advanced p{color:var(--muted);font-size:11px;margin:5px 0 0}.system-heading>.small-badge{margin-left:auto}.connection-flow{display:flex;align-items:center;gap:16px;margin:30px 0 25px;padding:25px;background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;justify-content:space-between;font-size:11px}.flow-line{flex:1;text-align:center;position:relative;color:var(--faint);font:8px var(--mono);border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:7px;max-width:175px}.flow-line:after{content:'›';font-size:15px;position:absolute;right:-3px;bottom:-10px}dl{margin:0;display:grid;grid-template-columns:1fr 1fr}dt,dd{padding:13px 0;border-bottom:1px solid var(--line-soft);font-size:11px;margin:0}dt{color:var(--muted)}dd{text-align:right;font-family:var(--mono);font-size:10px}.advanced{display:flex;justify-content:space-between;align-items:center;gap:20px}.outline-button{display:inline-flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:10px 15px;color:var(--muted);font-size:11px}.outline-button:hover{color:var(--text);background:var(--raised)}.outline-button svg{width:13px;height:13px}.footnote{font-size:10px;line-height:1.8;color:var(--faint);margin:20px 0}.notice{margin:0 0 24px;border:1px solid #655032;background:#241e15;color:var(--amber);border-radius:8px;padding:13px 18px;font-size:12px}footer{margin:34px 0 25px;padding-top:22px;border-top:1px solid var(--line-soft);display:flex;align-items:center;gap:30px;font-size:9px;color:var(--faint)}footer>span:first-child{display:flex;align-items:center;gap:7px}.tiny-dot{width:4px;height:4px}.footer-brand{margin-left:auto;font:8px var(--mono);letter-spacing:1.4px}.loading{color:var(--muted);display:flex;align-items:center;justify-content:center;animation:breathe 2s infinite}.refreshing svg{animation:spin 1.2s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@keyframes breathe{50%{opacity:.5}}.view{animation:appear .3s ease-out}@keyframes appear{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}[data-theme=light]{--bg:#f4f5f7;--surface:#fff;--raised:#edf0f5;--line:#dbe1e9;--line-soft:#e7ebf0;--text:#1b2838;--muted:#637185;--faint:#7b8797;--blue:#3276b8;--mint:#298a71;--amber:#8a6100;--track:#e4edf5;--codex:#7a58dc;--codex-2:#45309a;--claude:#c2603f;--claude-2:#7c3019;--shadow:0 8px 30px #16213505}[data-theme=light] .notice{background:#fff6e8}@media(min-width:1450px){main{max-width:1260px}.account-card{padding:29px 32px 25px;min-height:302px}.quota-label{margin-top:31px}.quota-value{font-size:58px}}@media(max-width:1040px){.topbar{gap:35px;padding:0 28px}.header-right{gap:12px}.account-card{padding:23px}.account-email{font-size:9px}}@media(max-width:760px){.topbar{height:74px;padding:0 20px;gap:24px}.topbar nav{gap:18px}.brand{font-size:15px;gap:8px}.brand-icon{width:29px;height:29px}.header-right .status{display:none}.header-right{margin-left:auto}main{padding:0 20px}.account-grid{gap:14px}.account-card{padding:20px}.account-email{overflow-wrap:anywhere}.quota-value{font-size:44px}.quota-value .remaining-word{display:none}.account-bottom{align-items:flex-end}.activity-grid{grid-template-columns:1fr}.activity-card{min-height:190px}.usage-summary{grid-template-columns:1fr 1fr}.connection-flow{padding:18px 10px;gap:8px;font-size:9px}.flow-line{font-size:7px}.section-label>span{font-size:9px}.segmented button{padding:6px 8px;font-size:9px}.advanced{align-items:flex-start;flex-direction:column}footer{gap:12px;font-size:8px}.footer-brand{display:none}}@media(max-width:490px){.topbar{flex-wrap:wrap;height:auto;gap:0;padding-top:17px}.topbar nav{order:3;width:100%;height:48px;margin-top:8px}.header-right{margin-left:auto}.account-grid{grid-template-columns:1fr}.account-card{min-height:270px}.account-email{font-size:10px}.section-label.usage-toolbar{align-items:flex-start;flex-direction:column;gap:13px}.metric-card{padding:17px}.metric-card strong{font-size:23px}.connection-flow{flex-direction:column;gap:8px}.flow-line{width:100%;max-width:110px;margin:0 0 5px}td,th{padding-left:14px;padding-right:14px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Account email addresses remain readable at every dashboard width. */
+.health-panel{display:flex;flex-wrap:wrap;gap:9px 22px;margin:0 0 24px;color:var(--muted);font-size:10px}
+.health-item{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}
+.health-item i{height:5px;width:5px;border-radius:50%;background:var(--faint);flex-shrink:0}
+.health-item b{font-weight:400;color:var(--faint)}
+.health-healthy i{background:var(--mint)}
+.health-intentionally_disabled i{background:var(--faint)}
+.health-disable_unconfirmed i{background:var(--amber)}
+.health-disable_unconfirmed b{color:var(--amber)}
+.health-stale i,.health-unknown i,.health-limited i{background:var(--amber)}
+.health-down i,.health-failed i,.health-sign_in_required i,.health-unavailable i{background:#ee987e}
+.health-down b,.health-failed b,.health-sign_in_required b{color:#ee987e}
+.account-top{gap:12px}.account-identity{min-width:0}.account-name>span{overflow-wrap:anywhere}.account-chip i,.legend i{flex-shrink:0}.account-top>.small-badge{flex-shrink:0}.chart-header{gap:16px;flex-wrap:wrap}.legend{flex-direction:column;gap:4px}.legend span{overflow-wrap:anywhere}.account-chip{font-family:var(--font)}
+
+/* Billing is a distinct, prominent calendar date; quota remains below it. */
+.account-bottom{flex-wrap:wrap;gap:12px 20px}
+.account-dates{display:flex;flex-wrap:wrap;gap:12px 24px}
+.account-state{margin-left:auto}
+.billing-renewal strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.billing-renewal.renewal-soon strong{color:var(--amber)}
+
+.account-resets{display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.account-resets>span{color:var(--faint);font-size:10px}
+.resets-button{display:inline-flex;align-items:center;gap:9px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;font-size:11px;padding:6px 10px}
+.resets-button:hover{color:var(--text);background:var(--raised)}
+.resets-button span{color:var(--text);font-variant-numeric:tabular-nums}
+.reset-dialog{width:min(660px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:22px;padding:30px;box-shadow:0 28px 110px #0008}
+.reset-dialog::backdrop{background:#03060b99;backdrop-filter:blur(5px)}
+.reset-dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.reset-dialog h2{font-size:22px;font-weight:600;letter-spacing:-.5px;margin:0}
+.reset-dialog-header p{font-size:12px;color:var(--muted);overflow-wrap:anywhere;margin:7px 0 0}
+.reset-close{width:30px;height:30px;flex-shrink:0;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:25px;line-height:1}
+.reset-close:hover{color:var(--text);background:var(--raised)}
+#reset-dialog-description{font-size:13px;color:var(--muted);margin:20px 0 24px}
+.reset-list-heading{font-size:12px;font-weight:600;padding:0 0 14px;border-bottom:1px solid var(--line)}
+.reset-list-heading span{color:var(--muted);margin-left:7px}
+.reset-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:22px 0;border-bottom:1px solid var(--line-soft)}
+.reset-row:last-child{border-bottom:0}
+.reset-row strong{font-size:15px;font-weight:500}
+.reset-row p{font-size:12px;color:var(--muted);margin:4px 0 0}
+.reset-row-action{display:flex;align-items:center;gap:10px}
+.reset-primary{min-width:95px;border:1px solid var(--line);border-radius:9px;background:var(--raised);color:var(--text);padding:9px 13px;font-size:12px;font-weight:600}
+.reset-primary:hover{border-color:var(--muted)}
+.reset-primary.confirm{background:var(--text);color:var(--bg);border-color:var(--text)}
+.reset-primary:disabled{cursor:not-allowed;opacity:.45}
+.reset-cancel{background:transparent;color:var(--muted);border:0;font-size:11px;padding:5px}
+.reset-wait{font-size:11px;color:var(--faint);text-align:right}
+.reset-modal-status{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0;min-height:19px}
+.reset-modal-status:empty{display:none}
+.reset-auto-setting{padding-top:16px;border-top:1px solid var(--line)}
+.reset-auto-setting label{display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:12px;cursor:pointer}
+.reset-auto-setting small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.reset-auto-setting input{appearance:none;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0}
+.reset-auto-setting input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted)}
+.reset-auto-setting input:checked{background:var(--blue)}
+.reset-auto-setting input:checked:before{left:17px;background:var(--bg)}
+.reset-auto-setting input:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+.reset-last-event{font-size:10px;line-height:1.65;color:var(--faint);margin:12px 0 0}
+.reset-empty{color:var(--muted);font-size:13px;padding:18px 0}
+@media(max-width:490px){.reset-dialog{padding:22px}.reset-dialog h2{font-size:20px}.reset-row-action{flex-direction:column;gap:4px}.reset-wait{max-width:90px}}
+
+.pool-availability{font-size:11px;color:var(--amber);margin:-15px 0 22px}.account-state{flex-wrap:wrap;justify-content:flex-end;text-align:right;max-width:160px}
+
+.routing-control{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-12px 0 28px;font-size:11px;color:var(--muted)}.routing-control select{font:inherit;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--surface);color:var(--text)}.routing-control select:focus-visible{outline:2px solid var(--blue);outline-offset:3px}.routing-control small{flex-basis:100%;font-size:9px;color:var(--faint)}.routing-feedback{font-size:10px;color:var(--muted)}
+
+/* Keep the per-request reasoning column readable in compact dashboard windows. */
+#recent-table td,#recent-table th{padding-left:12px;padding-right:12px}
+
+/* Routing hold states and reset-timing warnings. */
+:root{--danger:#ee987e;--danger-line:#5e3a33;--danger-bg:#231816}[data-theme=light]{--danger:#b8452c;--danger-line:#e8b4a6;--danger-bg:#fdf1ee}
+.routing-state{flex-basis:100%;display:flex;align-items:flex-start;gap:7px;font-size:10px;line-height:1.5;color:var(--amber);overflow-wrap:anywhere}.routing-state:before{content:'';flex-shrink:0;width:5px;height:5px;margin-top:5px;border-radius:50%;background:var(--amber)}
+#routing-resume,#claude-routing-resume{padding:6px 10px}
+.reset-warning{font-size:12px;line-height:1.6;color:var(--amber);margin:14px 0 0}.reset-step-warning{color:var(--amber)}
+
+/* Claude card: same structure as the Codex cards, with Anthropic's warm palette scoped to the card.
+   Tokens live on the card so the Codex cards and the rest of the page keep the cool theme. */
+.watch-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
+.account-card.claude-card,tbody tr.claude-row{--accent:var(--claude);--accent-2:var(--claude-2);--surface:#1f1c19;--raised:#2b2723;--line:#3b352e;--line-soft:#2d2924;--text:#f4efe6;--muted:#a99f91;--faint:#80776b;--track:#3a332b;--amber:#e3c46a;--danger:#e5484d;--serif:'IBM Plex Serif',Georgia,'Liberation Serif',serif}
+[data-theme=light] .account-card.claude-card,[data-theme=light] tbody tr.claude-row{--surface:#faf7f1;--raised:#f0eadf;--line:#e2d9ca;--line-soft:#ebe4d8;--text:#2a231c;--muted:#6f665a;--faint:#8a8175;--track:#e9e0d1;--amber:#8a6100;--danger:#b3261e}
+.claude-card .quota-value{font-family:var(--serif);font-weight:400;letter-spacing:-1.6px}
+.claude-card .quota-value .percent{letter-spacing:-.5px}
+.claude-card .small-badge{font-family:var(--mono);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.claude-card .resets-button:hover{border-color:var(--accent);color:var(--accent)}
+.claude-card .account-state svg{color:var(--mint)}
+.claude-card .watch-state-warn{color:var(--amber)}.claude-card .watch-state-warn svg{color:var(--amber)}
+.claude-card .watch-state-down{color:var(--danger)}.claude-card .watch-state-down svg{color:var(--danger)}
+@media(max-width:760px){.watch-grid{gap:14px;margin-top:14px}}
+@media(max-width:490px){.watch-grid{grid-template-columns:1fr}}
+
+/* Claude reset grants: disabled grants stay listed but recede; absent kinds read as "None right now". */
+.reset-row-off>div:first-child,.reset-row-none>div{opacity:.55}
+.reset-row-none p{color:var(--faint)}
+
+.account-fast{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.account-fast>div{min-width:0}
+.account-fast label{display:block;font-size:11px;color:var(--muted);cursor:pointer}
+.fast-usage{display:block;font-size:10px;color:var(--faint);margin-top:2px;overflow-wrap:anywhere}
+.fast-usage.warn{color:var(--amber)}
+.fast-usage.error{color:var(--danger)}
+.account-fast input{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.account-fast input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
+.account-fast input:checked{background:var(--accent)}
+.account-fast input:checked:before{left:17px;background:var(--bg)}
+.account-fast input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.account-fast input:disabled{opacity:.45;cursor:not-allowed}
+.account-fast input[aria-busy=true]{cursor:wait}
+.account-fast:has(input:disabled) label{cursor:default}
+.mono.tier-fast{color:var(--text)}
+.mono.tier-warn{color:var(--amber)}
+[data-theme=light] .fast-usage.warn,[data-theme=light] .mono.tier-warn{color:#8a6100}
+
+/* Weekly hero allowance pace bar: the share of the week left, a dimmed, notched segment of the allowance fill when shorter and a neutral bar behind it otherwise. */
+.account-card{--pace:color-mix(in srgb,var(--text) 35%,var(--track));--pace-under:color-mix(in srgb,var(--accent) 45%,var(--track))}
+.quota-track.has-pace{position:relative;isolation:isolate}
+.quota-track.has-pace>span{position:relative;z-index:1;max-width:100%}
+.pace-bar{position:absolute;top:0;left:0;z-index:2;height:100%;border-radius:3px;background:var(--pace);transition:width .5s;pointer-events:none}
+.pace-bar:not(.pace-behind){background:var(--pace-under);box-shadow:2px 0 0 var(--surface)}
+.pace-bar.pace-behind{z-index:0}
+.quota-used{display:flex;align-items:center;gap:12px}
+.quota-used>span:last-child{margin-left:auto;white-space:nowrap}
+.pace{display:inline-flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
+.pace:before{content:'';width:9px;height:5px;border-radius:3px;background:var(--pace);flex-shrink:0}
+.quota-track:has(>.pace-bar:not(.pace-behind))+.quota-used .pace:before{background:var(--pace-under)}
+.pace.pace-warn{color:var(--amber)}
+[data-theme=light] .pace.pace-warn{color:#8a6100}
+
+/* Provider regions reuse the existing pool header. */
+.pool-name h2{display:block;font-size:15px;font-weight:700;letter-spacing:-.3px;margin:0}
+@media(max-width:490px){.account-name{font-size:13px}}
+
+/* Proposed additions to dashboard/static/style.css: Codex account access (sign-in strip, device-code panel, routing switch). */
+
+/* Disabled or signed-out accounts recede: last-known numbers lose their accent colour. */
+.account-card.is-off .quota-value{color:var(--faint)}
+.account-card.is-off .quota-track>span{background:var(--faint)}
+
+/* Status strip: what blocks the account, the last sign-in outcome, and the one action that fixes it. */
+.account-access{margin-top:16px;padding:10px 10px 10px 13px;border:1px solid var(--line);border-radius:9px;background:var(--raised);color:var(--muted);font-size:11px;line-height:1.45}
+.account-access-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.account-access-row>span{display:flex;align-items:flex-start;gap:7px;min-width:0;overflow-wrap:anywhere;font-weight:500}
+.account-access svg{width:13px;height:13px;flex-shrink:0;margin-top:2px}
+.account-access .resets-button{flex-shrink:0;white-space:nowrap;color:var(--text);padding:6px 12px}
+.account-access .resets-button[aria-busy=true]{cursor:wait}
+.account-access-detail{display:block;margin:6px 0 1px 20px;color:var(--muted);font-size:10px;overflow-wrap:anywhere}
+.account-access-detail b{font-weight:500;color:var(--text)}
+.account-access-detail a{color:var(--text);text-decoration:underline;text-underline-offset:2px}
+.account-access.critical{border-color:var(--danger-line);background:var(--danger-bg)}
+.account-access.critical .account-access-row>span{color:var(--danger)}
+.access-result{display:flex;align-items:center;gap:6px;color:var(--mint);font-size:10px;margin-top:10px}
+.access-result svg{width:13px;height:13px}
+
+/* Device-code panel: replaces the allowance block while a sign-in is pending. */
+.signin-panel{container-type:inline-size;margin-top:22px;padding:15px 16px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.signin-as{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.signin-as b{font-weight:600;color:var(--text)}
+.signin-code{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:9px 0 14px}
+.signin-code code{font:500 25px/1.25 var(--mono);letter-spacing:2px;color:var(--text);user-select:all;-webkit-user-select:all;white-space:nowrap}
+.signin-code .resets-button{flex-shrink:0;color:var(--text)}
+.signin-code .resets-button svg{width:13px;height:13px;color:var(--mint)}
+.signin-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.signin-open{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--text);border-radius:9px;background:var(--text);color:var(--bg);padding:9px 13px;font-size:12px;font-weight:600;white-space:nowrap}
+.signin-open svg{width:13px;height:13px}
+.signin-open:hover{opacity:.9}
+.signin-actions .reset-cancel{padding:9px 8px}
+.signin-status{display:flex;align-items:center;gap:7px;margin-top:13px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.signin-status i{width:6px;height:6px;border-radius:50%;background:var(--blue);flex-shrink:0;animation:breathe 1.6s infinite}
+.signin-status.warn{color:var(--amber)}.signin-status.warn i{background:var(--amber)}
+.signin-status.static i{animation:none}
+[data-theme=light] .signin-status.warn{color:#8a6100}
+.signin-panel.finishing .signin-code code{opacity:.35}
+.signin-panel.finishing .signin-status i{background:var(--mint)}
+.signin-panel [aria-disabled=true]{pointer-events:none;opacity:.4}
+
+/* Optional: per-account routing switch, same row style as fast mode. */
+.account-route{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.account-route label{font-size:11px;color:var(--muted);cursor:pointer}
+.account-route input{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.account-route input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
+.account-route input:checked{background:var(--accent)}
+.account-route input:checked:before{left:17px;background:var(--bg)}
+.account-route input:disabled{opacity:.45;cursor:not-allowed}
+.account-route input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.route-confirm{display:flex;align-items:center;justify-content:space-between;gap:8px 10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--amber)}
+.route-confirm>div{display:flex;align-items:center;gap:4px;margin-left:auto}
+.route-confirm .reset-primary{min-width:0;padding:6px 11px;font-size:11px}
+[data-theme=light] .route-confirm{color:#8a6100}
+
+/* Routing change choice: a full-width inline decision below the select's line. */
+.routing-choice-host{display:contents}
+.routing-choice-host>.route-confirm{flex-basis:100%;justify-content:flex-start;margin-top:0;gap:8px 14px}
+.routing-choice-host>.route-confirm>div{margin-left:0;gap:6px}
+.routing-choice-host .reset-primary{white-space:nowrap}
+.routing-control select.pending{border-color:color-mix(in srgb,var(--amber) 60%,var(--line))}
+.routing-choice-host button[aria-busy=true]:disabled{opacity:1;cursor:wait}
+
+@media(max-width:760px){.signin-open,.account-access .resets-button,.signin-code .resets-button{min-height:38px}}
+@container (max-width:250px){.signin-code code{font-size:21px;letter-spacing:1px}}
+@container (max-width:200px){.signin-code code{font-size:18px;letter-spacing:.5px}}
+
+@media(max-width:760px){.signin-actions .reset-cancel,.route-confirm button{min-height:38px}}
+
+/* Overview: two gateway columns with identical structure. Subgrid rows keep headers, cards and routing aligned across columns. */
+@media(min-width:1180px){main{max-width:1680px}}
+/* Rows: gateway header, card headers, card bodies, routing. Cards span the two card rows, so a wrapped badge or email in one card keeps every card's content level. */
+.gateways{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto auto 1fr auto;column-gap:32px;margin-bottom:40px}
+.gateway{grid-row:1/span 4;display:grid;grid-template-rows:subgrid;min-width:0}
+#codex-accounts{grid-column:1}#watch-section{grid-column:2}
+.gateways:has(>#watch-section[hidden]){grid-template-columns:minmax(0,1fr)}
+.routing-linked{grid-row:4;grid-column:1/-1}
+/* One row at every width where the columns sit side by side: the status line keeps one line and the stats never drop below it. */
+.gateway-head{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;margin-bottom:16px}
+.gateway-head .pool-name{flex:1 1 auto}
+.gateway-head .pool-name>div{min-width:0}
+.gateway-head .provider-icon{width:36px;height:36px;border-radius:10px;flex-shrink:0}
+.gateway-head .provider-icon svg{width:20px;height:20px}
+.claude-gateway .provider-icon{background:#3a2219;color:var(--claude)}
+[data-theme=light] .provider-icon{background:#e8e3ff}[data-theme=light] .claude-gateway .provider-icon{background:#f6e3da}
+.gateway-title{display:flex;align-items:baseline;gap:12px}
+.gateway-title h2{font-size:15px;font-weight:700;letter-spacing:-.3px;margin:0}
+/* Items that do not fit wrap onto a clipped second line; problems sort ahead of healthy items so they stay visible. */
+.gateway-status{display:flex;flex-wrap:wrap;column-gap:14px;height:15px;overflow:hidden;margin-top:3px;font-size:10px;line-height:15px;color:var(--muted)}
+.status-item{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status-item.ok{order:1}
+.status-item:before{content:'';display:inline-block;vertical-align:middle;margin:-2px 6px 0 0;width:5px;height:5px;border-radius:50%;background:var(--faint)}
+.status-item.ok:before{background:var(--mint)}.status-item.warn{color:var(--amber)}.status-item.warn:before{background:var(--amber)}
+.status-item.down{color:var(--danger)}.status-item.down:before{background:var(--danger)}
+[data-theme=light] .status-item.warn{color:#8a6100}
+.gateway-stats{display:flex;gap:16px;margin-left:auto;flex-shrink:0}
+.gateway-stats .pool-stat{padding-left:16px;gap:3px}
+.gateway-stats .pool-stat strong{font-size:15px}
+.gateway>.account-grid,.gateway>.watch-grid{margin-top:0;min-height:0}
+
+/* Cards: same section order on both kinds; facts and controls sit at the bottom so equal heights leave no holes mid-card. */
+.account-card{display:flex;flex-direction:column}
+.account-body{display:flex;flex-direction:column;flex:1;container:card-body/inline-size}
+.account-body>.account-bottom{margin-top:auto}
+.account-body>:has(+.account-bottom){margin-bottom:17px}
+@media(min-width:491px){.account-grid,.watch-grid{grid-template-rows:auto 1fr;row-gap:0}.codex-card,.claude-card{display:grid;grid-template-rows:subgrid;grid-row:span 2;row-gap:0}}
+@media(min-width:1180px){.gateway>.account-grid,.gateway>.watch-grid{grid-row:span 2;grid-template-rows:subgrid}
+.gateway>.many-accounts{grid-template-rows:auto;grid-auto-rows:auto;row-gap:20px}.gateway>.many-accounts>.account-card{display:flex;grid-row:auto}}
+/* The plan badge always shares the email's line; a long email truncates and keeps its full text in the tooltip. */
+.account-top{flex-wrap:nowrap;align-items:center;gap:12px;min-width:0}.account-identity{flex:1;min-width:0}.account-name{min-width:0}.account-name>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Facts: dates keep one line and the state keeps its own line under them, reserved even when empty, so paired cards match.
+   Wide cards fit the state beside the dates. Long states truncate; the full text is in the tooltip. */
+.account-bottom{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(15px,auto);align-items:center;gap:12px 20px}
+.account-dates{flex-wrap:nowrap}
+.account-dates .reset-block{white-space:nowrap}
+.account-bottom>.account-state{justify-self:end;min-width:0;max-width:100%;margin:0;flex-wrap:nowrap}
+.account-state>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-state svg{flex-shrink:0}
+@container card-body (min-width:300px){.account-bottom{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto}}
+.account-resets.reserved{visibility:hidden}
+.limit-rows{display:flex;flex-direction:column;gap:11px;margin-top:16px}
+.limit-row .secondary-quota{margin:0 0 5px}
+.limit-row .secondary-quota>span:last-child{font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap}
+.limit-track{height:3px;border-radius:2px;background:var(--track);overflow:hidden}
+.limit-track>span{display:block;height:100%;border-radius:2px;background:var(--accent);opacity:.75;transition:width .5s}
+.limit-track.empty{background:repeating-linear-gradient(90deg,var(--track) 0 6px,transparent 6px 9px)}
+.account-card.is-off .limit-track>span{background:var(--faint)}
+@media(min-width:1180px){.gateway .account-card{padding:24px 24px 22px}.gateway .quota-label{margin-top:22px}}
+@media(min-width:1180px) and (max-width:1699px){.gateway .account-card{padding:22px 20px 20px}.gateway .account-name{font-size:13px}}
+
+/* Routing: one control under all four cards; split, each gateway gets its own row under its cards. */
+.gateway>.routing-control,.routing-linked{margin:20px 0 0;align-content:flex-start}
+.routing-split{display:inline-flex;align-items:center;gap:10px;margin-left:auto;cursor:pointer;color:var(--muted);font-size:11px}
+.routing-split input{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.routing-split input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
+.routing-split input:checked{background:var(--blue)}
+.routing-split input:checked:before{left:17px;background:var(--bg)}
+.routing-split input:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+.routing-split input:disabled{opacity:.45;cursor:not-allowed}
+.routing-split:has(input:disabled){cursor:default}
+.routing-states{flex-basis:100%;display:flex;flex-direction:column;gap:3px}
+.routing-states .routing-state b{font-weight:600;margin-right:6px}
+
+/* Request flow: two shades per gateway, one per account. */
+.bar-slot>span+span{box-shadow:0 -1px 0 var(--surface)}
+.legend{flex-direction:row;flex-wrap:wrap;gap:6px 22px}
+.legend-group{display:flex;flex-direction:column;gap:4px}
+.legend-group b{font-weight:600;color:var(--faint);font-size:9px}
+
+/* System health that is not specific to one gateway lives in the footer. */
+footer .health-panel{margin:0;font-size:9px}
+
+@media(max-width:1179px){.gateways{grid-template-columns:minmax(0,1fr);grid-template-rows:none;row-gap:36px}.gateway{grid-row:auto;grid-column:1!important;display:flex;flex-direction:column}.routing-linked{grid-row:auto;margin-top:-16px}}
+@media(max-width:760px){.gateway-head{flex-wrap:wrap}.gateway-status{height:auto;overflow:visible}.status-item{white-space:normal}.gateway-stats{margin-left:0;width:100%;gap:0}.gateway-stats .pool-stat{flex:1}.gateway-stats .pool-stat:first-child{border:0;padding-left:0}}
+@media(max-width:490px){.gateway-stats .pool-stat{padding-left:12px}.gateway-stats .pool-stat>span{white-space:normal}.routing-split{margin-left:0}.routing-choice-host>.route-confirm>div{flex-wrap:wrap;width:100%}.routing-choice-host .reset-primary{flex:1 1 auto}.routing-control>.routing-split{order:1}.routing-control>.routing-state,.routing-control>.routing-states,.routing-control>small{order:2}}
+
+/* Gateway colours: Codex violet, Claude terracotta. Cards and table rows share each gateway's palette.
+   The page keeps its navy and blue; status colours keep their meaning. */
+main{padding-top:22px}
+.updated{font-size:11px;color:var(--faint);white-space:nowrap}
+.header-right .status+.updated{margin-left:-8px}
+.account-card.codex-card,tbody tr.codex-row{--accent:var(--codex);--accent-2:var(--codex-2);--surface:#191823;--raised:#222130;--line:#353246;--line-soft:#262433;--track:#302d43}
+[data-theme=light] .account-card.codex-card,[data-theme=light] tbody tr.codex-row{--surface:#fbfaff;--raised:#f1eefa;--line:#ddd9ef;--line-soft:#e8e6f4;--track:#e4dff5}
+.codex-card .small-badge{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.codex-card .resets-button:hover{border-color:var(--accent);color:var(--accent)}
+.codex-gateway>.routing-control>label:first-child{color:var(--codex)}.claude-gateway>.routing-control>label:first-child{color:var(--claude)}
+.legend-group.codex b{color:var(--codex)}.legend-group.claude b{color:var(--claude)}
+#token-detail{display:flex;flex-wrap:wrap;gap:4px 16px}
+#token-detail span{display:inline-flex;align-items:center;gap:6px}
+#token-detail i{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+tbody tr.codex-row,tbody tr.claude-row{background:var(--surface);color:var(--text)}
+.codex-row .gateway-name,.claude-row .gateway-name{color:var(--accent)}
+
+@media(max-width:1040px){.updated{display:none}}
+@media(max-width:760px){main{padding-top:16px}}
+.account-route input.unknown:before{left:10px}
+
+.claude-unknown{background:var(--faint)}
+
+/* Cache read/write split: the second track row sits under "Cached input"; a partial split reads as a lower bound. */
+.track-label+.track-label{margin-top:4px}
+.metric-card .metric-detail{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:6px;font:10px var(--mono);color:var(--faint)}
+.metric-detail>span{white-space:nowrap}
+.metric-card .metric-detail span{font-size:inherit;color:inherit}
+.partial{cursor:help}

@@ -1,0 +1,26 @@
+[Unit]
+Description=Apply the saved Codex and Claude account routing selection
+After=cliproxyapi.service personal-codex-router-dashboard.service
+
+[Service]
+Type=oneshot
+User=cliproxyapi
+Group=cliproxyapi
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/prefer-earliest-reset.py --apply --all-providers
+StateDirectory=personal-codex-router-routing
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=110
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost

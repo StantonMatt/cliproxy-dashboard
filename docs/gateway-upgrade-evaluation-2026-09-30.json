@@ -1,0 +1,6079 @@
+{
+  "tested_at": "2026-09-30T17:17:40.224336+00:00",
+  "scope": "Release upgrade evaluation only: isolated loopback instances, two dummy Codex OAuth files, local HTTP/2 TLS CONNECT mock; no installation or production access.",
+  "question": "Does the latest release fix upstream Codex SSE disconnects after partial output, especially repeatedly selecting the failed account?",
+  "conclusion": {
+    "mid_stream_disconnect_fixed": false,
+    "partially_fixed": false,
+    "summary": "8.0.5 matches 7.3.11 in all 13 scenario records. Partial-output disconnects still return HTTP 200, MOCK_A, an error event, no response.completed, no retry on B, and no cooldown on A. All three subsequent new-session requests select A and fail again.",
+    "before_any_sse_bytes": "After upstream HTTP 200 headers but before any SSE DATA bytes: HTTP 408 request_timeout, no B retry, A remains eligible; all three followups fail on A. Before upstream response headers: retry A then B succeeds, but A is not cooled and each followup retries A again.",
+    "recommendation": "Do not upgrade specifically to solve this failure. Report upstream with this dummy-credential/local-mock repro; review any broader v8 upgrade separately.",
+    "intermediate_release_tested": false,
+    "intermediate_release_reason": "Latest and baseline have identical observed behavior; no changed behavior needs isolating."
+  },
+  "releases_newer_than_7.3.11": [
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-30T16:09:11Z",
+      "tagName": "v8.0.5"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-29T00:12:47Z",
+      "tagName": "v8.0.4"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-28T00:19:58Z",
+      "tagName": "v8.0.3"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-27T12:17:49Z",
+      "tagName": "v8.0.2"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-27T11:58:20Z",
+      "tagName": "v8.0.1"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-27T10:22:32Z",
+      "tagName": "v8.0.0"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-27T06:11:34Z",
+      "tagName": "v7.3.20"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-26T18:36:05Z",
+      "tagName": "v7.3.19"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-26T05:58:53Z",
+      "tagName": "v7.3.18"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-24T19:06:57Z",
+      "tagName": "v7.3.17"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-24T00:10:28Z",
+      "tagName": "v7.3.16"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-23T00:55:44Z",
+      "tagName": "v7.3.15"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-22T20:39:13Z",
+      "tagName": "v7.3.14"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-22T18:43:11Z",
+      "tagName": "v7.3.13"
+    },
+    {
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-22T02:25:45Z",
+      "tagName": "v7.3.12"
+    }
+  ],
+  "release_metadata_source": "https://github.com/router-for-me/CLIProxyAPI/releases",
+  "latest_release": {
+    "tag": "v8.0.5",
+    "published_at": "2026-09-30T16:09:11Z",
+    "url": "https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.5",
+    "upstream_revision": "e5b5a1cfca354ec80d5c31242ccfb6c0f6b5fbcd",
+    "asset": "CLIProxyAPI_8.0.5_linux_amd64.tar.gz",
+    "asset_url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v8.0.5/CLIProxyAPI_8.0.5_linux_amd64.tar.gz",
+    "archive_sha256": "856291020475247963e0129c67bdea1cee800f2ddfc7af7c62dbfde4e95d3ff1",
+    "checksums_url": "https://github.com/router-for-me/CLIProxyAPI/releases/download/v8.0.5/checksums.txt",
+    "checksums_file_sha256": "4ef5a5798e7abb3e76e122db9022b44c2710dcc9a865ec4f97e12179e11246e6",
+    "published_asset_digest_matches": true,
+    "published_checksum_verified_before_binary_execution": true,
+    "retained_binary": "/tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/8.0.5/cli-proxy-api",
+    "binary_sha256": "5b5c3d2f4ff51fd1381f08e452bb2b7f9b18d8ea0e6108c4076106c3b9441374"
+  },
+  "baseline": {
+    "version": "7.3.11",
+    "binary": "/opt/cliproxyapi/7.3.11/cli-proxy-api",
+    "binary_sha256": "7a228594b88feddf2105737386e2834c61c94adcec1fd3199da4794011ac539a",
+    "upstream_revision": "ffe6ad3c5fcf0a5eedd2198cd2e04b0249dc5063",
+    "same_day_baseline": true,
+    "checksum_matches_prior_quota_report": true
+  },
+  "script": "scripts/verify-quota-failover.py",
+  "script_sha256": "1d34db80c9a5d1d0f12616dfb73aa9f28aae322afba8706adc4668e3aa314bed",
+  "production_policy_used": {
+    "request-retry": 0,
+    "max-retry-credentials": 2,
+    "max-retry-interval": 0,
+    "routing": "round-robin",
+    "session-affinity": true,
+    "session-affinity-ttl": "1h",
+    "session-affinity-subagents": true
+  },
+  "mock_http_version": "HTTP/2 over TLS; SSE payloads",
+  "dependency": "Python h2 4.3.0, with hpack 4.1.0 and hyperframe 6.1.0",
+  "scenario_comparison": [
+    {
+      "scenario": 1,
+      "name": "quota failover in the same request",
+      "baseline_7.3.11": {
+        "scenario": 1,
+        "name": "quota failover in the same request",
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 1,
+        "name": "quota failover in the same request",
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 2,
+      "name": "next new request and settled cooldown",
+      "baseline_7.3.11": {
+        "scenario": 2,
+        "name": "next new request and settled cooldown",
+        "immediate_next_request": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_visible": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 2,
+        "name": "next new request and settled cooldown",
+        "immediate_next_request": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_visible": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 6,
+      "name": "natural cooldown expiration",
+      "baseline_7.3.11": {
+        "scenario": 6,
+        "name": "natural cooldown expiration",
+        "resets_in_seconds": 12,
+        "retry_after_header": 2,
+        "provider_healthy_while_cooled": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_header_deadline": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_body_deadline": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 6,
+        "name": "natural cooldown expiration",
+        "resets_in_seconds": 12,
+        "retry_after_header": 2,
+        "provider_healthy_while_cooled": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_header_deadline": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_body_deadline": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 3,
+      "name": "affinity rebinds after quota exhaustion",
+      "baseline_7.3.11": {
+        "scenario": 3,
+        "name": "affinity rebinds after quota exhaustion",
+        "baseline": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        },
+        "failover": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "followup": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_A_clear_same_session": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_A_clear_new_session": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        },
+        "clear_status": "ok"
+      },
+      "latest_8.0.5": {
+        "scenario": 3,
+        "name": "affinity rebinds after quota exhaustion",
+        "baseline": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        },
+        "failover": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "followup": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_A_clear_same_session": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "after_A_clear_new_session": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        },
+        "clear_status": "ok"
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 4,
+      "name": "both exhausted and subsequent recovery",
+      "baseline_7.3.11": {
+        "scenario": 4,
+        "name": "both exhausted and subsequent recovery",
+        "resets_in_seconds": 3,
+        "retry_after_header": 1,
+        "both_exhausted": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": [],
+          "body_error_code": "usage_limit_reached"
+        },
+        "provider_healthy_immediately": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [],
+          "error_codes": [],
+          "body_error_code": "model_cooldown"
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 0,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            }
+          }
+        },
+        "after_cooldown_visible": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [],
+          "error_codes": [],
+          "body_error_code": "model_cooldown"
+        },
+        "at_4_seconds": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [],
+          "error_codes": [],
+          "body_error_code": "model_cooldown"
+        },
+        "at_10_4_seconds": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 4,
+        "name": "both exhausted and subsequent recovery",
+        "resets_in_seconds": 3,
+        "retry_after_header": 1,
+        "both_exhausted": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": [],
+          "body_error_code": "usage_limit_reached"
+        },
+        "provider_healthy_immediately": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [],
+          "error_codes": [],
+          "body_error_code": "model_cooldown"
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 0,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            }
+          }
+        },
+        "after_cooldown_visible": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [],
+          "error_codes": [],
+          "body_error_code": "model_cooldown"
+        },
+        "at_4_seconds": {
+          "status": 429,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [],
+          "error_codes": [],
+          "body_error_code": "model_cooldown"
+        },
+        "at_10_4_seconds": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 5,
+      "name": "stream_error after a generated delta",
+      "baseline_7.3.11": {
+        "scenario": 5,
+        "name": "stream_error after a generated delta",
+        "result": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "usage_limit_reached"
+          ]
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "error",
+            "unavailable": true,
+            "priority": 100,
+            "cooldowns": [
+              {
+                "scope": "credential",
+                "reason": "credential_quota"
+              },
+              {
+                "scope": "model",
+                "model_key": "gpt-6-astra",
+                "reason": "quota",
+                "backoff_level": 0,
+                "http_status": 429
+              }
+            ]
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "B"
+            ],
+            "error_codes": []
+          }
+        ]
+      },
+      "latest_8.0.5": {
+        "scenario": 5,
+        "name": "stream_error after a generated delta",
+        "result": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "usage_limit_reached"
+          ]
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "error",
+            "unavailable": true,
+            "priority": 100,
+            "cooldowns": [
+              {
+                "scope": "credential",
+                "reason": "credential_quota"
+              },
+              {
+                "scope": "model",
+                "model_key": "gpt-6-astra",
+                "reason": "quota",
+                "backoff_level": 0,
+                "http_status": 429
+              }
+            ]
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "B"
+            ],
+            "error_codes": []
+          }
+        ]
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 5,
+      "name": "disconnect after a generated delta",
+      "baseline_7.3.11": {
+        "scenario": 5,
+        "name": "disconnect after a generated delta",
+        "result": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "request_timeout"
+          ]
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 100,
+            "cooldowns": []
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "request_timeout"
+          ]
+        },
+        "cooldown": {
+          "cooldown_observed": false,
+          "state": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "request_timeout"
+          ]
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 200,
+            "completed": false,
+            "text": "MOCK_A",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [
+              "request_timeout"
+            ]
+          },
+          {
+            "status": 200,
+            "completed": false,
+            "text": "MOCK_A",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [
+              "request_timeout"
+            ]
+          },
+          {
+            "status": 200,
+            "completed": false,
+            "text": "MOCK_A",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [
+              "request_timeout"
+            ]
+          }
+        ]
+      },
+      "latest_8.0.5": {
+        "scenario": 5,
+        "name": "disconnect after a generated delta",
+        "result": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "request_timeout"
+          ]
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 100,
+            "cooldowns": []
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "request_timeout"
+          ]
+        },
+        "cooldown": {
+          "cooldown_observed": false,
+          "state": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 200,
+          "completed": false,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "error"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [
+            "request_timeout"
+          ]
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 200,
+            "completed": false,
+            "text": "MOCK_A",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [
+              "request_timeout"
+            ]
+          },
+          {
+            "status": 200,
+            "completed": false,
+            "text": "MOCK_A",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [
+              "request_timeout"
+            ]
+          },
+          {
+            "status": 200,
+            "completed": false,
+            "text": "MOCK_A",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [
+              "request_timeout"
+            ]
+          }
+        ]
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 5,
+      "name": "disconnect before output",
+      "baseline_7.3.11": {
+        "scenario": 5,
+        "name": "disconnect before output",
+        "result": {
+          "status": 408,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [],
+          "body_error_code": "invalid_request_error"
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 100,
+            "cooldowns": []
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 408,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [],
+          "body_error_code": "invalid_request_error"
+        },
+        "cooldown": {
+          "cooldown_observed": false,
+          "state": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 408,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [],
+          "body_error_code": "invalid_request_error"
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 408,
+            "completed": false,
+            "text": "",
+            "event_types": [],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [],
+            "body_error_code": "invalid_request_error"
+          },
+          {
+            "status": 408,
+            "completed": false,
+            "text": "",
+            "event_types": [],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [],
+            "body_error_code": "invalid_request_error"
+          },
+          {
+            "status": 408,
+            "completed": false,
+            "text": "",
+            "event_types": [],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [],
+            "body_error_code": "invalid_request_error"
+          }
+        ]
+      },
+      "latest_8.0.5": {
+        "scenario": 5,
+        "name": "disconnect before output",
+        "result": {
+          "status": 408,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [],
+          "body_error_code": "invalid_request_error"
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 100,
+            "cooldowns": []
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 408,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [],
+          "body_error_code": "invalid_request_error"
+        },
+        "cooldown": {
+          "cooldown_observed": false,
+          "state": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 408,
+          "completed": false,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": [],
+          "body_error_code": "invalid_request_error"
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 408,
+            "completed": false,
+            "text": "",
+            "event_types": [],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [],
+            "body_error_code": "invalid_request_error"
+          },
+          {
+            "status": 408,
+            "completed": false,
+            "text": "",
+            "event_types": [],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [],
+            "body_error_code": "invalid_request_error"
+          },
+          {
+            "status": 408,
+            "completed": false,
+            "text": "",
+            "event_types": [],
+            "read_error": null,
+            "accounts": [
+              "A"
+            ],
+            "error_codes": [],
+            "body_error_code": "invalid_request_error"
+          }
+        ]
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 5,
+      "name": "disconnect before headers",
+      "baseline_7.3.11": {
+        "scenario": 5,
+        "name": "disconnect before headers",
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 100,
+            "cooldowns": []
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": false,
+          "state": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A",
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A",
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A",
+              "B"
+            ],
+            "error_codes": []
+          }
+        ]
+      },
+      "latest_8.0.5": {
+        "scenario": 5,
+        "name": "disconnect before headers",
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "state_after_first_request": {
+          "A": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 100,
+            "cooldowns": []
+          },
+          "B": {
+            "status": "active",
+            "unavailable": false,
+            "priority": 0,
+            "cooldowns": []
+          }
+        },
+        "immediate_next_request": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": false,
+          "state": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_cooldown_poll": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "three_consecutive_followups": [
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A",
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A",
+              "B"
+            ],
+            "error_codes": []
+          },
+          {
+            "status": 200,
+            "completed": true,
+            "text": "MOCK_B",
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "read_error": null,
+            "accounts": [
+              "A",
+              "B"
+            ],
+            "error_codes": []
+          }
+        ]
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 6,
+      "name": "priority patch versus explicit cooldown clear",
+      "baseline_7.3.11": {
+        "scenario": 6,
+        "name": "priority patch versus explicit cooldown clear",
+        "resets_in_seconds": 30,
+        "patch_status": "ok",
+        "cooldown_before_patch": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_patch": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "clear_status": "ok",
+        "after_clear": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 6,
+        "name": "priority patch versus explicit cooldown clear",
+        "resets_in_seconds": 30,
+        "patch_status": "ok",
+        "cooldown_before_patch": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "after_patch": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "B"
+          ],
+          "error_codes": []
+        },
+        "clear_status": "ok",
+        "after_clear": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 1,
+      "name": "non-streaming client quota failover",
+      "baseline_7.3.11": {
+        "scenario": 1,
+        "name": "non-streaming client quota failover",
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 1,
+        "name": "non-streaming client quota failover",
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "",
+          "event_types": [],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 2,
+      "name": "absolute_reset cooldown timing",
+      "baseline_7.3.11": {
+        "scenario": 2,
+        "name": "absolute_reset cooldown timing",
+        "resets_in_seconds": 60,
+        "retry_after_header": 2,
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 2,
+        "name": "absolute_reset cooldown timing",
+        "resets_in_seconds": 60,
+        "retry_after_header": 2,
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        }
+      },
+      "behavior_changed": false
+    },
+    {
+      "scenario": 2,
+      "name": "header_only cooldown timing",
+      "baseline_7.3.11": {
+        "scenario": 2,
+        "name": "header_only cooldown timing",
+        "resets_in_seconds": null,
+        "retry_after_header": 90,
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 1,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "provider_healthy_at_1_3_seconds": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "latest_8.0.5": {
+        "scenario": 2,
+        "name": "header_only cooldown timing",
+        "resets_in_seconds": null,
+        "retry_after_header": 90,
+        "result": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_B",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A",
+            "B"
+          ],
+          "error_codes": []
+        },
+        "cooldown": {
+          "cooldown_observed": true,
+          "state": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota"
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "backoff_level": 1,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          }
+        },
+        "provider_healthy_at_1_3_seconds": {
+          "status": 200,
+          "completed": true,
+          "text": "MOCK_A",
+          "event_types": [
+            "response.created",
+            "response.output_text.delta",
+            "response.completed"
+          ],
+          "read_error": null,
+          "accounts": [
+            "A"
+          ],
+          "error_codes": []
+        }
+      },
+      "behavior_changed": false
+    }
+  ],
+  "runs": [
+    {
+      "tested_at": "2026-09-30T17:09:30.199852+00:00",
+      "binary": "/opt/cliproxyapi/7.3.11/cli-proxy-api",
+      "binary_sha256": "7a228594b88feddf2105737386e2834c61c94adcec1fd3199da4794011ac539a",
+      "binary_version": "7.3.11",
+      "upstream_revision": "ffe6ad3c",
+      "script_sha256": "1d34db80c9a5d1d0f12616dfb73aa9f28aae322afba8706adc4668e3aa314bed",
+      "mock_http_version": "HTTP/2 over TLS; SSE payloads",
+      "dependency": "Python h2 4.3.0, with hpack 4.1.0 and hyperframe 6.1.0",
+      "scope": "isolated loopback gateway with two dummy Codex OAuth files and local TLS/SSE mock",
+      "credential_type": "codex OAuth auth files, matching production provider type",
+      "upstream_override": "Supported per-file proxy_url to a local CONNECT mock; no outbound forwarding. SSL_CERT_FILE/SSL_CERT_DIR trust the temporary mock certificate only in the isolated gateway process. OAuth base_url override is unsupported.",
+      "source_references": [
+        "https://github.com/router-for-me/CLIProxyAPI/blob/ffe6ad3c/internal/watcher/synthesizer/file.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/ffe6ad3c/internal/watcher/synthesizer/config.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/ffe6ad3c/internal/runtime/executor/codex_executor_auth.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/ffe6ad3c/internal/runtime/executor/helps/utls_client.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/ffe6ad3c/config.example.yaml"
+      ],
+      "policy_source": "docs/failover-verification.json; production config and overview not accessed",
+      "production_policy_used": {
+        "request-retry": 0,
+        "max-retry-credentials": 2,
+        "max-retry-interval": 0,
+        "routing": "round-robin",
+        "session-affinity": true,
+        "session-affinity-ttl": "1h",
+        "session-affinity-subagents": true
+      },
+      "priorities": {
+        "A": 100,
+        "B": 0
+      },
+      "other_settings": "gateway defaults, including Codex stream bootstrap buffering off",
+      "tests": [
+        {
+          "scenario": 1,
+          "name": "quota failover in the same request",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.006
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.049
+              }
+            ],
+            "elapsed_seconds": 0.09,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 2,
+          "name": "next new request and settled cooldown",
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.047,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.042,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:08:59.964293085Z",
+                    "remaining_seconds": 12
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:08:59.964293085Z",
+                    "remaining_seconds": 12,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_visible": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 6,
+          "name": "natural cooldown expiration",
+          "resets_in_seconds": 12,
+          "retry_after_header": 2,
+          "provider_healthy_while_cooled": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_header_deadline": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_body_deadline": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 3,
+          "name": "affinity rebinds after quota exhaustion",
+          "baseline": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "failover": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.047
+              }
+            ],
+            "elapsed_seconds": 0.089,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "followup": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_A_clear_same_session": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_A_clear_new_session": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.047,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "clear_status": "ok"
+        },
+        {
+          "scenario": 4,
+          "name": "both exhausted and subsequent recovery",
+          "resets_in_seconds": 3,
+          "retry_after_header": 1,
+          "both_exhausted": {
+            "status": 429,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "quota",
+                "after_seconds": 0.049
+              }
+            ],
+            "elapsed_seconds": 0.097,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "usage_limit_reached",
+                "message": "You've hit your usage limit. Try again later.",
+                "plan_type": "plus",
+                "resets_in_seconds": 3,
+                "type": "usage_limit_reached"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "provider_healthy_immediately": {
+            "status": 429,
+            "upstream_attempts": [],
+            "elapsed_seconds": 0.003,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "model_cooldown",
+                "last_upstream_error": "{\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}}",
+                "message": "All credentials for model gpt-6-astra are cooling down (last error: {\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}})",
+                "model": "gpt-6-astra",
+                "reset_seconds": 10,
+                "reset_time": "10s"
+              }
+            },
+            "read_error": null,
+            "retry_after": "10"
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.041,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:12.571132205Z",
+                    "remaining_seconds": 10
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:12.571132205Z",
+                    "remaining_seconds": 10,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 0,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:12.6160425Z",
+                    "remaining_seconds": 10
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:12.6160425Z",
+                    "remaining_seconds": 10,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              }
+            }
+          },
+          "after_cooldown_visible": {
+            "status": 429,
+            "upstream_attempts": [],
+            "elapsed_seconds": 0.002,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "model_cooldown",
+                "last_upstream_error": "{\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}}",
+                "message": "All credentials for model gpt-6-astra are cooling down (last error: {\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}})",
+                "model": "gpt-6-astra",
+                "reset_seconds": 10,
+                "reset_time": "10s"
+              }
+            },
+            "read_error": null,
+            "retry_after": "10"
+          },
+          "at_4_seconds": {
+            "status": 429,
+            "upstream_attempts": [],
+            "elapsed_seconds": 0.002,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "model_cooldown",
+                "last_upstream_error": "{\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}}",
+                "message": "All credentials for model gpt-6-astra are cooling down (last error: {\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}})",
+                "model": "gpt-6-astra",
+                "reset_seconds": 7,
+                "reset_time": "6s"
+              }
+            },
+            "read_error": null,
+            "retry_after": "7"
+          },
+          "at_10_4_seconds": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 5,
+          "name": "stream_error after a generated delta",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "stream_error",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "usage_limit_reached",
+                  "message": "You've hit your usage limit. Try again later.",
+                  "plan_type": "plus",
+                  "resets_in_seconds": 12,
+                  "type": "usage_limit_reached"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota",
+                  "retry_at": "2026-09-30T17:09:25.977279859Z",
+                  "remaining_seconds": 12
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "retry_at": "2026-09-30T17:09:25.977279859Z",
+                  "remaining_seconds": 12,
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.039,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:25.977279859Z",
+                    "remaining_seconds": 12
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:25.977279859Z",
+                    "remaining_seconds": 12,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.044,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.046,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.044,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.045,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 5,
+          "name": "disconnect after a generated delta",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "request_timeout",
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "param": null,
+                  "type": "server_error"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "request_timeout",
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "param": null,
+                  "type": "server_error"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": null,
+            "state": {
+              "A": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 100,
+                "cooldowns": []
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "request_timeout",
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "param": null,
+                  "type": "server_error"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "error"
+              ],
+              "text": "MOCK_A",
+              "errors": [
+                {
+                  "type": "error",
+                  "error": {
+                    "code": "request_timeout",
+                    "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                    "param": null,
+                    "type": "server_error"
+                  },
+                  "sequence_number": 2
+                }
+              ],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "error"
+              ],
+              "text": "MOCK_A",
+              "errors": [
+                {
+                  "type": "error",
+                  "error": {
+                    "code": "request_timeout",
+                    "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                    "param": null,
+                    "type": "server_error"
+                  },
+                  "sequence_number": 2
+                }
+              ],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "error"
+              ],
+              "text": "MOCK_A",
+              "errors": [
+                {
+                  "type": "error",
+                  "error": {
+                    "code": "request_timeout",
+                    "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                    "param": null,
+                    "type": "server_error"
+                  },
+                  "sequence_number": 2
+                }
+              ],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 5,
+          "name": "disconnect before output",
+          "result": {
+            "status": 408,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_output",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.206,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                "type": "invalid_request_error"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 408,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_output",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                "type": "invalid_request_error"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": null,
+            "state": {
+              "A": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 100,
+                "cooldowns": []
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 408,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_output",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.206,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                "type": "invalid_request_error"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 408,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_output",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [],
+              "text": "",
+              "errors": [],
+              "body": {
+                "error": {
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "type": "invalid_request_error"
+                }
+              },
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 408,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_output",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.206,
+              "completed": false,
+              "event_types": [],
+              "text": "",
+              "errors": [],
+              "body": {
+                "error": {
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "type": "invalid_request_error"
+                }
+              },
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 408,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_output",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.206,
+              "completed": false,
+              "event_types": [],
+              "text": "",
+              "errors": [],
+              "body": {
+                "error": {
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "type": "invalid_request_error"
+                }
+              },
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 5,
+          "name": "disconnect before headers",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_headers",
+                "after_seconds": 0.005
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.009
+              }
+            ],
+            "elapsed_seconds": 0.05,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_headers",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.008
+              }
+            ],
+            "elapsed_seconds": 0.051,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": null,
+            "state": {
+              "A": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 100,
+                "cooldowns": []
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_headers",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.008
+              }
+            ],
+            "elapsed_seconds": 0.049,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_headers",
+                  "after_seconds": 0.004
+                },
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.008
+                }
+              ],
+              "elapsed_seconds": 0.051,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_headers",
+                  "after_seconds": 0.004
+                },
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.008
+                }
+              ],
+              "elapsed_seconds": 0.049,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_headers",
+                  "after_seconds": 0.004
+                },
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.008
+                }
+              ],
+              "elapsed_seconds": 0.05,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 6,
+          "name": "priority patch versus explicit cooldown clear",
+          "resets_in_seconds": 30,
+          "patch_status": "ok",
+          "cooldown_before_patch": {
+            "observed_after_seconds": 0.039,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:55.229169232Z",
+                    "remaining_seconds": 30
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:55.229169232Z",
+                    "remaining_seconds": 30,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_patch": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.047,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "clear_status": "ok",
+          "after_clear": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 1,
+          "name": "non-streaming client quota failover",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.05
+              }
+            ],
+            "elapsed_seconds": 0.091,
+            "completed": true,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "id": "resp_mock_944d9a801b8b425cb117e67e89adcd56",
+              "object": "response",
+              "status": "completed",
+              "model": "gpt-6-astra",
+              "output": [
+                {
+                  "id": "msg_mock",
+                  "type": "message",
+                  "role": "assistant",
+                  "status": "completed",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "MOCK_B",
+                      "annotations": []
+                    }
+                  ]
+                }
+              ],
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "total_tokens": 2,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                }
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 2,
+          "name": "absolute_reset cooldown timing",
+          "resets_at": 1790788181,
+          "resets_in_seconds": 60,
+          "retry_after_header": 2,
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.05
+              }
+            ],
+            "elapsed_seconds": 0.091,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.039,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:41.000220773Z",
+                    "remaining_seconds": 14
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:41.000220773Z",
+                    "remaining_seconds": 14,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          }
+        },
+        {
+          "scenario": 2,
+          "name": "header_only cooldown timing",
+          "resets_at": null,
+          "resets_in_seconds": null,
+          "retry_after_header": 90,
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.049
+              }
+            ],
+            "elapsed_seconds": 0.09,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.045,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:29.443178338Z",
+                    "remaining_seconds": 1
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:29.443178338Z",
+                    "remaining_seconds": 1,
+                    "backoff_level": 1,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "provider_healthy_at_1_3_seconds": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.003
+              }
+            ],
+            "elapsed_seconds": 0.044,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        }
+      ],
+      "baseline_behavior_checks": [
+        {
+          "name": "streaming quota failover completes on B",
+          "passed": true
+        },
+        {
+          "name": "settled quota cooldown excludes A",
+          "passed": true
+        },
+        {
+          "name": "provider recovery alone preserves cooldown",
+          "passed": true
+        },
+        {
+          "name": "body reset outlasts Retry-After header",
+          "passed": true
+        },
+        {
+          "name": "A recovers after body reset deadline",
+          "passed": true
+        },
+        {
+          "name": "new session initially selects A",
+          "passed": true
+        },
+        {
+          "name": "pinned session fails over to B",
+          "passed": true
+        },
+        {
+          "name": "pinned session stays on B while A cools",
+          "passed": true
+        },
+        {
+          "name": "affinity stays on B after A cooldown clear; fresh session selects A",
+          "passed": true
+        },
+        {
+          "name": "both exhausted returns upstream 429 after trying A and B",
+          "passed": true
+        },
+        {
+          "name": "both exhausted remains local 429 at four seconds",
+          "passed": true
+        },
+        {
+          "name": "both exhausted recovers at 10.4 seconds",
+          "passed": true
+        },
+        {
+          "name": "stream_error after a generated delta: partial stream has an error and no completion or retry",
+          "passed": true
+        },
+        {
+          "name": "stream_error after a generated delta: three new requests complete on B",
+          "passed": true
+        },
+        {
+          "name": "stream_error after a generated delta: quota cooldown recorded",
+          "passed": true
+        },
+        {
+          "name": "disconnect after a generated delta: partial stream has an error and no completion or retry",
+          "passed": true
+        },
+        {
+          "name": "disconnect after a generated delta: three new requests still fail on A",
+          "passed": true
+        },
+        {
+          "name": "disconnect after a generated delta: disconnect leaves A eligible",
+          "passed": true
+        },
+        {
+          "name": "disconnect before output: empty upstream SSE failure returns 408 without retry",
+          "passed": true
+        },
+        {
+          "name": "disconnect before output: three new requests still fail on A",
+          "passed": true
+        },
+        {
+          "name": "disconnect before output: disconnect leaves A eligible",
+          "passed": true
+        },
+        {
+          "name": "disconnect before headers: transport failure retries B before response headers",
+          "passed": true
+        },
+        {
+          "name": "disconnect before headers: three new requests retry A then B",
+          "passed": true
+        },
+        {
+          "name": "disconnect before headers: disconnect leaves A eligible",
+          "passed": true
+        },
+        {
+          "name": "priority-patch setup fails over to B",
+          "passed": true
+        },
+        {
+          "name": "priority patch preserves cooldown",
+          "passed": true
+        },
+        {
+          "name": "explicit reset clears cooldown",
+          "passed": true
+        },
+        {
+          "name": "non-streaming quota failover returns 200 on B",
+          "passed": true
+        },
+        {
+          "name": "non-streaming quota failover completes",
+          "passed": true
+        },
+        {
+          "name": "reset-timing setup fails over to B",
+          "passed": true
+        },
+        {
+          "name": "absolute reset takes precedence over relative reset",
+          "passed": true
+        },
+        {
+          "name": "reset-timing setup fails over to B",
+          "passed": true
+        },
+        {
+          "name": "header-only quota returns to A by 1.3 seconds",
+          "passed": true
+        },
+        {
+          "name": "header-only recovery completes",
+          "passed": true
+        }
+      ],
+      "baseline_behavior_checks_passed": true,
+      "not_covered": [
+        "Real OAuth token validation/refresh and real OpenAI behavior",
+        "WebSocket transport, client cancellation, concurrent load",
+        "Week-long cooldowns, reset credits, dashboard/controller integration",
+        "Other models, prefixed routes, HTTP-date Retry-After headers, affinity TTL expiry",
+        "Repeated header-only quota errors and escalating fallback backoff"
+      ],
+      "real_credentials_used": false,
+      "openai_contacted": false,
+      "production_files_accessed": false,
+      "live_gateway_accessed": false,
+      "temporary_instances_stopped_and_files_removed": true
+    },
+    {
+      "tested_at": "2026-09-30T17:10:04.553605+00:00",
+      "binary": "/tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/8.0.5/cli-proxy-api",
+      "binary_sha256": "5b5c3d2f4ff51fd1381f08e452bb2b7f9b18d8ea0e6108c4076106c3b9441374",
+      "binary_version": "8.0.5",
+      "upstream_revision": "e5b5a1cf",
+      "script_sha256": "1d34db80c9a5d1d0f12616dfb73aa9f28aae322afba8706adc4668e3aa314bed",
+      "mock_http_version": "HTTP/2 over TLS; SSE payloads",
+      "dependency": "Python h2 4.3.0, with hpack 4.1.0 and hyperframe 6.1.0",
+      "scope": "isolated loopback gateway with two dummy Codex OAuth files and local TLS/SSE mock",
+      "credential_type": "codex OAuth auth files, matching production provider type",
+      "upstream_override": "Supported per-file proxy_url to a local CONNECT mock; no outbound forwarding. SSL_CERT_FILE/SSL_CERT_DIR trust the temporary mock certificate only in the isolated gateway process. OAuth base_url override is unsupported.",
+      "source_references": [
+        "https://github.com/router-for-me/CLIProxyAPI/blob/e5b5a1cf/internal/watcher/synthesizer/file.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/e5b5a1cf/internal/watcher/synthesizer/config.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/e5b5a1cf/internal/runtime/executor/codex_executor_auth.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/e5b5a1cf/internal/runtime/executor/helps/utls_client.go",
+        "https://github.com/router-for-me/CLIProxyAPI/blob/e5b5a1cf/config.example.yaml"
+      ],
+      "policy_source": "docs/failover-verification.json; production config and overview not accessed",
+      "production_policy_used": {
+        "request-retry": 0,
+        "max-retry-credentials": 2,
+        "max-retry-interval": 0,
+        "routing": "round-robin",
+        "session-affinity": true,
+        "session-affinity-ttl": "1h",
+        "session-affinity-subagents": true
+      },
+      "priorities": {
+        "A": 100,
+        "B": 0
+      },
+      "other_settings": "gateway defaults, including Codex stream bootstrap buffering off",
+      "tests": [
+        {
+          "scenario": 1,
+          "name": "quota failover in the same request",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.049
+              }
+            ],
+            "elapsed_seconds": 0.09,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 2,
+          "name": "next new request and settled cooldown",
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.039,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:34.387223666Z",
+                    "remaining_seconds": 12
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:34.387223666Z",
+                    "remaining_seconds": 12,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_visible": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 6,
+          "name": "natural cooldown expiration",
+          "resets_in_seconds": 12,
+          "retry_after_header": 2,
+          "provider_healthy_while_cooled": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_header_deadline": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_body_deadline": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 3,
+          "name": "affinity rebinds after quota exhaustion",
+          "baseline": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "failover": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.049
+              }
+            ],
+            "elapsed_seconds": 0.091,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "followup": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.003
+              }
+            ],
+            "elapsed_seconds": 0.043,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_A_clear_same_session": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "after_A_clear_new_session": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "clear_status": "ok"
+        },
+        {
+          "scenario": 4,
+          "name": "both exhausted and subsequent recovery",
+          "resets_in_seconds": 3,
+          "retry_after_header": 1,
+          "both_exhausted": {
+            "status": 429,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.005
+              },
+              {
+                "account": "B",
+                "mode": "quota",
+                "after_seconds": 0.05
+              }
+            ],
+            "elapsed_seconds": 0.093,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "usage_limit_reached",
+                "message": "You've hit your usage limit. Try again later.",
+                "plan_type": "plus",
+                "resets_in_seconds": 3,
+                "type": "usage_limit_reached"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "provider_healthy_immediately": {
+            "status": 429,
+            "upstream_attempts": [],
+            "elapsed_seconds": 0.002,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "model_cooldown",
+                "last_upstream_error": "{\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}}",
+                "message": "All credentials for model gpt-6-astra are cooling down (last error: {\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}})",
+                "model": "gpt-6-astra",
+                "reset_seconds": 10,
+                "reset_time": "10s"
+              }
+            },
+            "read_error": null,
+            "retry_after": "10"
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.039,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:46.943267315Z",
+                    "remaining_seconds": 10
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:46.943267315Z",
+                    "remaining_seconds": 10,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 0,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:09:46.989129667Z",
+                    "remaining_seconds": 10
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:09:46.989129667Z",
+                    "remaining_seconds": 10,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              }
+            }
+          },
+          "after_cooldown_visible": {
+            "status": 429,
+            "upstream_attempts": [],
+            "elapsed_seconds": 0.002,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "model_cooldown",
+                "last_upstream_error": "{\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}}",
+                "message": "All credentials for model gpt-6-astra are cooling down (last error: {\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}})",
+                "model": "gpt-6-astra",
+                "reset_seconds": 10,
+                "reset_time": "10s"
+              }
+            },
+            "read_error": null,
+            "retry_after": "10"
+          },
+          "at_4_seconds": {
+            "status": 429,
+            "upstream_attempts": [],
+            "elapsed_seconds": 0.002,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "code": "model_cooldown",
+                "last_upstream_error": "{\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}}",
+                "message": "All credentials for model gpt-6-astra are cooling down (last error: {\"error\": {\"type\": \"usage_limit_reached\", \"code\": \"usage_limit_reached\", \"message\": \"You've hit your usage limit. Try again later.\", \"plan_type\": \"plus\", \"resets_in_seconds\": 3}})",
+                "model": "gpt-6-astra",
+                "reset_seconds": 7,
+                "reset_time": "6s"
+              }
+            },
+            "read_error": null,
+            "retry_after": "7"
+          },
+          "at_10_4_seconds": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 5,
+          "name": "stream_error after a generated delta",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "stream_error",
+                "after_seconds": 0.003
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "usage_limit_reached",
+                  "message": "You've hit your usage limit. Try again later.",
+                  "plan_type": "plus",
+                  "resets_in_seconds": 12,
+                  "type": "usage_limit_reached"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "error",
+              "unavailable": true,
+              "priority": 100,
+              "cooldowns": [
+                {
+                  "scope": "credential",
+                  "reason": "credential_quota",
+                  "retry_at": "2026-09-30T17:10:00.347846929Z",
+                  "remaining_seconds": 12
+                },
+                {
+                  "scope": "model",
+                  "model_key": "gpt-6-astra",
+                  "reason": "quota",
+                  "retry_at": "2026-09-30T17:10:00.347846929Z",
+                  "remaining_seconds": 12,
+                  "backoff_level": 0,
+                  "http_status": 429
+                }
+              ]
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.003
+              }
+            ],
+            "elapsed_seconds": 0.044,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.039,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:10:00.347846929Z",
+                    "remaining_seconds": 12
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:10:00.347846929Z",
+                    "remaining_seconds": 12,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.003
+                }
+              ],
+              "elapsed_seconds": 0.044,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.005
+                }
+              ],
+              "elapsed_seconds": 0.045,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.005
+                }
+              ],
+              "elapsed_seconds": 0.046,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 5,
+          "name": "disconnect after a generated delta",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "request_timeout",
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "param": null,
+                  "type": "server_error"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "request_timeout",
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "param": null,
+                  "type": "server_error"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": null,
+            "state": {
+              "A": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 100,
+                "cooldowns": []
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.205,
+            "completed": false,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "error"
+            ],
+            "text": "MOCK_A",
+            "errors": [
+              {
+                "type": "error",
+                "error": {
+                  "code": "request_timeout",
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "param": null,
+                  "type": "server_error"
+                },
+                "sequence_number": 2
+              }
+            ],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "error"
+              ],
+              "text": "MOCK_A",
+              "errors": [
+                {
+                  "type": "error",
+                  "error": {
+                    "code": "request_timeout",
+                    "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                    "param": null,
+                    "type": "server_error"
+                  },
+                  "sequence_number": 2
+                }
+              ],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "error"
+              ],
+              "text": "MOCK_A",
+              "errors": [
+                {
+                  "type": "error",
+                  "error": {
+                    "code": "request_timeout",
+                    "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                    "param": null,
+                    "type": "server_error"
+                  },
+                  "sequence_number": 2
+                }
+              ],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "error"
+              ],
+              "text": "MOCK_A",
+              "errors": [
+                {
+                  "type": "error",
+                  "error": {
+                    "code": "request_timeout",
+                    "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                    "param": null,
+                    "type": "server_error"
+                  },
+                  "sequence_number": 2
+                }
+              ],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 5,
+          "name": "disconnect before output",
+          "result": {
+            "status": 408,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_output",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.206,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                "type": "invalid_request_error"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 408,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_output",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.206,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                "type": "invalid_request_error"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": null,
+            "state": {
+              "A": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 100,
+                "cooldowns": []
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 408,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_output",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.206,
+            "completed": false,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "error": {
+                "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                "type": "invalid_request_error"
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 408,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_output",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.206,
+              "completed": false,
+              "event_types": [],
+              "text": "",
+              "errors": [],
+              "body": {
+                "error": {
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "type": "invalid_request_error"
+                }
+              },
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 408,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_output",
+                  "after_seconds": 0.005
+                }
+              ],
+              "elapsed_seconds": 0.206,
+              "completed": false,
+              "event_types": [],
+              "text": "",
+              "errors": [],
+              "body": {
+                "error": {
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "type": "invalid_request_error"
+                }
+              },
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 408,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_output",
+                  "after_seconds": 0.004
+                }
+              ],
+              "elapsed_seconds": 0.205,
+              "completed": false,
+              "event_types": [],
+              "text": "",
+              "errors": [],
+              "body": {
+                "error": {
+                  "message": "stream error: stream disconnected before completion: stream closed before response.completed",
+                  "type": "invalid_request_error"
+                }
+              },
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 5,
+          "name": "disconnect before headers",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_headers",
+                "after_seconds": 0.005
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.008
+              }
+            ],
+            "elapsed_seconds": 0.049,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "state_after_first_request": {
+            "A": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 100,
+              "cooldowns": []
+            },
+            "B": {
+              "status": "active",
+              "unavailable": false,
+              "priority": 0,
+              "cooldowns": []
+            }
+          },
+          "immediate_next_request": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_headers",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.008
+              }
+            ],
+            "elapsed_seconds": 0.049,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": null,
+            "state": {
+              "A": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 100,
+                "cooldowns": []
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_cooldown_poll": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "disconnect_before_headers",
+                "after_seconds": 0.003
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.007
+              }
+            ],
+            "elapsed_seconds": 0.048,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "three_consecutive_followups": [
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_headers",
+                  "after_seconds": 0.004
+                },
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.008
+                }
+              ],
+              "elapsed_seconds": 0.049,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_headers",
+                  "after_seconds": 0.003
+                },
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.007
+                }
+              ],
+              "elapsed_seconds": 0.048,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            },
+            {
+              "status": 200,
+              "upstream_attempts": [
+                {
+                  "account": "A",
+                  "mode": "disconnect_before_headers",
+                  "after_seconds": 0.004
+                },
+                {
+                  "account": "B",
+                  "mode": "ok",
+                  "after_seconds": 0.008
+                }
+              ],
+              "elapsed_seconds": 0.05,
+              "completed": true,
+              "event_types": [
+                "response.created",
+                "response.output_text.delta",
+                "response.completed"
+              ],
+              "text": "MOCK_B",
+              "errors": [],
+              "body": null,
+              "read_error": null,
+              "retry_after": null
+            }
+          ]
+        },
+        {
+          "scenario": 6,
+          "name": "priority patch versus explicit cooldown clear",
+          "resets_in_seconds": 30,
+          "patch_status": "ok",
+          "cooldown_before_patch": {
+            "observed_after_seconds": 0.04,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:10:29.529169117Z",
+                    "remaining_seconds": 30
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:10:29.529169117Z",
+                    "remaining_seconds": 30,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "after_patch": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.003
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "clear_status": "ok",
+          "after_clear": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.004
+              }
+            ],
+            "elapsed_seconds": 0.045,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 1,
+          "name": "non-streaming client quota failover",
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.05
+              }
+            ],
+            "elapsed_seconds": 0.091,
+            "completed": true,
+            "event_types": [],
+            "text": "",
+            "errors": [],
+            "body": {
+              "id": "resp_mock_97fad08cc30340e2882f05ab496ff8c5",
+              "object": "response",
+              "status": "completed",
+              "model": "gpt-6-astra",
+              "output": [
+                {
+                  "id": "msg_mock",
+                  "type": "message",
+                  "role": "assistant",
+                  "status": "completed",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "MOCK_B",
+                      "annotations": []
+                    }
+                  ]
+                }
+              ],
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "total_tokens": 2,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                }
+              }
+            },
+            "read_error": null,
+            "retry_after": null
+          }
+        },
+        {
+          "scenario": 2,
+          "name": "absolute_reset cooldown timing",
+          "resets_at": 1790788215,
+          "resets_in_seconds": 60,
+          "retry_after_header": 2,
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.005
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.009
+              }
+            ],
+            "elapsed_seconds": 0.049,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.043,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:10:15.000137388Z",
+                    "remaining_seconds": 13
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:10:15.000137388Z",
+                    "remaining_seconds": 13,
+                    "backoff_level": 0,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          }
+        },
+        {
+          "scenario": 2,
+          "name": "header_only cooldown timing",
+          "resets_at": null,
+          "resets_in_seconds": null,
+          "retry_after_header": 90,
+          "result": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "quota",
+                "after_seconds": 0.004
+              },
+              {
+                "account": "B",
+                "mode": "ok",
+                "after_seconds": 0.047
+              }
+            ],
+            "elapsed_seconds": 0.088,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_B",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          },
+          "cooldown": {
+            "observed_after_seconds": 0.041,
+            "state": {
+              "A": {
+                "status": "error",
+                "unavailable": true,
+                "priority": 100,
+                "cooldowns": [
+                  {
+                    "scope": "credential",
+                    "reason": "credential_quota",
+                    "retry_at": "2026-09-30T17:10:03.796074974Z",
+                    "remaining_seconds": 1
+                  },
+                  {
+                    "scope": "model",
+                    "model_key": "gpt-6-astra",
+                    "reason": "quota",
+                    "retry_at": "2026-09-30T17:10:03.796074974Z",
+                    "remaining_seconds": 1,
+                    "backoff_level": 1,
+                    "http_status": 429
+                  }
+                ]
+              },
+              "B": {
+                "status": "active",
+                "unavailable": false,
+                "priority": 0,
+                "cooldowns": []
+              }
+            }
+          },
+          "provider_healthy_at_1_3_seconds": {
+            "status": 200,
+            "upstream_attempts": [
+              {
+                "account": "A",
+                "mode": "ok",
+                "after_seconds": 0.005
+              }
+            ],
+            "elapsed_seconds": 0.046,
+            "completed": true,
+            "event_types": [
+              "response.created",
+              "response.output_text.delta",
+              "response.completed"
+            ],
+            "text": "MOCK_A",
+            "errors": [],
+            "body": null,
+            "read_error": null,
+            "retry_after": null
+          }
+        }
+      ],
+      "baseline_behavior_checks": [
+        {
+          "name": "streaming quota failover completes on B",
+          "passed": true
+        },
+        {
+          "name": "settled quota cooldown excludes A",
+          "passed": true
+        },
+        {
+          "name": "provider recovery alone preserves cooldown",
+          "passed": true
+        },
+        {
+          "name": "body reset outlasts Retry-After header",
+          "passed": true
+        },
+        {
+          "name": "A recovers after body reset deadline",
+          "passed": true
+        },
+        {
+          "name": "new session initially selects A",
+          "passed": true
+        },
+        {
+          "name": "pinned session fails over to B",
+          "passed": true
+        },
+        {
+          "name": "pinned session stays on B while A cools",
+          "passed": true
+        },
+        {
+          "name": "affinity stays on B after A cooldown clear; fresh session selects A",
+          "passed": true
+        },
+        {
+          "name": "both exhausted returns upstream 429 after trying A and B",
+          "passed": true
+        },
+        {
+          "name": "both exhausted remains local 429 at four seconds",
+          "passed": true
+        },
+        {
+          "name": "both exhausted recovers at 10.4 seconds",
+          "passed": true
+        },
+        {
+          "name": "stream_error after a generated delta: partial stream has an error and no completion or retry",
+          "passed": true
+        },
+        {
+          "name": "stream_error after a generated delta: three new requests complete on B",
+          "passed": true
+        },
+        {
+          "name": "stream_error after a generated delta: quota cooldown recorded",
+          "passed": true
+        },
+        {
+          "name": "disconnect after a generated delta: partial stream has an error and no completion or retry",
+          "passed": true
+        },
+        {
+          "name": "disconnect after a generated delta: three new requests still fail on A",
+          "passed": true
+        },
+        {
+          "name": "disconnect after a generated delta: disconnect leaves A eligible",
+          "passed": true
+        },
+        {
+          "name": "disconnect before output: empty upstream SSE failure returns 408 without retry",
+          "passed": true
+        },
+        {
+          "name": "disconnect before output: three new requests still fail on A",
+          "passed": true
+        },
+        {
+          "name": "disconnect before output: disconnect leaves A eligible",
+          "passed": true
+        },
+        {
+          "name": "disconnect before headers: transport failure retries B before response headers",
+          "passed": true
+        },
+        {
+          "name": "disconnect before headers: three new requests retry A then B",
+          "passed": true
+        },
+        {
+          "name": "disconnect before headers: disconnect leaves A eligible",
+          "passed": true
+        },
+        {
+          "name": "priority-patch setup fails over to B",
+          "passed": true
+        },
+        {
+          "name": "priority patch preserves cooldown",
+          "passed": true
+        },
+        {
+          "name": "explicit reset clears cooldown",
+          "passed": true
+        },
+        {
+          "name": "non-streaming quota failover returns 200 on B",
+          "passed": true
+        },
+        {
+          "name": "non-streaming quota failover completes",
+          "passed": true
+        },
+        {
+          "name": "reset-timing setup fails over to B",
+          "passed": true
+        },
+        {
+          "name": "absolute reset takes precedence over relative reset",
+          "passed": true
+        },
+        {
+          "name": "reset-timing setup fails over to B",
+          "passed": true
+        },
+        {
+          "name": "header-only quota returns to A by 1.3 seconds",
+          "passed": true
+        },
+        {
+          "name": "header-only recovery completes",
+          "passed": true
+        }
+      ],
+      "baseline_behavior_checks_passed": true,
+      "not_covered": [
+        "Real OAuth token validation/refresh and real OpenAI behavior",
+        "WebSocket transport, client cancellation, concurrent load",
+        "Week-long cooldowns, reset credits, dashboard/controller integration",
+        "Other models, prefixed routes, HTTP-date Retry-After headers, affinity TTL expiry",
+        "Repeated header-only quota errors and escalating fallback backoff"
+      ],
+      "real_credentials_used": false,
+      "openai_contacted": false,
+      "production_files_accessed": false,
+      "live_gateway_accessed": false,
+      "temporary_instances_stopped_and_files_removed": true
+    }
+  ],
+  "regressions": {
+    "observed": [],
+    "scenario_records_per_version": 13,
+    "baseline_behavior_checks_per_version": 34,
+    "all_checks_passed_both_versions": true,
+    "unchanged": "Same-request streaming/non-streaming 429 failover; exclusion during cooldown; 12-second body reset over 2-second Retry-After; absolute reset precedence; header-only 90-second Retry-After ignored with approximately one-second fallback; affinity rebinding and retention; both exhausted local 429 and 10-second floor; priority patch retains cooldown; explicit reset clears cooldown.",
+    "comparison_excludes": "Nondeterministic response IDs, absolute mock reset timestamps, cooldown timestamps/remaining seconds, and request/poll latency. Full raw records remain in runs."
+  },
+  "schema_changes": {
+    "harness_adaptations_required": false,
+    "legacy_config_and_dummy_auth_accepted_both_versions": true,
+    "config": "v8 introduces config-version: 8 and nested server, management, access, requests, oauth and observability sections. Legacy fields remain accepted. When old and v8 spellings coexist, v8 wins, including false, 0 and empty collections. Successful /v8/management configuration writes migrate the layout; GET or config-version: 8 alone does not.",
+    "relevant_key_mapping": {
+      "host": "server.host",
+      "port": "server.port",
+      "remote-management": "management",
+      "api-keys": "access.api-keys",
+      "auth-dir": "oauth.auth-dir",
+      "proxy-url": "requests.proxy-url",
+      "request-retry": "routing.retry.request-retry",
+      "max-retry-credentials": "routing.retry.max-retry-credentials",
+      "max-retry-interval": "routing.retry.max-retry-interval",
+      "codex": "oauth.providers.codex",
+      "usage-statistics-enabled": "observability.usage.usage-statistics-enabled",
+      "logging-to-file": "observability.logs.logging-to-file",
+      "pprof": "observability.pprof"
+    },
+    "auth_files": "No required change to the dummy top-level codex OAuth fields (type, access_token, refresh_token, account_id, expired, priority, proxy_url). No real OAuth refresh/validation or production auth schema was examined.",
+    "management": "/v0/management is deprecated but remains supported; auth-files, auth-files/fields PATCH and reset-quota POST work in both runs. v8.0.5 removes /v8/management/credentials/quota/providers, /fetch and /reset; a controller migration must not assume these new-v8 routes exist.",
+    "bootstrap_buffering": "Default remains false (new location oauth.providers.codex.stream-bootstrap-buffering); enabled buffering was not evaluated.",
+    "references": [
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/config.example.yaml",
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/internal/config/config_v8.go",
+      "https://github.com/router-for-me/CLIProxyAPI/pull/6154"
+    ]
+  },
+  "source_analysis": {
+    "compare_url": "https://github.com/router-for-me/CLIProxyAPI/compare/v7.3.11...v8.0.5",
+    "method": "Read release changelogs, commit history for the whole range and relevant file history/diffs; inspect tagged Codex executor and conductor classification/stream/cooldown code.",
+    "finding": "The Codex incomplete-stream type and classification remain unchanged apart from v7-to-v8 import paths. newCodexIncompleteStreamError has HTTP 408 and IsRequestScoped() == true. resultErrorFromError preserves request-scoped classification; shouldSkipCredentialCooldown excludes these results. Stream wrapping forwards a failure after output without restarting on another credential. The empty SSE case reaches the bootstrap error path with that same request-scoped error.",
+    "code_references": [
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/internal/runtime/executor/codex_executor_terminal.go#L17",
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/internal/runtime/executor/codex_executor_stream.go#L439",
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/sdk/cliproxy/auth/conductor_cooldown.go#L1462",
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/sdk/cliproxy/auth/conductor_cooldown.go#L1507",
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/sdk/cliproxy/auth/conductor_stream.go#L121",
+      "https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.5/sdk/cliproxy/auth/conductor_stream.go#L396"
+    ],
+    "relevant_commits": [
+      {
+        "revision": "aafa4e9549f7d77b7a361cb68fc350e8ee4185a9",
+        "url": "https://github.com/router-for-me/CLIProxyAPI/commit/aafa4e9549f7d77b7a361cb68fc350e8ee4185a9",
+        "title": "fix(auth): isolate credential-scoped quota cooldown from model quota state",
+        "files": [
+          "sdk/cliproxy/auth/conductor_cooldown.go"
+        ],
+        "assessment": "Separates credential versus model quota backoff/deadlines; does not change request-scoped disconnect handling. No regression in tested single-model quota cases.",
+        "related": [
+          "https://github.com/router-for-me/CLIProxyAPI/issues/6083"
+        ]
+      },
+      {
+        "revision": "ed70aeaa1627ddd2cbf9fbeea63a7cd7fad958f4",
+        "url": "https://github.com/router-for-me/CLIProxyAPI/commit/ed70aeaa1627ddd2cbf9fbeea63a7cd7fad958f4",
+        "title": "fix(registry): avoid double-counting clients with active quota and suspension",
+        "files": [
+          "internal/registry/model_registry.go",
+          "sdk/cliproxy/auth/catalog_credential_quota_regression_test.go"
+        ],
+        "assessment": "Availability counting fix; not a Codex disconnect fix.",
+        "related": [
+          "https://github.com/router-for-me/CLIProxyAPI/issues/6036"
+        ]
+      },
+      {
+        "revision": "cbf8318315a102e65f288f17fba2322cf9cecda2",
+        "url": "https://github.com/router-for-me/CLIProxyAPI/commit/cbf8318315a102e65f288f17fba2322cf9cecda2",
+        "title": "perf(codex): avoid discarded copies of SSE data lines",
+        "files": [
+          "internal/runtime/executor/codex_executor_stream.go",
+          "internal/runtime/executor/codex_executor_stream_alloc_test.go"
+        ],
+        "assessment": "Reduces SSE allocations, without changing terminal/disconnect classification.",
+        "related": [
+          "https://github.com/router-for-me/CLIProxyAPI/pull/5678"
+        ]
+      },
+      {
+        "revision": "f1697119f6b0d87352bcd116093ff80011e8165d",
+        "url": "https://github.com/router-for-me/CLIProxyAPI/commit/f1697119f6b0d87352bcd116093ff80011e8165d",
+        "title": "fix(interactions): handle failure events in response translators and stream executor",
+        "files": [
+          "internal/runtime/executor/devin_executor.go",
+          "internal/translator/openai/interactions/responses/interactions_openai_responses_response.go"
+        ],
+        "assessment": "Failure-event fix is for Interactions/Devin and translators, not the tested Codex Responses HTTP/SSE path.",
+        "related": [
+          "https://github.com/router-for-me/CLIProxyAPI/issues/6204"
+        ]
+      },
+      {
+        "revision": "d9922f058902249488688af24baeac39a8428592",
+        "url": "https://github.com/router-for-me/CLIProxyAPI/commit/d9922f058902249488688af24baeac39a8428592",
+        "title": "feat(config): add v8 configuration API",
+        "files": [
+          "internal/config/config_v8.go",
+          "internal/api/server_management_v8.go",
+          "config.example.yaml"
+        ],
+        "assessment": "Adds nested config layout and new management routes while retaining legacy compatibility.",
+        "related": [
+          "https://github.com/router-for-me/CLIProxyAPI/pull/6154"
+        ]
+      },
+      {
+        "revision": "097511b81fff16569d67bb7fe8bd1779c27178f8",
+        "url": "https://github.com/router-for-me/CLIProxyAPI/commit/097511b81fff16569d67bb7fe8bd1779c27178f8",
+        "title": "fix(management): remove deprecated credential quota endpoints from v8 API",
+        "files": [
+          "internal/api/server_management_v8.go",
+          "docs/management-api-v8.md"
+        ],
+        "assessment": "Removes new-v8 quota provider/fetch/reset endpoints; does not remove the tested legacy reset-quota endpoint."
+      }
+    ]
+  },
+  "reproduction": {
+    "commands": [
+      "PYTHONPATH=/tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/test-deps python3 -B scripts/verify-quota-failover.py --output /tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/baseline-7.3.11.json",
+      "PYTHONPATH=/tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/test-deps python3 -B scripts/verify-quota-failover.py --binary /tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/8.0.5/cli-proxy-api --output /tmp/claude-1000/-home-user-Projects-personal-codex-router/621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw/latest-8.0.5.json"
+    ],
+    "dependency_setup": "Extract pinned, PyPI-sha256-verified h2 4.3.0, hpack 4.1.0 and hyperframe 6.1.0 pure Python wheels into scratch/test-deps and set PYTHONPATH. Dependencies removed after testing; recreate them to rerun.",
+    "minimal_fault": "Dummy account A priority 100, healthy B priority 0. On A, the loopback HTTP/2 mock sends HTTP 200 text/event-stream, response.created, response.output_text.delta MOCK_A, waits 0.2 seconds, then closes TLS without HTTP/2 END_STREAM or response.completed. Make three additional requests with fresh session IDs while A keeps disconnecting.",
+    "followup_timing": "First followup immediately after initial failure; second after up to two seconds polling management cooldown state; third immediately after second. Polling does not issue an upstream request.",
+    "management_state": "State is captured immediately after the first stream failure and again after polling; A is active/available with no cooldown in all disconnect modes in both versions."
+  },
+  "not_covered": [
+    "Real OAuth token validation/refresh and real OpenAI behavior",
+    "WebSocket transport, client cancellation, concurrent load",
+    "Week-long cooldowns, reset credits, dashboard/controller integration",
+    "Other models, prefixed routes, HTTP-date Retry-After headers, affinity TTL expiry",
+    "Repeated header-only quota errors and escalating fallback backoff",
+    "Native v8 config/API writes and migration of an actual production config; legacy compatibility only exercised",
+    "Enabled Codex bootstrap buffering, SSE comments/handshake-only disconnects, RST_STREAM/GOAWAY variants, graceful END_STREAM without completion, network latency and packet loss",
+    "Native upstream Go test suites, dashboard/browser integration, broader v8 release functionality or every intermediate release"
+  ],
+  "real_credentials_used": false,
+  "openai_contacted": false,
+  "production_files_accessed": false,
+  "live_gateway_accessed": false,
+  "services_changed": false,
+  "installed_binary_changed": false,
+  "committed_or_pushed": false,
+  "temporary_instances_stopped_and_files_removed": true,
+  "temporary_dependencies_removed": true,
+  "environment_notes": [
+    "python3 -m venv initially failed because ensurepip/python3-venv is unavailable; used checksum-verified wheel extraction under allowed scratch path instead.",
+    "Some lazy Git source fetches failed or stalled; used public GitHub raw tagged source for those reads. The stalled diff command was interrupted; no repository task changes were discarded."
+  ],
+  "cleanup": {
+    "verified_at": "2026-09-30T17:19:34.428707+00:00",
+    "temporary_probe_directories_remaining": 0,
+    "temporary_python_dependencies_and_failed_venv_removed": true,
+    "temporary_source_checkout_and_source_copies_removed": true,
+    "gateway_children_terminated_and_waited": true,
+    "mock_servers_shutdown_and_threads_joined": true,
+    "stalled_source_diff_process_interrupted": true,
+    "retained": "Verified 8.0.5 binary, release archive/checksums, metadata, raw probe reports and source diffs under scratch/gw."
+  },
+  "validation_commands": [
+    {
+      "command": "gh release list / gh api releases/latest / gh release download",
+      "result": "Latest v8.0.5 located and asset downloaded; 15 newer releases recorded."
+    },
+    {
+      "command": "SHA256 of archive against checksums.txt and GitHub asset digest; SHA256 of checksums.txt against GitHub digest",
+      "result": "Archive matched published checksums before binary execution; both archive and checksums file also match GitHub asset digests."
+    },
+    {
+      "command": "verify-quota-failover.py --output scratch/gw/baseline-7.3.11.json (default binary)",
+      "result": "Exit 0; 13 scenario records; all 34 baseline behavior checks passed."
+    },
+    {
+      "command": "verify-quota-failover.py --binary scratch/gw/8.0.5/cli-proxy-api --output scratch/gw/latest-8.0.5.json",
+      "result": "Exit 0; 13 scenario records; all 34 baseline behavior checks passed."
+    },
+    {
+      "command": "Normalized per-scenario comparison",
+      "result": "All 13 unchanged; no observed regression."
+    },
+    {
+      "command": "git diff --check; Python ast.parse; JSON parse; harness --help",
+      "result": "Passed."
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+routing:
+    strategy: round-robin
+    session-affinity: true
+    session-affinity-ttl: 1h
+    session-affinity-subagents: true
+    force-model-prefix: true
+    cooldown:
+        disable-cooling: true
+        save-cooldown-status: true
+    retry:
+        request-retry: 0
+        max-retry-credentials: 2
+        max-retry-interval: 0
+quota-exceeded:
+    switch-project: true
+    switch-preview-model: true
+config-version: 8
+requests:
+    proxy-url: http://127.0.0.1:56637
+observability:
+    logs:
+        request-log: false
+        debug: false
+        logging-to-file: false
+    pprof:
+        enable: false
+    usage:
+        usage-statistics-enabled: false
+        redis-usage-queue-retention-seconds: 60
+access:
+    api-keys:
+        - dummy-fixture-client-key
+server:
+    host: 127.0.0.1
+    port: 53135
+    discovery:
+        enabled: false
+        service-type: _ai-gateway._tcp
+        subtypes:
+            - _chat-completions
+            - _responses
+            - _messages
+            - _generate-content
+            - _interactions
+management:
+    allow-remote: false
+    secret-key: $2b$12$kNSacZKjHH.cMVJ0MyU1OOaLjGeZV3QVS5dTzbYt3OphdZIVGQ7bK
+    disable-control-panel: true
+    disable-auto-update-panel: true
+oauth:
+    auth-dir: /tmp/router-config-fixture-_rlndy6t/auth
+    providers:
+        antigravity:
+            antigravity-credits: true
+        aistudio:
+            ws-auth: true
+credentials:
+    concurrency:
+        cpa-heartbeat-timeout: 3s
+        cpa-cancel-bound: 5s
+        reclaim-grace: 5s
+        cleanup-interval: 5s
+        release-flush-interval: 250ms
+        release-max-backoff: 2s
+        busy-retry-min: 250ms
+        busy-retry-max: 1s
+        max-limit: 1000000
+    in-flight:
+        snapshot-interval: 2s
+        stale-after: 10s
+        max-part-bytes: 262144
+        max-part-count: 64
+        max-revision-bytes: 16777216
+        max-aggregate-groups: 100000
+        max-details: 10000
+        max-string-bytes: 256
+        staging-retention: 1m

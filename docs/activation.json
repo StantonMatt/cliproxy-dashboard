@@ -1,0 +1,10 @@
+{
+  "enabled_at": "20260922T162042Z",
+  "backup": "/var/lib/cliproxyapi-dashboard-backups/20260922T162042Z",
+  "before_sha256": "2222b7d45ac69053e2506ec4cb70a50338dcc6e12767509e4df14c15ffe55304",
+  "enabled_sha256": "758c301ac58451b2c63b150ae6e9d19a892b9e03b82d77c0fc0bea42dc0b4fc4",
+  "panel_version": "v1.24.2",
+  "panel_digest": "sha256:51b24db8170a5414875602c2f4e35017185b1c1dd7e9a6b1c0de69905a81e997",
+  "management_remote": false,
+  "usage_statistics": true
+}

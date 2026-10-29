@@ -1,0 +1,106 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+let clock = Date.parse('2026-10-14T12:00:00Z');
+class FakeDate extends Date { static now() { return clock; } }
+const elements = new Map();
+const document = {documentElement: {dataset: {}}, querySelectorAll: () => [], getElementById(id) {
+  if (!elements.has(id)) elements.set(id, {addEventListener() {}});
+  return elements.get(id);
+}};
+const context = vm.createContext({document, Date: FakeDate, localStorage: {getItem: () => null}});
+const source = fs.readFileSync(path.join(__dirname, '../dashboard/static/app.js'), 'utf8');
+vm.runInContext(source.slice(0, source.indexOf('function renderChart(')), context);
+const windows = [
+  {kind: 'five_hour', label: '5-hour limit', used: 4, remaining: 96, resets_at: clock / 1000 + 14000, seconds: 18000},
+  {kind: 'seven_day', label: 'Weekly · all models', used: 16, remaining: 84, resets_at: clock / 1000 + 302400, seconds: 604800},
+];
+const a = {id: 'claude', label: 'Claude A', email: 'a@example.com', plan: 'Max (20x)', status: 'ok',
+  checked_at: new FakeDate(clock).toISOString(), windows, extra_usage: {enabled: false},
+  resets: {eligible: true, service: 'ok', grants: [{id: 'grant', resets_left: 1}]}};
+const b = {...a, id: 'claude-b', label: 'Claude B', plan: 'Pro', email: null, resets: null, extra_usage: null};
+const render = accounts => {
+  context.renderWatch({gateway: {accounts: [{}, {}]}, watch_accounts: accounts});
+  return elements.get('watch-grid').innerHTML;
+};
+const before = render([a]);
+const combined = render([a, b]);
+assert.equal(combined.slice(0, combined.indexOf('</article>') + 10), before);
+assert.equal(elements.get('claude-account-count').textContent, '2 / 2');
+assert.equal((combined.match(/class="account-card claude-card"/g) || []).length, 2);
+const emailHtml = render([{...b, email: 'account-b@example.com'}]);
+assert.match(emailHtml, /<span title="account-b@example.com">account-b@example.com<\/span>/);
+// No "Claude A/B" subtitle: the email and plan badge identify the card.
+assert.doesNotMatch(emailHtml + before, /class="account-email"|Claude [AB]</);
+const bHtml = render([b]);
+assert.doesNotMatch(bHtml, /class="account-email"/);
+render([]);
+assert.equal(elements.get('watch-section').hidden, true);
+render([b]);
+assert.equal(elements.get('watch-section').hidden, false);
+assert.equal(elements.get('claude-account-count').textContent, '1 / 1');
+for (const status of ['missing_token', 'error', 'unavailable']) {
+  const errorHtml = render([{...b, email: 'account-b@example.com', status,
+    checked_at: new FakeDate(clock - 3600000).toISOString(), attempted_at: b.checked_at, error: status}]);
+  assert.match(errorHtml, status === 'missing_token' ? /Sign-in token missing/ : /Unavailable/);
+  assert.match(errorHtml, /watch-state-down/);
+  assert.match(errorHtml, /last known/);
+  assert.match(errorHtml, /Last attempt/);
+  assert.doesNotMatch(errorHtml, /pace-bar/);
+  if (status === 'missing_token') {
+    assert.match(errorHtml, /Waiting for usage data/);
+    assert.match(errorHtml, /Not reported/);
+    assert.doesNotMatch(errorHtml, /aria-valuenow/);
+  } else assert.match(errorHtml, /84<span class="percent">%<\/span>/);
+}
+
+assert.match(bHtml, /<span title="Claude B">Claude B<\/span>/);
+assert.match(bHtml, /class="small-badge">Pro<\/span>/);
+assert.match(bHtml, /84<span class="percent">%<\/span>/);
+assert.match(bHtml, /5-hour limit<\/span><span>96% remaining/);
+assert.match(bHtml, /class="pace-bar/);
+assert.doesNotMatch(bHtml, /Extra usage|data-reset-open|Resets <span>|Auto-use/);
+const unknown = render([{...b, windows: windows.map(w => ({...w, used: null, remaining: null}))}]);
+assert.match(unknown, /Waiting for usage data/);
+assert.match(unknown, /5-hour limit<\/span><span>—<\/span>/);
+assert.doesNotMatch(unknown, /pace-bar|aria-valuenow/);
+const measured = {...b, windows: windows.map(w => ({...w, measured_at: b.checked_at}))};
+for (const kind of ['five_hour', 'seven_day']) {
+  const partial = {...measured, windows: measured.windows.map(w => w.kind === kind
+    ? {...w, measured_at: new FakeDate(clock - 901000).toISOString()} : w)};
+  const partialHtml = render([partial]);
+  assert.match(partialHtml, /Stale · updated 15m ago|last known/);
+  assert.doesNotMatch(partialHtml, /pace-bar/);
+}
+assert.match(render([measured]), /pace-bar/);
+for (const value of [null, 'bad']) {
+  assert.doesNotMatch(render([{...measured, windows: measured.windows.map(w => w.kind === 'seven_day'
+    ? {...w, measured_at: value} : w)}]), /pace-bar/);
+}
+for (const kind of ['five_hour', 'seven_day']) {
+  for (const offset of [0, -1]) {
+    const due = {...measured, windows: measured.windows.map(w => w.kind === kind
+      ? {...w, resets_at: clock / 1000 + offset} : w)};
+    const dueHtml = render([due]);
+    if (kind === 'seven_day') {
+      assert.match(dueHtml, /Waiting for usage data/);
+      assert.doesNotMatch(dueHtml, /pace-bar|aria-valuenow/);
+    } else assert.match(dueHtml, /5-hour limit<\/span><span>—<\/span>/);
+    assert.equal(due.windows.find(w => w.kind === kind).used, kind === 'five_hour' ? 4 : 16);
+  }
+}
+// A's rendering ignores B-only measurement fields and retains its existing behavior.
+assert.equal(render([{...a, windows: windows.map(w => ({...w, measured_at: null}))}]), before);
+const expiresOnPage = {...measured, windows: measured.windows.map(w => w.kind === 'seven_day'
+  ? {...w, resets_at: clock / 1000 + 1} : w)};
+assert.match(render([expiresOnPage]), /pace-bar/);
+clock += 1000;
+assert.doesNotMatch(render([expiresOnPage]), /pace-bar|aria-valuenow/);
+assert.match(render([expiresOnPage]), /Waiting for usage data/);
+clock += 901000;
+const stale = render([b]);
+assert.match(stale, /last known/);
+assert.doesNotMatch(stale, /pace-bar/);
+console.log('Claude B UI: A unchanged, oldest-window freshness, full refresh, due resets, pace, unknowns and stale state passed.');

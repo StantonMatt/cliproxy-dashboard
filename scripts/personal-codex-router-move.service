@@ -1,0 +1,49 @@
+[Unit]
+Description=Release gateway session-affinity bindings
+After=cliproxyapi.service personal-codex-router-dashboard.service
+# Each request starts the helper once and is always removed. A request that
+# can't be removed retriggers several times a second and fails the path unit
+# here within seconds; paced dashboard requests never reach this limit.
+# Recovery is in docs/move-conversations-2026-10-17.md.
+StartLimitIntervalSec=10
+StartLimitBurst=30
+
+[Service]
+Type=oneshot
+User=root
+# No capabilities, so no DAC override: group access to the dashboard's
+# request directory is what lets the helper inspect and remove a request.
+Group=cliproxyapi
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/move-conversations.py
+RuntimeDirectory=personal-codex-router-move
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+StateDirectory=personal-codex-router-move
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=10
+TimeoutStopSec=5
+NoNewPrivileges=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+CapabilityBoundingSet=
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+IPAddressDeny=any
+# Optional so a missing path still lets the helper run, consume and refuse.
+ReadWritePaths=-/etc/cliproxyapi/config.yaml -/run/personal-codex-router-move-request

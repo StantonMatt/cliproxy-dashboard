@@ -1,0 +1,19 @@
+{
+  "binary_version": "8.0.7",
+  "binary_sha256": "3ee48dcfdf1d6aa352712ac47dde0a67bdfcaeeb790ea2a54ddd4fab37dfba51",
+  "command": "python3 -B tests/generate_config_fixtures.py",
+  "native_patch": {
+    "routing": {
+      "retry": {
+        "request-retry": 0
+      }
+    }
+  },
+  "patch_count": 1,
+  "startup_and_read_preserved_bytes": true,
+  "same_inode": true,
+  "dummy_values_only": true,
+  "proxy": "closed loopback port; environment and per-auth proxies",
+  "before_sha256": "5ba89ff4fbfd43f86bd3abce382b276ac8d5b1e7d6f69530e12bf35aa180403f",
+  "after_sha256": "b76e3e5868c793e0e4a621e3f44392f2f40256b04b29158afa18597a6a39b598"
+}

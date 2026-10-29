@@ -1,0 +1,13 @@
+{
+  "tag_name": "v1.24.2",
+  "html_url": "https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/tag/v1.24.2",
+  "published_at": "2026-09-22T05:14:13Z",
+  "assets": [
+    {
+      "name": "management.html",
+      "browser_download_url": "https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/download/v1.24.2/management.html",
+      "digest": "sha256:51b24db8170a5414875602c2f4e35017185b1c1dd7e9a6b1c0de69905a81e997",
+      "size": 2767070
+    }
+  ]
+}

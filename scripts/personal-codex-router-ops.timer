@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh shared Codex health and deliver actionable notices
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=30s
+AccuracySec=3s
+Unit=personal-codex-router-ops.service
+
+[Install]
+WantedBy=timers.target

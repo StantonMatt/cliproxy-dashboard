@@ -1,0 +1,41 @@
+[Unit]
+Description=Private personal Codex router overview
+After=cliproxyapi.service
+
+[Service]
+Type=simple
+User=cliproxyapi
+Group=cliproxyapi
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/dashboard/server.py
+WorkingDirectory=/opt/personal-codex-router/dashboard
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+ReadOnlyPaths=/etc/cliproxyapi
+# Conversation-move requests; the root move helper inspects and removes them through
+# group access (cliproxyapi:cliproxyapi 0770). It disappears when the dashboard stops.
+RuntimeDirectory=personal-codex-router-move-request
+RuntimeDirectoryMode=0770
+# SQLite read-only connections still need its WAL shared-memory sidecar.
+# All dashboard SQL connections use mode=ro; no API exposes database writes.
+ReadWritePaths=/var/lib/personal-codex-router /var/lib/personal-codex-router-routing
+# Codex sign-in replaces token fields under the gateway's own per-file flock
+# (dashboard/credential_replace.py). The management key could already upload
+# or delete these files, so direct write access adds no real capability.
+ReadWritePaths=-/var/lib/cliproxyapi/auth
+
+[Install]
+WantedBy=multi-user.target

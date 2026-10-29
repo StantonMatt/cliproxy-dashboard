@@ -1,0 +1,23 @@
+{
+  "verified_at": "2026-09-22T20:59:50.328229+00:00",
+  "dashboard_browser_verified": true,
+  "quota_cards_verified": true,
+  "usage_page_and_seven_day_filter_verified": true,
+  "metadata_security_tests": 4,
+  "linux_friendly_url_verified": true,
+  "mac_fallback_url_verified": true,
+  "mac_socket_activation_mechanism_verified_on_test_port": true,
+  "mac_friendly_url": "verified HTTP 200 with both accounts and usage data",
+  "chrome_bookmark": "Existing bookmark verified on fallback URL; short URL update pending browser-control recovery",
+  "old_ai_web_assistant_setup_worktree": {
+    "path": "/home/user/.codex/worktrees/ccfe/ai-web-assistant",
+    "head": "ff8f04ac2",
+    "status_including_ignored": "clean",
+    "head_reflog": "one initial checkout entry"
+  },
+  "code_committed_or_pushed": false,
+  "chrome_bookmark_url": "http://router.localhost:18320/",
+  "authentication_failover_both_directions_verified": true,
+  "quota_exhaustion_tested": false,
+  "mac_friendly_url_log_repair_verified": true
+}

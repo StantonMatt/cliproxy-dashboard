@@ -1,0 +1,643 @@
+{
+  "prepared_at": "2026-10-26",
+  "cutover_performed": false,
+  "live_version": "8.0.30",
+  "install": {
+    "release": "v8.0.43",
+    "published_at": "2026-10-25T15:37:22Z",
+    "asset": "CLIProxyAPI_8.0.43_linux_amd64.tar.gz",
+    "size": 24022497,
+    "archive_sha256": "7825540634898e11fe9baf255b683856da5d9e75b95c66835891ebb40a79b526",
+    "github_asset_digest": "sha256:7825540634898e11fe9baf255b683856da5d9e75b95c66835891ebb40a79b526",
+    "checksums_sha256": "9c4ca4bf749368d1f9a47f4ae115443ad5a89f92fdcfca59576ad2332a218f95",
+    "binary_sha256": "0e6445974aca0fd46c85847f3d06d950c8a67f6936af4584a01b9866388128ff",
+    "revision": "307803510bce87f986fcf7b1a84190f105c7b4aa",
+    "installed_path": "/opt/cliproxyapi/8.0.43/cli-proxy-api",
+    "installed_size": 72062568,
+    "owner": "root:root",
+    "mode": "0755",
+    "banner": "CLIProxyAPI Version: 8.0.43, Commit: 30780351, BuiltAt: 2026-10-25T15:38:02Z"
+  },
+  "replacement": {
+    "8.0.43": {
+      "gateway": {
+        "binary": "/opt/cliproxyapi/8.0.43/cli-proxy-api",
+        "version": "8.0.43",
+        "tested": true,
+        "seed": 598404492
+      },
+      "patch_only_control": {
+        "disk_changed": false,
+        "runtime_changed": false
+      },
+      "idle_pro_to_free": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "next_refresh_uses_new_token": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "race_waits": [
+        1.16,
+        1.25,
+        1.15,
+        1.15,
+        1.5,
+        1.09,
+        1.26,
+        1.15,
+        1.1,
+        1.5,
+        1.2,
+        1.25
+      ],
+      "replace_during_inflight_refresh": {
+        "passed": 12,
+        "failed": 0,
+        "failures": []
+      },
+      "replace_then_priority_and_enable_patches": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_runtime_equals_disk": {
+        "passed": 50,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_unconfirmed_watcher_runtime_equals_disk": {
+        "passed": 2,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_outcomes": {
+        "signed_in": 48,
+        "saved_unconfirmed": 2,
+        "unconfirmed_modes": [
+          "refresh_after",
+          "refresh_after"
+        ]
+      },
+      "restart_keeps_new_tokens": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "proxy_refused_hosts": [
+        "antigravity-hub-auto-updater-974169037036.us-central1.run.app:443",
+        "registry.npmjs.org:443"
+      ],
+      "ok": true
+    },
+    "8.0.30": {
+      "gateway": {
+        "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+        "version": "8.0.30",
+        "tested": true,
+        "seed": 1055362323
+      },
+      "patch_only_control": {
+        "disk_changed": false,
+        "runtime_changed": false
+      },
+      "idle_pro_to_free": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "next_refresh_uses_new_token": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "race_waits": [
+        1.37,
+        1.17,
+        1.42,
+        1.11,
+        1.36,
+        1.2,
+        1.27,
+        1.24,
+        1.45,
+        1.29,
+        1.49,
+        1.4
+      ],
+      "replace_during_inflight_refresh": {
+        "passed": 12,
+        "failed": 0,
+        "failures": []
+      },
+      "replace_then_priority_and_enable_patches": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_runtime_equals_disk": {
+        "passed": 50,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_unconfirmed_watcher_runtime_equals_disk": {
+        "passed": 3,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_outcomes": {
+        "signed_in": 47,
+        "saved_unconfirmed": 3,
+        "unconfirmed_modes": [
+          "refresh_after",
+          "refresh_after",
+          "refresh_after"
+        ]
+      },
+      "restart_keeps_new_tokens": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "proxy_refused_hosts": [
+        "antigravity-hub-auto-updater-974169037036.us-central1.run.app:443",
+        "registry.npmjs.org:443"
+      ],
+      "ok": true
+    }
+  },
+  "isolated": {
+    "binary": "/opt/cliproxyapi/8.0.43/cli-proxy-api",
+    "checks": [
+      {
+        "name": "nested retry policy consumed",
+        "passed": true
+      },
+      {
+        "name": "nested fixture passes strict v8 config validation",
+        "passed": true
+      },
+      {
+        "name": "plain model routes advertised",
+        "passed": true,
+        "missing": []
+      },
+      {
+        "name": "codex gpt-6.1-sol completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6.1-sol reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-astra completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6-astra reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-sol completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6-sol reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-5.6-sol completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-5.6-sol reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6-luna reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-5.6-terra completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-5.6-terra reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-5.6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-5.6-luna reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "claude claude-opus-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude-opus-5-5 reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude-sonnet-5-5 reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "claude claude-haiku-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude-haiku-5-5 reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex affinity cache hit before TTL change",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex in-place TTL change releases pin",
+        "passed": true,
+        "previous_ttl": "1h",
+        "new_ttl": "1h0m1s"
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude affinity cache hit before TTL change",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude in-place TTL change releases pin",
+        "passed": true,
+        "previous_ttl": "1h0m1s",
+        "new_ttl": "1h0m0s"
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 429 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "codex-A",
+            "status": 429
+          },
+          {
+            "account": "codex-B",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 429 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 503 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "codex-A",
+            "status": 503
+          },
+          {
+            "account": "codex-B",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 503 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 429 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "claude-B",
+            "status": 429
+          },
+          {
+            "account": "claude-A",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 429 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 503 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "claude-B",
+            "status": 503
+          },
+          {
+            "account": "claude-A",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 503 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "/v1/models rejects unauthenticated access",
+        "passed": true
+      },
+      {
+        "name": "/v0/management/config rejects unauthenticated access",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "Claude preserved thinking opts into drop_block",
+        "passed": true
+      },
+      {
+        "name": "sdk-ts native request preserves caller profile and system",
+        "passed": true
+      },
+      {
+        "name": "8.x usage queue is JSON list",
+        "passed": true
+      },
+      {
+        "name": "additive effective tier discarded",
+        "passed": true
+      },
+      {
+        "name": "existing collector persists both providers",
+        "passed": true,
+        "rows": 33
+      },
+      {
+        "name": "no unknown or removed config warnings",
+        "passed": true
+      }
+    ],
+    "gateway_pid": 3041819,
+    "gateway_port": 41435,
+    "mock_port": 45035,
+    "version": "8.0.43",
+    "claude_wire": {
+      "thinking": {
+        "type": "adaptive",
+        "block_binding": {
+          "prefix_mismatch_behavior": "drop_block"
+        }
+      },
+      "user_agent": "claude-cli/2.1.304 (external, sdk-ts, agent-sdk/0.3.276)",
+      "history_types": [
+        [
+          "thinking",
+          "text"
+        ]
+      ]
+    },
+    "queue_records": 33,
+    "collection": {
+      "saved_records": 33,
+      "quarantined_records": 0,
+      "failed_spools": 0
+    },
+    "refused_external_hosts": [
+      "antigravity-hub-auto-updater-974169037036.us-central1.run.app:443",
+      "registry.npmjs.org:443"
+    ],
+    "gateway_exit": 0
+  },
+  "fast_mode": {
+    "8.0.43": {
+      "gateway_pid": 3014561,
+      "gateway_port": 55029,
+      "mock_port": 43955,
+      "hot_enable_same_pid": true,
+      "status_init_and_reconfigure": true,
+      "failover": [
+        {
+          "account": "A",
+          "tier": "<absent>"
+        },
+        {
+          "account": "B",
+          "tier": "priority"
+        }
+      ],
+      "library_path_update_same_pid": true,
+      "websocket_warning_count": 1,
+      "same_pid_after_all_toggles": true,
+      "installer_disable_unconfirmed": true,
+      "status_shutdown_removed": true,
+      "restart_indexes_unchanged": true,
+      "status_restart_current_pid": true,
+      "http_cases": 53,
+      "cleanup": {
+        "gateway_pid": 3015665,
+        "gateway_exit": 0,
+        "mock_server_stopped": true
+      },
+      "websocket_observed_tiers": [
+        "<absent>",
+        "priority"
+      ]
+    },
+    "8.0.30": {
+      "gateway_pid": 3033148,
+      "gateway_port": 48701,
+      "mock_port": 38653,
+      "hot_enable_same_pid": true,
+      "status_init_and_reconfigure": true,
+      "failover": [
+        {
+          "account": "A",
+          "tier": "<absent>"
+        },
+        {
+          "account": "B",
+          "tier": "priority"
+        }
+      ],
+      "library_path_update_same_pid": true,
+      "websocket_warning_count": 1,
+      "same_pid_after_all_toggles": true,
+      "installer_disable_unconfirmed": true,
+      "status_shutdown_removed": true,
+      "restart_indexes_unchanged": true,
+      "status_restart_current_pid": true,
+      "http_cases": 53,
+      "cleanup": {
+        "gateway_pid": 3033712,
+        "gateway_exit": 0,
+        "mock_server_stopped": true
+      },
+      "websocket_observed_tiers": [
+        "<absent>",
+        "priority"
+      ]
+    }
+  },
+  "plugin_sandbox": {
+    "unit": "pcr-plugin-28079d9bbe.service",
+    "gateway_port": 59041,
+    "mock_port": 35403,
+    "binary": "/opt/cliproxyapi/8.0.43/cli-proxy-api",
+    "sandbox": {
+      "UMask": "0077",
+      "CapabilityBoundingSet": "",
+      "User": "cliproxyapi",
+      "Group": "cliproxyapi",
+      "PrivateTmp": "yes",
+      "ProtectKernelTunables": "yes",
+      "ProtectKernelModules": "yes",
+      "ProtectControlGroups": "yes",
+      "ProtectHome": "yes",
+      "ProtectSystem": "strict",
+      "NoNewPrivileges": "yes",
+      "SystemCallArchitectures": "native",
+      "LockPersonality": "yes",
+      "RestrictAddressFamilies": "AF_INET AF_INET6 AF_UNIX",
+      "RestrictSUIDSGID": "yes"
+    },
+    "pid": 3028787,
+    "version": "8.0.43",
+    "ok": true,
+    "marker_current_pid": true,
+    "shadow_mappings": [
+      "/tmp/cliproxy-pluginhost/pid-3028787/cliproxy-plugin-fast-mode-policy-eff6ea99f9e8ce5e9ac5e5c63d97c66c.so"
+    ],
+    "equivalent_sandbox": true,
+    "cleanup": {
+      "unit_stopped": true,
+      "state_directory_removed": true,
+      "mock_stopped": true
+    }
+  },
+  "verification": {
+    "focused_tests": {
+      "signin_retry": 33,
+      "move_conversations": 40,
+      "credential_replace": 36,
+      "install_fast_mode_plugin": 47,
+      "claude_gateway_compatibility": 8
+    },
+    "full_python_suite": {
+      "passed": 803,
+      "failures": 0
+    },
+    "offline_unit_verify": {
+      "exit_code": 0,
+      "diagnostics": "Two unrelated installed XFS CPUAccounting warnings"
+    },
+    "documentation_shell_and_python_syntax": "passed",
+    "git_diff_check": "passed"
+  },
+  "live_baseline": {
+    "pid": 2654,
+    "executable": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+    "ActiveEnterTimestamp": "Mon 2026-07-27 16:44:09 -04",
+    "NRestarts": 0,
+    "unchanged_process_and_active_dropins": true,
+    "unchanged_protected_trees": [
+      "/etc/cliproxyapi",
+      "/opt/personal-codex-router",
+      "/opt/cliproxyapi/8.0.30",
+      "/opt/cliproxyapi/8.0.7"
+    ],
+    "auth_changed_files_while_live": 2,
+    "live_auth_watcher_updates": 2,
+    "task_wrote_production_auth": false,
+    "staged_dropin": "/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.43.conf.staged"
+  }
+}

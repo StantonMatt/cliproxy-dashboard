@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Claude B subscription usage every five minutes
+
+[Timer]
+OnStartupSec=30
+OnUnitActiveSec=5min
+RandomizedDelaySec=20
+AccuracySec=5
+Unit=personal-codex-router-claude-b-usage.service
+
+[Install]
+WantedBy=timers.target

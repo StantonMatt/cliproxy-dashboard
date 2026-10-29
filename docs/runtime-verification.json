@@ -1,0 +1,21 @@
+{
+  "config_other_settings_preserved": true,
+  "gateway_active": "active",
+  "collector_timer_active": "active",
+  "collector_last_status": "0",
+  "sqlite_integrity": "ok",
+  "record_counts_by_account": [
+    {
+      "auth_index": "example-index-b",
+      "requests": 1,
+      "tokens": 332
+    },
+    {
+      "auth_index": "example-index-a",
+      "requests": 7,
+      "tokens": 606484
+    }
+  ],
+  "api_management_remote": false,
+  "usage_enabled": true
+}

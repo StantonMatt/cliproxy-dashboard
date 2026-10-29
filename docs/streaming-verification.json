@@ -1,0 +1,22 @@
+{
+  "tested_at": "2026-09-22T16:27:49.136507+00:00",
+  "tests": [
+    {
+      "http_status": 200,
+      "completed": true,
+      "marker_matches": true,
+      "stream_events": 14,
+      "account": "account-a@example.com",
+      "model": "gpt-6-astra"
+    },
+    {
+      "http_status": 200,
+      "completed": true,
+      "marker_matches": true,
+      "stream_events": 14,
+      "account": "account-b@example.com",
+      "model": "gpt-6-astra"
+    }
+  ],
+  "note": "The account-prefixed routes were retired on 2026-10-16 when gateway auth prefixes were removed; the literal prefix names were removed at the user's request."
+}

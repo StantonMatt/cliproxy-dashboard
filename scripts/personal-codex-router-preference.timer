@@ -1,0 +1,11 @@
+[Unit]
+Description=Recheck the saved Codex account routing selection every minute
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=60
+AccuracySec=5
+Unit=personal-codex-router-preference.service
+
+[Install]
+WantedBy=timers.target

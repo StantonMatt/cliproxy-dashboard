@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Claude Code token expiry every fifteen minutes
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=30
+AccuracySec=5
+Persistent=true
+Unit=personal-codex-router-claude-keepalive.service
+
+[Install]
+WantedBy=timers.target
