@@ -2,7 +2,7 @@
 
 Paste this into Codex on the Windows machine: “Read `docs/windows-setup.md` in this repo and set up the gateway following it. Use gpt-6.1-sol for implementation and gpt-6-astra if advice is needed.”
 
-The remaining instructions are for that agent. Set up stock **CLIProxyAPI 8.0.43** for three ChatGPT Pro accounts, all Codex, on this one Windows machine.
+The remaining instructions are for that agent. Set up stock **CLIProxyAPI 8.0.47** for three ChatGPT Pro accounts, all Codex, on this one Windows machine.
 
 ## Agent rules
 
@@ -14,7 +14,7 @@ The remaining instructions are for that agent. Set up stock **CLIProxyAPI 8.0.43
 
 This repo's routing settings and documentation carry over. Its dashboard, usage collectors, account controls, systemd units, installers, nftables rules, and Linux `.so` plugin do **not** constitute a Windows installation. Do not run those scripts. This setup needs neither Claude nor a Linux host. The computer must remain awake while clients use it; the scheduled task runs only while this Windows user is logged in.
 
-Checked against the [v8.0.43 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.43), its Linux `--help`, [example configuration](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.43/config.example.yaml), and source. Windows execution, browser login, Task Scheduler, and client acceptance must be checked on the target machine; they were not run on Linux. Run PowerShell blocks in the same **non-administrator** session, in order.
+Checked against the [v8.0.47 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.47), its Linux `--help`, [example configuration](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/config.example.yaml), and source. Windows execution, browser login, Task Scheduler, and client acceptance must be checked on the target machine; they were not run on Linux. Run PowerShell blocks in the same **non-administrator** session, in order.
 
 ## 1. Check the machine and download the release
 
@@ -23,7 +23,7 @@ Determine whether the user uses the native Windows CLI, the Windows Codex app, o
 ```powershell
 $ErrorActionPreference = 'Stop'
 $Root = Join-Path $env:LOCALAPPDATA 'CLIProxyAPI'
-$Version = '8.0.43'
+$Version = '8.0.47'
 $BinDir = Join-Path $Root "versions\$Version"
 $DownloadDir = Join-Path $Root "downloads\$Version"
 $AuthDir = Join-Path $Root 'auth'
@@ -39,7 +39,7 @@ if (Test-Path $Root) { throw 'Existing gateway directory: inspect its public met
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) { throw 'Scheduled task already exists.' }
 if (Get-NetTCPConnection -State Listen -LocalPort 8317 -ErrorAction SilentlyContinue) { throw 'Port 8317 is occupied; identify its owner, do not stop it.' }
 if ([Environment]::GetEnvironmentVariable('CODEX_GATEWAY_API_KEY', 'User') -or $env:CODEX_GATEWAY_API_KEY) { throw 'Gateway key variable already exists; ask before changing it.' }
-if ($env:MANAGEMENT_PASSWORD -or $env:WRITABLE_PATH) { throw 'Existing CLIProxyAPI environment overrides: clarify first; do not display values.' }
+if ($env:MANAGEMENT_PASSWORD -or $env:WRITABLE_PATH -or $env:MANAGEMENT_STATIC_PATH) { throw 'Existing CLIProxyAPI environment overrides: clarify first; do not display values.' }
 $Arch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 $AssetArch = switch ($Arch) { 'X64' { 'amd64' } 'Arm64' { 'aarch64' } default { throw 'Only Windows x64 and ARM64 releases are covered.' } }
 $null = New-Item -ItemType Directory -Path $Root
@@ -62,17 +62,17 @@ try {
     $ErrorActionPreference = 'Continue' # Go help uses stderr; Windows PowerShell 5.1 wraps it as error records.
     $HelpText = (& $Exe --help 2>&1 | Out-String)
 } finally { $ErrorActionPreference = $SavedErrorPreference }
-if ($HelpText -notmatch 'Version: 8\.0\.43\b' -or $HelpText -notmatch '-codex-login') { throw 'Unexpected binary version or flags.' }
-'SHA256 verified; CLIProxyAPI 8.0.43 help verified.'
+if ($HelpText -notmatch 'Version: 8\.0\.47\b' -or $HelpText -notmatch '-codex-device-login' -or $HelpText -notmatch '-codex-login') { throw 'Unexpected binary version or flags.' }
+'SHA256 verified; CLIProxyAPI 8.0.47 help verified.'
 ```
 
-Expected: a matching SHA-256 and version 8.0.43. Upstream publishes `checksums.txt` alongside both Windows archives. Checksum matching checks the download against that release, not a publisher signature.
+Expected: a matching SHA-256 and version 8.0.47. Upstream publishes `checksums.txt` alongside both Windows archives. Checksum matching checks the download against that release, not a publisher signature.
 
 **HUMAN STEP:** If Windows asks for administrator approval or SmartScreen/Defender intervention, stop and show the human the executable path and official release link. Have them review the detection/download. Do not disable protection, add exclusions, or automatically unblock the executable. No administrator access is intended here.
 
 ## 2. Write the private configuration
 
-Use separate random client and management keys. Management is enabled **only on loopback**, with a key required even locally; the bundled web panel is disabled. This enables account-count and routing checks without opening raw auth files. Upstream also supports disabling management completely with an empty `management.secret-key`, but then the inventory checks and optional T3 usage hub are unavailable.
+Use separate random client and management keys. Management is enabled **only on loopback**, with a key required even locally; the web panel is disabled unless the human chooses step 8. This enables account-count and routing checks without opening raw auth files. Upstream also supports disabling management completely with an empty `management.secret-key`, but then the inventory checks and optional T3 usage hub are unavailable.
 
 ```powershell
 function New-LocalKey {
@@ -140,7 +140,7 @@ Expected: files exist under the restricted directory; step 3 proves the YAML loa
 - `max-retry-interval: 45`: cap cooldown waits between rounds at 45 seconds.
 - `max-retry-credentials: 2`: try at most two different credentials **per round**, limiting fan-out; this is not a lifetime limit of two accounts.
 
-Fast mode is stripped for **all three accounts** by the payload filter, including a client requesting priority. Remove that rule only after the human chooses to allow fast mode. There is no per-account toggle in this Windows setup. See step 8 for the plugin and WebSocket distinction.
+Fast mode is stripped for **all three accounts** by the payload filter, including a client requesting priority. Remove that rule only after the human chooses to allow fast mode. There is no per-account toggle in this Windows setup. See step 9 for the plugin and WebSocket distinction.
 
 ## 3. Start it at logon and check the listener
 
@@ -180,7 +180,7 @@ if (@($Inventory.files).Count -ne 0) { throw 'Fresh auth directory unexpectedly 
 'YAML loaded; authenticated management reachable; zero accounts as expected.'
 ```
 
-Expected: one owned loopback listener and an empty inventory. Do not add `-local-model`: it pins the model list to the catalog embedded in the release, so models OpenAI ships later (for example `gpt-6.1-terra`, which 8.0.43 does not embed) never appear. Without it the gateway refreshes its catalog from upstream. The application log rotates at `$env:LOCALAPPDATA\CLIProxyAPI\logs\main.log`, capped with the other logs at 50 MB. OAuth commands may print login status to their terminal; do not record that output. Do not dump log files into the agent chat. On startup failure, inspect Task Scheduler's last result and summarize only allowlisted error information.
+Expected: one owned loopback listener and an empty inventory. Do not add `-local-model`: with this configuration it pins the model list to the catalogs embedded in the release, so later models never appear. v8.0.47 [already embeds `gpt-6.1-terra`](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/internal/registry/models/codex_client_models.json#L513); without the flag, the gateway refreshes its catalogs from upstream. The application log rotates at `$env:LOCALAPPDATA\CLIProxyAPI\logs\main.log`, capped with the other logs at 50 MB. OAuth commands may print login status to their terminal; do not record that output. Do not dump log files into the agent chat. On startup failure, inspect Task Scheduler's last result and summarize only allowlisted error information.
 
 ## 4. Sign in the three accounts, one at a time
 
@@ -211,7 +211,7 @@ if (@($CodexAccounts | Where-Object { $_.unavailable }).Count) { throw 'An accou
 'Three Codex accounts loaded and available.'
 ```
 
-Auth files land in **`$env:LOCALAPPDATA\CLIProxyAPI\auth`**, because the guide sets `oauth.auth-dir` explicitly. The upstream default is `~/.cli-proxy-api` (normally `%USERPROFILE%\.cli-proxy-api` on Windows), not Codex's own `.codex` login. Repeating login for the same identity replaces that gateway credential rather than adding capacity. Both `-codex-device-login` and `-codex-login` exist in 8.0.43. Do **not** use the latter here: its [OAuth callback server](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.43/internal/auth/codex/oauth_server.go#L88) binds `:1455` (all interfaces), independently of `server.host`. Device login avoids that exception to the loopback rule.
+Auth files land in **`$env:LOCALAPPDATA\CLIProxyAPI\auth`**, because the guide sets `oauth.auth-dir` explicitly. The upstream default is `~/.cli-proxy-api` (normally `%USERPROFILE%\.cli-proxy-api` on Windows), not Codex's own `.codex` login. Repeating login for the same identity replaces that gateway credential rather than adding capacity. Both `-codex-device-login` and `-codex-login` exist in 8.0.47. Do **not** use the latter here: its [OAuth callback server](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/internal/auth/codex/oauth_server.go#L88) binds `:1455` (all interfaces), independently of `server.host`. Device login avoids that exception to the loopback rule.
 
 ## 5. Verify inference and account rotation
 
@@ -282,7 +282,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Codex profile test failed.' }
 
 Run the test from a trusted project the user chooses. Expected: `gateway-ok`; start `codex --profile gateway`, check `/status` for provider `cliproxy`/model `gpt-6.1-sol`, and ask for one follow-up. Recheck management success counters to establish that gateway traffic increased; text output alone does not prove routing. For optional advice, `codex --profile gateway --model gpt-6-astra` uses the same provider; first verify that model appears in `/v1/models`.
 
-The [official provider reference](https://developers.openai.com/codex/config-reference/) supports `base_url`, `env_http_headers`, `wire_api = "responses"`, and `requires_openai_auth`. Keep `requires_openai_auth = true`: Codex stays signed in to the human's ChatGPT account, so account features (account and plan recognition, usage display) keep working. With `false`, inference still works but Codex no longer recognizes the account. Codex then sends its ChatGPT token as the bearer, and the gateway authenticates the request by the client key in `X-Api-Key` instead. CLIProxyAPI 8.0.43 accepts a valid `X-Api-Key` even when the bearer holds a different token. `env_http_headers` reads the key from the environment, so no secret is written to TOML. Inference still rotates across all three gateway accounts; Codex's usage display shows only the signed-in account.
+The [official provider reference](https://developers.openai.com/codex/config-reference/) supports `base_url`, `env_http_headers`, `wire_api = "responses"`, and `requires_openai_auth`. Keep `requires_openai_auth = true`: Codex stays signed in to the human's ChatGPT account, so account features (account and plan recognition, usage display) keep working. With `false`, inference still works but Codex no longer recognizes the account. Codex then sends its ChatGPT token as the bearer, and the gateway authenticates the request by the client key in `X-Api-Key` instead. CLIProxyAPI 8.0.47 [accepts a valid `X-Api-Key` even when the bearer holds a different token](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/internal/access/config_access/provider.go#L75-L103). `env_http_headers` reads the key from the environment, so no secret is written to TOML. Inference still rotates across all three gateway accounts; Codex's usage display shows only the signed-in account.
 
 **HUMAN STEP:** Codex must already be signed in with ChatGPT (any one of the three accounts). If it is not, have the human sign in through Codex's normal login; never handle their credentials. A 401 from the gateway with this profile means `CODEX_GATEWAY_API_KEY` is missing from that process's environment.
 
@@ -307,13 +307,42 @@ Expected: a fresh T3 conversation and follow-up work, and the gateway's successf
 
 The separate **Settings → Providers → Usage providers → Add hub** feature needs management access; it does not configure inference. Default: leave it off. If requested, **HUMAN STEP:** explain that granting T3 the gateway management key permits administrative operations, then obtain approval. Use hub URL `http://127.0.0.1:8317` (no `/v1`) and transfer `management-key.txt` through the local clipboard/UI without printing it; clear the clipboard afterward. Expect three accounts and quota windows, or diagnose unavailable data without dumping responses. This integration is source-backed but untested on Windows. The repo's [read-only usage hub](t3-usage-hub.md) uses a separately keyed Linux dashboard shim; that shim is **not** installed by this guide, so its token, ports, and deployment commands do not apply here.
 
-## 8. Fast mode and WebSockets
+## 8. Optional Management Center
 
-Go's standard `plugin` package does not support Windows, but CLIProxyAPI **does not use that mechanism**: v8.0.43 has a [Windows DLL loader](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.43/internal/pluginhost/loader_windows.go) calling `LoadDLL` and `cliproxy_plugin_init` through its C/JSON ABI. Its Windows release builds enable CGO. This repo's [fast-mode plugin build](../plugins/fast-mode-policy/build.sh) explicitly targets Linux amd64 with `-buildmode=c-shared`; the resulting `.so` cannot load on Windows. No Windows DLL build of this plugin is provided or validated.
+**HUMAN STEP:** Ask whether to enable the official [Management Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center). It has administrative access to accounts and configuration, including actions that consume manual reset credits. Leave it disabled unless approved.
+
+Back up the private config without displaying it. Under the **existing** `management` block, change only `disable-control-panel` to `false`; retain the management key and these settings (merge, do not replace the block):
+
+```yaml
+management:
+  allow-remote: false
+  disable-control-panel: false
+  disable-auto-update-panel: true
+```
+
+Keep `server.host: "127.0.0.1"` and port `8317`. With `disable-auto-update-panel: true`, the panel downloads on first access if missing, then stays at that version. With separate human approval, `false` permits background GitHub update checks every three hours. The default `management.panel-github-repository` is `https://github.com/router-for-me/Cli-Proxy-API-Management-Center`; do not substitute another source. The panel release is independent of the gateway version; capabilities below were checked at [v1.26.7](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/tag/v1.26.7), the latest panel on 2026-10-29.
+
+Saving the config [hot-reloads these flags](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/internal/api/server_reload.go#L178-L192); wait a few seconds, repeat step 3's listener/ownership check and confirm the authenticated inventory still contains three Codex accounts, then request `http://127.0.0.1:8317/management.html` without a key to trigger the first download. Do not restart the scheduled task for this change. If reload fails, stop and inspect safe error summaries; coordinate any necessary task restart with the human after active work finishes.
+
+The [downloader](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/internal/managementasset/updater.go#L245-L309) uses GitHub's latest `management.html` release asset and checks its SHA-256 against the asset digest **when supplied** (v1.26.7 supplies one). It can also fall back to `https://cpamc.router-for.me/` **without digest verification** when the first GitHub fetch fails. Before entering the key, compare `Get-FileHash (Join-Path $Root 'static\management.html') -Algorithm SHA256` with the `sha256:` asset digest from the official GitHub release API, `https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest`. Stop if the digest is missing or mismatched; do not authenticate an unverified panel.
+
+**HUMAN STEP:** Open `http://127.0.0.1:8317/management.html`. Use server URL `http://127.0.0.1:8317` if prompted and the **management key**, not the client key. Transfer `management-key.txt` through the local clipboard/UI without printing it; clear the clipboard afterward and leave “Remember password” off. The HTML login page itself needs no key; its management API calls do, even on loopback. Never put the key in the URL.
+
+The checked panel can list/enable/disable credentials, [refresh Codex quota windows and reset times, show manual reset credits and their expiry, and redeem an available credit](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/blob/v1.26.7/src/features/quota/providers/codex/data.ts#L418-L548) with **Reset quota**. **HUMAN STEP:** Let the human choose the account and explicitly confirm each redemption; it consumes one credit. If redemption succeeded but clearing the gateway cooldown failed, use that account's **Clear cooldown** action; do not redeem another credit. Clearing a local cooldown alone does not restore upstream allowance.
+
+It also displays and [edits routing strategy (`round-robin`, `weighted-round-robin`, `fill-first`) and session-affinity settings](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/blob/v1.26.7/src/features/config/components/sections/SectionNetwork.tsx#L118-L165) in its configuration editor. Retain this guide's routing unless the human approves a change. It does not pool subscriptions, create reset credits, or automatically select the account whose quota resets soonest.
+
+The dashboard also shows recent gateway request successes/failures and a traffic chart from credential counters; these need no `usage-statistics-enabled` change. They reset with the gateway process. This panel does not provide a durable token/cost history or the accounts' complete ChatGPT usage. Leave request/body logging and the separate usage queue off.
+
+To turn the panel off, set `management.disable-control-panel: true` again and retain `disable-auto-update-panel: true`. After reload, expect `/management.html` to return 404 while the authenticated inventory still works. Sign out of the panel and close its tab. The downloaded HTML remains on disk; disabling the panel does not disable the management API. Panel login, quota/reset actions, charts, and routing edits still require Windows acceptance; they were source-checked, not executed here.
+
+## 9. Fast mode and WebSockets
+
+Go's standard `plugin` package does not support Windows, but CLIProxyAPI **does not use that mechanism**: v8.0.47 has a [Windows DLL loader](https://github.com/router-for-me/CLIProxyAPI/blob/v8.0.47/internal/pluginhost/loader_windows.go) calling `LoadDLL` and `cliproxy_plugin_init` through its C/JSON ABI. Its Windows release builds enable CGO. This repo's [fast-mode plugin build](../plugins/fast-mode-policy/build.sh) explicitly targets Linux amd64 with `-buildmode=c-shared`; the resulting `.so` cannot load on Windows. No Windows DLL build of this plugin is provided or validated.
 
 The sample's `requests.payload.filter` removes `service_tier` on Codex requests globally. It provides a simpler all-accounts policy, not the Linux dashboard's per-account control. Keep `supports_websockets = false` and `upstream.codex.response-steering: false` for this setup. Theo's gist enables client WebSockets, but upstream Codex WebSockets also depend on credential flags; setting the client flag alone is not proof of the upstream transport. See [the policy](fast-mode-policy.md) and [WebSocket findings](codex-websockets.md) before changing this. Duplex follow-ups can bypass policy processing. Effective outbound tier enforcement on Windows remains an acceptance check, not a measured result of this document's Linux config-load test.
 
-## 9. Upgrade, stop, or roll back
+## 10. Upgrade, stop, or roll back
 
 Before upgrading, wait for this gateway's tasks to finish and ask the human to close affected client sessions. Download the chosen release into a **new version directory**, verify its published checksum as in step 1, and read that version's config changes. Back up the private config; leave `auth` and both keys in place. Never replace a running executable or restore old OAuth tokens as part of a binary downgrade.
 
@@ -354,13 +383,13 @@ if ($Remaining.Count) { throw 'Port 8317 still has a listener; identify its owne
 
 Expected: no guide-owned task/process/listener, and the original Codex configuration restored. **HUMAN STEP:** Restart only the affected client when their work is safe; check it uses its original provider. Deleting the retained auth directory, keys, or backups requires a separate human decision.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Agent action and expected check |
 | --- | --- |
 | 401 from the gateway | Check the client environment variable exists without printing it and matches the private client-key file in memory. A management request needs the separate management key. Expect `/v1/models` and the inventory checks to pass. |
 | Upstream 401 / invalidated login | Identify the affected account using inventory metadata privately; repeat only its gateway OAuth login with a **HUMAN STEP:**. Never log out the user's regular Codex client. Expect the account available and a successful fresh request. |
-| 429 | Check inventory `unavailable`/quota/cooldown metadata and whether all three accounts are enabled. The retry settings mitigate transient exhaustion; they cannot create allowance. Wait for reset or let another eligible account serve a fresh session. Do not disable cooling or repeatedly hammer the endpoint. |
+| 429 | Check inventory `unavailable`/quota/cooldown metadata and whether all three accounts are enabled. v8.0.47 automatically treats Codex `turn_rate_limit_exceeded` as transient capacity and can retry early WebSocket 429s on another credential; no extra retry key is needed. The retry settings cannot create allowance. Wait for reset or let another eligible account serve a fresh session. Do not disable cooling or repeatedly hammer the endpoint. |
 | Only one account used | A single conversation is sticky by design. Repeat the three distinct-session probes, check all three entries are enabled/available and have equal priority, and count successful accounts. Repeated logins to one identity do not add accounts. |
 | Port 8317 occupied | Run `Get-NetTCPConnection -State Listen -LocalPort 8317 -ErrorAction SilentlyContinue` and inspect its owning process metadata. Do not kill it or change every URL silently. Ask the human about the conflict. Device login does not need callback port 1455. |
 | Task stops or does not start | Inspect `Get-ScheduledTaskInfo -TaskName 'CLIProxyAPI-local'`, the configured absolute action path/working directory, and safe startup error summaries. Expect the listener check to pass after a logon or explicit task start. It does not run through logout or sleep. |
