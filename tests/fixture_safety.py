@@ -6,6 +6,12 @@ def forbidden_transport(*args, **kwargs):
 
 
 def isolate(app, directory):
+    # These previews exercise the two-account regression scenarios explicitly.
+    # Their roster must not depend on the production Codex configuration.
+    from codex_fixture import CODEX_PAIR
+    import operations
+    app.routing_policy.EMAILS = CODEX_PAIR
+    operations.EMAILS = CODEX_PAIR
     app.urlopen = forbidden_transport
     app.claude_request = forbidden_transport
     app.routing_policy.urlopen = forbidden_transport

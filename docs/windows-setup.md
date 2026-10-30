@@ -147,7 +147,7 @@ Fast mode is stripped for **all three accounts** by the payload filter, includin
 Use Task Scheduler under the current user, without elevation. Set no execution time limit, retain operation on battery, and reject duplicate instances. The executable stays in its versioned directory; state stays outside it.
 
 ```powershell
-$Action = New-ScheduledTaskAction -Execute $Exe -Argument ('-config "{0}" -local-model' -f $Config) -WorkingDirectory $Root
+$Action = New-ScheduledTaskAction -Execute $Exe -Argument ('-config "{0}"' -f $Config) -WorkingDirectory $Root
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Identity
 $Principal = New-ScheduledTaskPrincipal -UserId $Identity -LogonType Interactive -RunLevel Limited
 $Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
@@ -180,7 +180,7 @@ if (@($Inventory.files).Count -ne 0) { throw 'Fresh auth directory unexpectedly 
 'YAML loaded; authenticated management reachable; zero accounts as expected.'
 ```
 
-Expected: one owned loopback listener and an empty inventory. `-local-model` uses the release's embedded model catalogs, making the initial setup independent of catalog refreshes. The application log rotates at `$env:LOCALAPPDATA\CLIProxyAPI\logs\main.log`, capped with the other logs at 50 MB. OAuth commands may print login status to their terminal; do not record that output. Do not dump log files into the agent chat. On startup failure, inspect Task Scheduler's last result and summarize only allowlisted error information.
+Expected: one owned loopback listener and an empty inventory. Do not add `-local-model`: it pins the model list to the catalog embedded in the release, so models OpenAI ships later (for example `gpt-6.1-terra`, which 8.0.43 does not embed) never appear. Without it the gateway refreshes its catalog from upstream. The application log rotates at `$env:LOCALAPPDATA\CLIProxyAPI\logs\main.log`, capped with the other logs at 50 MB. OAuth commands may print login status to their terminal; do not record that output. Do not dump log files into the agent chat. On startup failure, inspect Task Scheduler's last result and summarize only allowlisted error information.
 
 ## 4. Sign in the three accounts, one at a time
 
@@ -267,9 +267,9 @@ model_provider = "cliproxy"
 [model_providers.cliproxy]
 name = "CLIProxyAPI"
 base_url = "http://127.0.0.1:8317/v1"
-env_key = "CODEX_GATEWAY_API_KEY"
+env_http_headers = { "X-Api-Key" = "CODEX_GATEWAY_API_KEY" }
 wire_api = "responses"
-requires_openai_auth = false
+requires_openai_auth = true
 supports_websockets = false
 '@
 [IO.File]::WriteAllText($GatewayProfile, $ProviderToml)
@@ -282,7 +282,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Codex profile test failed.' }
 
 Run the test from a trusted project the user chooses. Expected: `gateway-ok`; start `codex --profile gateway`, check `/status` for provider `cliproxy`/model `gpt-6.1-sol`, and ask for one follow-up. Recheck management success counters to establish that gateway traffic increased; text output alone does not prove routing. For optional advice, `codex --profile gateway --model gpt-6-astra` uses the same provider; first verify that model appears in `/v1/models`.
 
-The [official provider reference](https://developers.openai.com/codex/config-reference/) supports `base_url`, `env_key`, `wire_api = "responses"`, and `requires_openai_auth = false`. This uses the gateway's client key, not an OpenAI API key or the existing ChatGPT login. `env_key` avoids embedding a bearer token in TOML. The profile shares the normal Codex home but does not change its default provider or login.
+The [official provider reference](https://developers.openai.com/codex/config-reference/) supports `base_url`, `env_http_headers`, `wire_api = "responses"`, and `requires_openai_auth`. Keep `requires_openai_auth = true`: Codex stays signed in to the human's ChatGPT account, so account features (account and plan recognition, usage display) keep working. With `false`, inference still works but Codex no longer recognizes the account. Codex then sends its ChatGPT token as the bearer, and the gateway authenticates the request by the client key in `X-Api-Key` instead. CLIProxyAPI 8.0.43 accepts a valid `X-Api-Key` even when the bearer holds a different token. `env_http_headers` reads the key from the environment, so no secret is written to TOML. Inference still rotates across all three gateway accounts; Codex's usage display shows only the signed-in account.
+
+**HUMAN STEP:** Codex must already be signed in with ChatGPT (any one of the three accounts). If it is not, have the human sign in through Codex's normal login; never handle their credentials. A 401 from the gateway with this profile means `CODEX_GATEWAY_API_KEY` is missing from that process's environment.
 
 For future PowerShell sessions, load `$env:CODEX_GATEWAY_API_KEY` from the private key file before `codex --profile gateway`. If the human approves default routing, **merge** the same top-level keys and provider table into `%USERPROFILE%\.codex\config.toml`, preserving unrelated settings and avoiding duplicate TOML keys/tables. Top-level keys must precede table headers. Do not replace the entire existing file with `$ProviderToml`.
 

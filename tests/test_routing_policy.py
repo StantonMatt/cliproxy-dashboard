@@ -13,7 +13,12 @@ from unittest.mock import mock_open, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
 import routing_policy as policy
 from signin_fixture import auth_file_row
-A,B=policy.EMAILS
+from codex_fixture import CODEX_PAIR, use_codex_pair
+A, B = CODEX_PAIR
+
+
+def setUpModule():
+    use_codex_pair()
 
 class RoutingTests(unittest.TestCase):
     def test_free_eligibility_follows_preference_auth_and_quota(self):

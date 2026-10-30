@@ -19,19 +19,19 @@ from urllib.request import Request, urlopen
 from account_access import runtime_matches
 from request_deadline import RequestDeadline
 
-EMAILS = ('account-a@example.com', 'account-b@example.com')
+EMAILS = ('account-a@example.com',)
 CLAUDE_EMAILS = ('account-a@example.com', 'account-b@example.com')
 STATE = Path('/var/lib/personal-codex-router-routing')
 KEY = Path('/etc/cliproxyapi/dashboard-management-key')
 MODES = ('round-robin', 'earliest-weekly-reset', 'highest-remaining-quota', 'preferred-account')
 PROVIDERS = {
-    'codex': {'emails': EMAILS, 'modes': MODES, 'default': 'earliest-weekly-reset'},
+    'codex': {'modes': MODES, 'default': 'earliest-weekly-reset'},
     'claude': {'emails': CLAUDE_EMAILS, 'modes': MODES, 'default': 'preferred-account'},
 }
 
 
 def identities(provider):
-    return PROVIDERS[provider]['emails']
+    return EMAILS if provider == 'codex' else PROVIDERS[provider]['emails']
 
 
 def state_path(provider='codex'):
@@ -194,7 +194,7 @@ def eligible_accounts(overview, now, provider='codex'):
         raise DataHold('Gateway observations are stale')
     accounts = [a for a in gateway.get('accounts', []) if a.get('email') in emails]
     if len(accounts) != len(emails) or {a['email'] for a in accounts} != set(emails):
-        raise Hold('Expected account pair is incomplete or ambiguous')
+        raise Hold('Expected accounts are incomplete or ambiguous')
     candidates, excluded = {}, {}
     for account in accounts:
         email, label = account['email'], account_label(account)
@@ -256,6 +256,8 @@ def priority_plan(email, reset=None, reason=None, provider='codex'):
 def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='codex'):
     if mode not in ('earliest-weekly-reset', 'highest-remaining-quota'):
         raise ValueError('Choose an automatic routing mode')
+    if provider == 'codex' and len(identities(provider)) == 1:
+        return priority_plan(None, reason='Only one Codex account is configured', provider=provider)
     candidates, _ = eligible_accounts(overview, now, provider)
     if not candidates:
         raise Hold('No account currently reports available allowance')
@@ -290,10 +292,12 @@ def request(path, body=None, method=None, base='http://127.0.0.1:8317', timeout=
 def records(call, provider='codex'):
     emails = identities(provider)
     files = call('/auth-files').get('files', [])
+    # Codex policy owns only configured identities, including disabled ones.
+    # Retired credentials are ignored; duplicates of a configured email hold.
     rows = [a for a in files if a.get('type') == provider
             and (provider == 'claude' or a.get('email') in emails)]
     if len(rows) != len(emails) or {a.get('email') for a in rows} != set(emails):
-        raise Hold('Gateway account pair is incomplete or ambiguous')
+        raise Hold('Gateway accounts are incomplete or ambiguous')
     if any(not isinstance(a.get('name'), str) or not a['name']
            or sum(f.get('name') == a['name'] for f in files) != 1 for a in rows):
         raise Hold('Gateway account filenames are incomplete or ambiguous')
@@ -348,8 +352,13 @@ def apply_plan(plan, call, state_dir, provider='codex'):
     baseline_path = state_dir / 'baseline.json'
     if baseline_path.exists():
         baseline = json.loads(baseline_path.read_text())
-        if any(baseline[e]['name'] != rows[e]['name'] for e in emails):
+        if any(e in baseline and baseline[e]['name'] != rows[e]['name'] for e in emails):
             raise Hold('Account files changed; check policy ownership before continuing')
+        # An identity configured after the baseline was captured starts from its current priority.
+        added = {e: {'name': rows[e]['name'], 'priority': rows[e].get('priority')}
+                 for e in emails if e not in baseline}
+        if added:
+            write_json(baseline_path, {**baseline, **added})
     else:
         write_json(baseline_path, {e: {'name': rows[e]['name'], 'priority': rows[e].get('priority')}
                                   for e in emails})
@@ -392,8 +401,11 @@ def rollback(call, state_dir):
         baseline = json.loads(baseline_path.read_text()) if recorded else None
         rows = records(call)
         if any(rows[e].get('priority') not in (None, 0, 100) or
-               (recorded and rows[e]['name'] != baseline[e]['name']) for e in EMAILS):
+               (recorded and e in baseline and rows[e]['name'] != baseline[e]['name']) for e in EMAILS):
             raise Hold('Account files or priorities changed; rollback left them untouched')
+        if recorded:
+            baseline = {**{e: {'name': rows[e]['name'], 'priority': rows[e].get('priority')}
+                           for e in EMAILS if e not in baseline}, **baseline}
         if not recorded:
             if call('/config').get('routing', {}).get('strategy') != 'round-robin':
                 raise Hold('Gateway strategy changed; inspect before applying priorities')
@@ -430,11 +442,20 @@ def selection(state_dir=None, provider='codex'):
     if not path.exists():
         return {'mode': PROVIDERS[provider]['default'],
                 'preferred_email': identities(provider)[0] if provider == 'claude' else None}
-    return validate_selection(json.loads(path.read_text()), provider)
+    value = json.loads(path.read_text())
+    if (provider == 'codex' and len(identities(provider)) == 1 and isinstance(value, dict)
+            and value.get('mode') == 'preferred-account'
+            and value.get('preferred_email') not in identities(provider)):
+        # A retired saved preference follows the sole remaining account. New
+        # API selections still go through strict validation.
+        value = {**value, 'preferred_email': identities(provider)[0]}
+    return validate_selection(value, provider)
 
 
 def selected_plan(selected, overview, now, current=None, provider='codex'):
     selected = validate_selection(selected, provider)
+    if provider == 'codex' and len(identities(provider)) == 1:
+        return priority_plan(None, reason='Only one Codex account is configured', provider=provider)
     if selected['mode'] in ('earliest-weekly-reset', 'highest-remaining-quota'):
         return choose(overview, now, selected['mode'], current, provider)
     if selected['mode'] == 'round-robin':
@@ -514,7 +535,8 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
 
         # Codex completes persisted plans without fresh quota. Claude recomputes
         # from fresh usage before retrying, so stale snapshots never trigger writes.
-        if provider == 'codex' and previous.get('pending_plan') and selected is None:
+        if (provider == 'codex' and previous.get('pending_plan') and selected is None
+                and set(previous.get('intended_priorities', {})) == set(emails)):
             plan = {k: previous.get(k) for k in ('preferred_email', 'weekly_resets_at', 'reason')}
             plan['priorities'] = previous['intended_priorities']
             apply(plan, previous.get('plan_status', 'active'))
@@ -584,7 +606,7 @@ def main():
         else:
             wanted = selection()
             overview = {}
-            if wanted['mode'] != 'round-robin' and not suspended(STATE):
+            if wanted['mode'] != 'round-robin' and len(EMAILS) > 1 and not suspended(STATE):
                 req = Request('http://127.0.0.1:8320/api/overview', headers={'X-Router-Request': '1'})
                 try:
                     with urlopen(req, timeout=15) as response:

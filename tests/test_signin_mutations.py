@@ -15,6 +15,11 @@ import routing_policy as routing
 import server as app
 import signin
 from signin_fixture import CONFIRMED, FakeGateway, auth_file_row, jwt
+from codex_fixture import use_codex_pair
+
+
+def setUpModule():
+    use_codex_pair()
 
 
 def controller_process(connection, root, rollback):

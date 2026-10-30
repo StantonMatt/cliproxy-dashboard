@@ -10,9 +10,10 @@ import threading
 import time
 from zoneinfo import ZoneInfo
 
+from routing_policy import EMAILS
+
 OPS = Path('/var/lib/personal-codex-router-ops')
 NOTICES = Path('/var/lib/personal-codex-router/notifications.json')
-EMAILS = ('account-a@example.com', 'account-b@example.com')
 
 
 def age(value, now):
@@ -145,7 +146,7 @@ def exhaustion_candidates(accounts, gateway, now):
                  if windows[email] is not None and windows[email]['remaining'] == 0]
     if not exhausted:
         return {}
-    both = len(exhausted) == len(EMAILS)
+    both = len(EMAILS) > 1 and len(exhausted) == len(EMAILS)
     other = next((accounts[email] for email in EMAILS if accounts[email] not in exhausted), None)
     fallback = not both and can_serve(other, gateway, now)
     details, choices = [], []
@@ -350,6 +351,12 @@ class NoticeStore:
             wanted = candidates(gateway, now, observed_usage)
             accounts = {a.get('email'): a for a in gateway.get('accounts', [])}
             for key, row in self.rows.items():
+                if (key.startswith(('free:', 'signin:', 'exhausted:'))
+                        and ((key == 'exhausted:pool' and len(EMAILS) == 1)
+                             or (key != 'exhausted:pool' and row['email'] not in EMAILS))):
+                    row['active'] = False
+                    row.pop('action', None)
+                    continue
                 if key.startswith('free:'):
                     row['message'] = 'ChatGPT reports a Free plan'
                     if key not in wanted and gateway.get('online') is True and fresh(gateway.get('checked_at'), now):
@@ -362,6 +369,8 @@ class NoticeStore:
                     if authenticated(account, gateway, now):
                         row['active'] = False
                 elif key.startswith('exhausted:'):
+                    if len(EMAILS) == 1:
+                        row['urgency'] = 'critical'
                     emails = EMAILS if key == 'exhausted:pool' else (row['email'],)
                     if any((w := weekly_allowance(accounts.get(email), gateway, now)) is not None
                            and w['remaining'] > 0 for email in emails) or (
@@ -373,7 +382,7 @@ class NoticeStore:
                         # Retained episodes may predate the compact copy. Use their
                         # structured data, and keep countdowns current during outages.
                         row['message'] = exhaustion_message(row.get('accounts') or [], key == 'exhausted:pool',
-                                                            row.get('urgency') != 'critical', now)
+                                                            len(EMAILS) > 1 and row.get('urgency') != 'critical', now)
                 elif key.startswith('usage:'):
                     if usage['status'] == 'healthy':
                         row['active'] = False

@@ -102,7 +102,8 @@ function series(provider, id, email) {
   }
   const accounts = current?.gateway.accounts || [];
   const a = accountFor(id) || accounts.find(x => email && x.email === email);
-  return accounts.indexOf(a) === 1 ? 'codex-two' : 'codex-one';
+  // History from a credential no longer listed (a removed account) keeps its own series.
+  return accounts.length && (!a || accounts.indexOf(a) === 1) ? 'codex-two' : 'codex-one';
 }
 // Until the gateway's first snapshot arrives, account routing and identities are unknown, not off.
 function gatewayLoading(data=current) { return data?.gateway?.online == null; }
@@ -360,7 +361,7 @@ function routingValue(value, preference, provider='codex') {
   return valid(saved) ? saved : provider==='claude' ? 'account-a@example.com' : 'round-robin';
 }
 function routingLocked() { return routingSaving || claudeRoutingSaving || routingAllSaving || routingLinkSaving; }
-// "New conversations only" or "Move all conversations now": an inline choice per routing row.
+// "New conversations only" or "Move all conversations now": one small modal, opened by whichever routing row changed.
 const routingRows = {codex:{row:'codex-routing',prefix:'routing'}, claude:{row:'claude-routing',prefix:'claude-routing'}, all:{row:'routing-all',prefix:'routing-all'}};
 function routingPart(key, part) { return $(routingRows[key].prefix+'-'+part); }
 function routingMoveAvailable() { return current?.gateway?.move_available===true; }
@@ -368,18 +369,30 @@ function routingApplied(key) {
   const gateway=current?.gateway || {};
   return key==='claude' ? routingSelection(gateway.claude_preference,'claude') : routingSelection(gateway.preference,'codex');
 }
-function routingRowHidden(key) {
-  const both=!$('watch-section').hidden, linked=both && routingLinked(current?.gateway);
-  return key==='all' ? !linked : key==='codex' ? linked : !both || linked;
+// With one configured Codex account there is nothing to route between, so only Claude keeps a routing choice.
+// The count, not the account list: a retired credential stays listed until its file is removed. Older backends omit it.
+function codexRoutable(gateway) { return typeof gateway?.codex_account_count!=='number' || gateway.codex_account_count>1; }
+function routingRowHidden(key, gateway=current?.gateway) {
+  const claude=!$('watch-section').hidden, codex=codexRoutable(gateway), linked=claude && codex && routingLinked(gateway);
+  return key==='all' ? !linked : key==='codex' ? !codex || linked : !claude || linked;
 }
 function routingRowSaving(key) { return key==='all' ? routingAllSaving : key==='claude' ? claudeRoutingSaving : routingSaving; }
+function routingChoiceTitle(key, value) {
+  const option=Array.from(routingPart(key,'mode').options).find(option=>option.value===value);
+  return `Switch ${key==='all' ? 'routing' : key==='claude' ? 'Claude routing' : 'Codex routing'} to ${value.includes('@') ? 'prefer '+value : option?.textContent || value}?`;
+}
+// A move drops every pinned conversation on the gateway, so one gateway's move reaches the other's conversations too.
+function routingMoveNote(key) {
+  if(key==='codex' && !$('watch-section').hidden)return 'Also moves Claude conversations.';
+  return key==='claude' && codexRoutable(current?.gateway) ? 'Also moves Codex conversations.' : '';
+}
 function closeRoutingChoice(revert=true, focus=false) {
   const choice=routingChoice;if(!choice)return;
   routingChoice=null;
   const select=routingPart(choice.key,'mode');
   if(revert)select.value=routingApplied(choice.key);
   select.classList?.remove?.('pending');
-  routingPart(choice.key,'choice-host').innerHTML='';
+  if($('routing-dialog').open)$('routing-dialog').close();
   if(focus)select.focus();
 }
 function openRoutingChoice(key, value) {
@@ -388,31 +401,44 @@ function openRoutingChoice(key, value) {
   routingRetry.delete(key);
   routingPart(key,'feedback').textContent='';
   if(value===routingApplied(key)){closeRoutingChoice(true);renderRoutingControls();return;}
-  if(routingChoice){routingChoice.value=value;renderRoutingControls();return;}
-  routingChoice={key,value,applying:null};
-  const line=routingRows[key].prefix+'-choice-line';
-  // Built once per open; renders only update attributes, so focus and the alert survive refreshes.
-  routingPart(key,'choice-host').innerHTML=`<div class="route-confirm" role="alert"><div>`+
-    `<button type="button" class="reset-primary confirm" data-routing-choice="new">New conversations only</button>`+
-    `<button type="button" class="reset-primary" data-routing-choice="move" aria-describedby="${line}">Move all conversations now</button>`+
-    `<button type="button" class="reset-cancel" data-routing-choice="cancel">Cancel</button></div>`+
-    `<span id="${line}">Moving affects both Codex and Claude conversations.</span></div>`;
+  if(routingChoice){routingChoice.value=value;routingChoice.error=false;renderRoutingControls();return;}
+  routingChoice={key,value,applying:null,error:false,focus:'new'};
   renderRoutingControls();
+  if(!$('routing-dialog').open)$('routing-dialog').showModal();
+  routingChoiceButton('new').focus();
 }
-// A refresh closes an idle choice silently once it can no longer apply what it shows.
+function routingChoiceButton(kind) { return $('routing-dialog').querySelector(`[data-routing-choice="${kind}"]`); }
+// A refresh closes an idle choice once it can no longer apply what it shows; an unconfirmed attempt's error moves to the row.
 function expireRoutingChoice(key) {
   if(routingChoice?.key!==key || routingChoice.applying)return;
-  if(failed || current?.read_only || current?.gateway?.online!==true || !routingMoveAvailable() || routingRowHidden(key) || routingApplied(key)===routingChoice.value)closeRoutingChoice(true);
+  if(failed || current?.read_only || current?.gateway?.online!==true || !routingMoveAvailable() || routingRowHidden(key) || routingApplied(key)===routingChoice.value) {
+    const error=routingChoice.error;
+    closeRoutingChoice(true);
+    if(error)routingPart(key,'feedback').textContent='Not confirmed · refresh and try again';
+  }
 }
+// The modal's text only changes when its content does, so a refresh never re-announces the error.
 function syncRoutingChoice(key) {
   const select=routingPart(key,'mode'), choice=routingChoice?.key===key ? routingChoice : null;
   select.classList?.toggle?.('pending',!!choice);
   if(!choice)return;
-  const disabled=!!choice.applying || routingLocked() || select.disabled;
-  for(const button of routingPart(key,'choice-host').querySelectorAll('[data-routing-choice]')) {
+  const disabled=!!choice.applying || routingLocked() || select.disabled, note=routingMoveNote(key);
+  const text=(id,value)=>{if($(id).textContent!==value)$(id).textContent=value;};
+  text('routing-dialog-title',routingChoiceTitle(key,choice.value));
+  text('routing-dialog-error',choice.error ? 'Change not confirmed. Try again.' : '');
+  text('routing-dialog-note',note);$('routing-dialog-note').hidden=!note;
+  for(const button of $('routing-dialog').querySelectorAll('[data-routing-choice]')) {
     button.disabled=disabled;
     if(choice.applying===button.dataset.routingChoice)button.setAttribute('aria-busy','true');else button.removeAttribute('aria-busy');
   }
+}
+// An unconfirmed save keeps its open modal, with the error inside and the choices available again.
+function routingChoiceFailed(key) {
+  const choice=routingChoice;
+  if(choice?.key!==key || !$('routing-dialog').open)return false;
+  choice.error=true;choice.focus=choice.applying;choice.applying=null;
+  routingPart(key,'feedback').textContent='';
+  return true;
 }
 // A retry stays valid only while every preference the row posts for is live and still shows the retried value.
 // A suspended routing shows its saved value, but re-posting it would resume routing, not retry a move.
@@ -482,17 +508,23 @@ function renderRouting(gateway, provider='codex') {
   $(prefix+'-help').hidden=!current?.read_only; $(prefix+'-help').textContent=current?.read_only ? `Change ${name} routing from your computer dashboard` : '';
   syncRoutingRetry(provider);syncRoutingChoice(provider);
 }
-// Focus returns to the select when it was in the row, or was dropped to the body by disabled controls.
+// Focus returns to the select when it was in the row or the modal, or was dropped to the body by disabled controls;
+// a modal kept open by an error gets it back on the choice that failed.
+function routingFocused(key) {
+  const active=document.activeElement;
+  return operationFocus(routingPart(key,'mode').id) || $(routingRows[key].row).contains?.(active) || $('routing-dialog').contains?.(active);
+}
 function routingRefocus(key) {
-  const row=$(routingRows[key].row), select=routingPart(key,'mode');
-  return ()=>{if(operationFocus(select.id) || row.contains?.(document.activeElement))select.focus?.();};
+  return ()=>{
+    if(routingChoice?.key===key && $('routing-dialog').open)routingChoiceButton(routingChoice.focus).focus?.();
+    else if(routingFocused(key))routingPart(key,'mode').focus?.();
+  };
 }
 async function saveRouting(value, provider='codex', move=false) {
   if(routingLocked())return;
   routingEpoch++;
   const claude=provider==='claude', prefix=claude?'claude-routing':'routing', key=claude?'claude_preference':'preference';
-  const select=$(prefix+'-mode'), row=$(routingRows[provider].row);
-  const refocus=row.contains?.(document.activeElement) || operationFocus(select.id) ? routingRefocus(provider) : null;
+  const select=$(prefix+'-mode'), refocus=routingFocused(provider) ? routingRefocus(provider) : null;
   value=routingValue(value,current?.gateway[key],provider); select.value=value;
   const body=value.includes('@') ? {mode:'preferred-account', preferred_email:value} : {mode:value};
   if(move)body.move=true;
@@ -505,10 +537,10 @@ async function saveRouting(value, provider='codex', move=false) {
     if(current && result && typeof result==='object')current.gateway[key]={...current.gateway[key],...part};
     routingFeedback(provider,value,move,routingNotApplied(result),moved);
   } catch (_) {
-    $(prefix+'-feedback').textContent='Not confirmed · refresh and try again';
+    if(!routingChoiceFailed(provider))$(prefix+'-feedback').textContent='Not confirmed · refresh and try again';
   } finally {
     routingEpoch++;
-    if(routingChoice?.key===provider)closeRoutingChoice(false);
+    if(routingChoice?.key===provider && !routingChoice.error)closeRoutingChoice(false);
     await load(true);
     if(claude)claudeRoutingSaving=false;else routingSaving=false;
     renderRoutingControls();
@@ -524,14 +556,14 @@ for(const provider of ['codex','claude']) {
 function routingLinked(gateway) { return gateway?.routing_linked!==false; }
 function routingSelection(p, provider) { return routingValue(routingSuspended(p) ? null : p?.policy==='preferred-account' ? p.selected_email : p?.policy,p,provider); }
 function renderRoutingAll(gateway) {
-  const both=!$('watch-section').hidden, linked=both && routingLinked(gateway);
+  const both=!$('watch-section').hidden && codexRoutable(gateway), linked=!routingRowHidden('all',gateway);
   syncRoutingLayout();expireRoutingChoice('all');
-  $('routing-all').hidden=!linked; $('codex-routing').hidden=linked; $('claude-routing').hidden=!both || linked;
+  for(const key of Object.keys(routingRows))$(routingRows[key].row).hidden=routingRowHidden(key,gateway);
   const split=$('routing-split'), toggle=$('routing-link'), host=linked?$('routing-all'):$('claude-routing');
   if(split.parentElement!==host) {
     const focused=document.activeElement===toggle;
-    // Keep the switch on the select's line, ahead of the full-width choice and state lines.
-    host.querySelector('.routing-choice-host,.routing-state,.routing-states').before(split);
+    // Keep the switch on the select's line, ahead of the full-width state lines.
+    host.querySelector('.routing-state,.routing-states').before(split);
     if(focused)toggle.focus();
   }
   split.hidden=!both;
@@ -554,8 +586,7 @@ function renderRoutingAll(gateway) {
 async function saveRoutingAll(value, relinking=false, move=false) {
   if(routingLocked() && !(relinking && routingLinkSaving && !routingAllSaving))return;
   routingEpoch++;
-  const select=$('routing-all-mode'), row=$('routing-all');
-  const refocus=!relinking && (row.contains?.(document.activeElement) || operationFocus(select.id)) ? routingRefocus('all') : null;
+  const select=$('routing-all-mode'), refocus=!relinking && routingFocused('all') ? routingRefocus('all') : null;
   value=routingValue(value,current?.gateway.preference); select.value=value;
   const body=value.includes('@') ? {mode:'preferred-account', preferred_email:value} : {mode:value};
   if(move)body.move=true;
@@ -571,10 +602,10 @@ async function saveRoutingAll(value, relinking=false, move=false) {
     }
     routingFeedback('all',value,move,pending.some(Boolean),result?.move);
   } catch (_) {
-    $('routing-all-feedback').textContent='Not confirmed · refresh and try again';
+    if(!routingChoiceFailed('all'))$('routing-all-feedback').textContent='Not confirmed · refresh and try again';
   } finally {
     routingEpoch++;
-    if(routingChoice?.key==='all')closeRoutingChoice(false);
+    if(routingChoice?.key==='all' && !routingChoice.error)closeRoutingChoice(false);
     await load(true);
     routingAllSaving=false;
     renderRoutingControls();
@@ -609,7 +640,7 @@ $('routing-link').addEventListener('change', ()=>saveRoutingLink(!$('routing-lin
 function routingChoiceApply(key, kind) {
   const choice=routingChoice;
   if(!choice || choice.key!==key || choice.applying || routingLocked())return;
-  choice.applying=kind;
+  choice.applying=kind;choice.error=false;
   const move=kind==='move';
   return key==='all' ? saveRoutingAll(choice.value,false,move) : saveRouting(choice.value,key,move);
 }
@@ -620,24 +651,33 @@ function retryRoutingMove(key) {
   const value=routingRetry.get(key);
   return key==='all' ? saveRoutingAll(value,false,true) : saveRouting(value,key,true);
 }
-for(const key of Object.keys(routingRows)) {
-  const row=$(routingRows[key].row);
-  row.addEventListener('click',event=>{
-    const button=event.target.closest?.('[data-routing-choice]');
-    if(!button || button.disabled || routingChoice?.key!==key)return;
-    if(button.dataset.routingChoice==='cancel'){closeRoutingChoice(true,true);renderRoutingControls();}
-    else routingChoiceApply(key,button.dataset.routingChoice);
-  });
-  row.addEventListener('focusout',event=>{
-    if(routingChoice?.key===key && !routingChoice.applying && event.relatedTarget && !row.contains(event.relatedTarget)){closeRoutingChoice(true);renderRoutingControls();}
-  });
-  routingPart(key,'retry').addEventListener('click',()=>retryRoutingMove(key));
+for(const key of Object.keys(routingRows))routingPart(key,'retry').addEventListener('click',()=>retryRoutingMove(key));
+// Cancel, Escape and a backdrop click revert the select, except while a choice is applying.
+function cancelRoutingChoice() {
+  if(!routingChoice || routingChoice.applying)return;
+  closeRoutingChoice(true,true);renderRoutingControls();
 }
-if(document.addEventListener)document.addEventListener('keydown',event=>{
-  const choice=routingChoice;if(!choice || choice.applying)return;
-  if(event.target!==document.body && !$(routingRows[choice.key].row).contains(event.target))return;
-  if(event.key==='Escape'){event.preventDefault();closeRoutingChoice(true,true);renderRoutingControls();}
+$('routing-dialog').addEventListener('click',event=>{
+  const dialog=$('routing-dialog'), button=event.target.closest?.('[data-routing-choice]');
+  if(!routingChoice)return;
+  if(!button){
+    const r=dialog.getBoundingClientRect();
+    if(event.target===dialog && (event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom))cancelRoutingChoice();
+    return;
+  }
+  if(button.disabled)return;
+  if(button.dataset.routingChoice==='cancel')cancelRoutingChoice();
+  else routingChoiceApply(routingChoice.key,button.dataset.routingChoice);
 });
+// Tab wraps inside the modal instead of leaving for the browser's own controls.
+$('routing-dialog').addEventListener('keydown',event=>{
+  const buttons=[...$('routing-dialog').querySelectorAll('[data-routing-choice]')].filter(button=>!button.disabled);
+  const edge=event.shiftKey ? buttons[0] : buttons.at(-1);
+  if(event.key==='Tab' && edge && document.activeElement===edge){event.preventDefault();(event.shiftKey ? buttons.at(-1) : buttons[0]).focus();}
+});
+$('routing-dialog').addEventListener('cancel',event=>{if(routingChoice?.applying)event.preventDefault();});
+// The browser can still close it (a repeated Escape); an applying choice then reports in its row.
+$('routing-dialog').addEventListener('close',()=>{if(!$('routing-dialog').open)cancelRoutingChoice();});
 const signinBusy = new Set(), signinErrors = new Map(), copiedCodes = new Map();
 const routePending = new Set(), routeErrors = new Map(), routeConfirm = new Map(), signinPanels = new Map();
 let accessFocus = null, accessNextFocus = null;
@@ -994,9 +1034,14 @@ function renderAccounts(gateway) {
 }
 // Request flow keeps unmapped Claude history separate from the known accounts.
 const SERIES = [['codex','codex-one'],['codex','codex-two'],['claude','claude-one'],['claude','claude-two'],['claude','claude-unknown']];
+// A retired second Codex account (listed after the configured one, or no longer listed) keeps a series only while history shows its requests.
+function codexSecondShown() {
+  return codexRoutable(current?.gateway) && (current?.gateway.accounts || []).length > 1 ||
+    [current?.usage,today?.usage].some(u=>(u?.hours || []).some(r=>r.requests && series('codex',r.auth_index,r.email)==='codex-two'));
+}
 function seriesNames() {
   const accounts = current?.gateway.accounts || [], [first,second] = claudeSeriesEmails();
-  return {'codex-one': accounts[0] && accountName(accounts[0]), 'codex-two': accounts[1] && accountName(accounts[1]),
+  return {'codex-one': accounts[0] && accountName(accounts[0]), 'codex-two': codexSecondShown() && (accounts[1] ? accountName(accounts[1]) : 'Removed account'),
     'claude-one': first, 'claude-two': second,
     'claude-unknown': 'Unknown account'};
 }

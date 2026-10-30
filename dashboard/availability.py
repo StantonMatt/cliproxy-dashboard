@@ -75,5 +75,5 @@ def pool_status(gateway, now=None):
     if gateway.get('online') is not True or checked is None or not -30 <= now-checked <= 180 or 'unknown' in states:
         return {'state': 'unknown', 'ready': None, 'total': len(accounts)}
     ready = states.count('ready')
-    return {'state': 'unavailable' if ready == 0 else 'reduced' if ready < 2 else 'available',
+    return {'state': 'unavailable' if ready == 0 else 'reduced' if ready < len(accounts) else 'available',
             'ready': ready, 'total': len(accounts)}

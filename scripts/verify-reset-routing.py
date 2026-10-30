@@ -34,6 +34,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, help='Gateway executable (default: effective cliproxyapi ExecStart)')
     args = parser.parse_args(argv)
+    if len(policy.EMAILS) != 2:
+        print('Skipped: reset-priority affinity verification requires exactly two configured Codex accounts; '
+              f'{len(policy.EMAILS)} configured. No credentials read or gateway started.')
+        return 0
     binary = (args.binary or gateway_config.resolve_gateway_binary()).resolve()
     assert os.geteuid() == 0
     owner = pwd.getpwnam('cliproxyapi')
@@ -46,7 +50,7 @@ def main(argv=None):
         auth = root / 'auth'; auth.mkdir(mode=0o700); os.chown(auth, owner.pw_uid, owner.pw_gid)
         for source in support.AUTH.glob('*.json'):
             data = json.loads(source.read_text())
-            if data.get('email') not in policy.EMAILS:
+            if data.get('type') != 'codex' or data.get('email') not in policy.EMAILS:
                 continue
             data.update(refresh_token='', disabled=False)
             data.pop('priority', None)
@@ -108,4 +112,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

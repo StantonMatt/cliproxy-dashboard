@@ -336,9 +336,16 @@ sudo systemctl start personal-codex-router-move.path
 conversations only**. That shortcut is removed, an approved deviation: some
 browsers deliver Enter before the select’s value updates, so it applied the
 previous pending value, and where Enter opens the picker it couldn’t reopen
-it. Keyboard users Tab from the select to **New conversations only**, the next
-Tab stop, and press Enter or Space, the button’s native activation. Escape
-still cancels, and focus handling is unchanged.
+it.
+
+On 2026-10-29 the inline choice row was replaced by a small modal (`#routing-dialog`), so the
+layout no longer shifts. It offers the same choices and sends the same requests.
+- The modal opens with focus on **New conversations only**; Enter or Space activates it.
+- Tab cycles inside the modal.
+- Escape, Cancel or a backdrop click revert the select and return focus to it.
+- A failed request keeps the modal open with the error inside.
+- With one configured Codex account (`gateway.codex_account_count < 2`), only Claude routing is
+  shown.
 
 ## Gateway upgrades
 

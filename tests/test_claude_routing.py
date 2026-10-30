@@ -14,8 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
 import routing_policy as p
 import server as app
 
-A, B = p.EMAILS
+from codex_fixture import CODEX_PAIR, use_codex_pair
+A, B = CODEX_PAIR
 NOW = 1700000000
+
+
+def setUpModule():
+    use_codex_pair()
 
 
 def overview():

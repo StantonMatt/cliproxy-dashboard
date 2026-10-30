@@ -187,13 +187,19 @@
 .route-confirm .reset-primary{min-width:0;padding:6px 11px;font-size:11px}
 [data-theme=light] .route-confirm{color:#8a6100}
 
-/* Routing change choice: a full-width inline decision below the select's line. */
-.routing-choice-host{display:contents}
-.routing-choice-host>.route-confirm{flex-basis:100%;justify-content:flex-start;margin-top:0;gap:8px 14px}
-.routing-choice-host>.route-confirm>div{margin-left:0;gap:6px}
-.routing-choice-host .reset-primary{white-space:nowrap}
+/* Routing change choice: a small modal with the two ways to apply it. */
+.routing-dialog{width:min(380px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 28px 110px #0008}
+.routing-dialog::backdrop{background:#03060b99;backdrop-filter:blur(5px)}
+.routing-dialog h2{font-size:17px;font-weight:600;letter-spacing:-.3px;line-height:1.4;margin:0 0 20px;overflow-wrap:anywhere}
+.routing-dialog-error{font-size:12px;color:var(--danger);margin:-8px 0 16px}
+.routing-dialog-error:empty{display:none}
+.routing-dialog-choices{display:grid;gap:8px}
+.routing-dialog .reset-primary{min-height:42px;font-size:13px}
+.routing-dialog .reset-primary[aria-busy=true]:disabled{opacity:1;cursor:wait;animation:breathe 1.6s infinite}
+.routing-dialog-note{font-size:11px;color:var(--muted);text-align:center;margin:8px 0 0}
+.routing-dialog .reset-cancel{display:block;min-height:38px;margin:10px auto -6px;padding:0 14px;font-size:12px}
+.routing-dialog .reset-cancel:hover:not(:disabled){color:var(--text)}
 .routing-control select.pending{border-color:color-mix(in srgb,var(--amber) 60%,var(--line))}
-.routing-choice-host button[aria-busy=true]:disabled{opacity:1;cursor:wait}
 
 @media(max-width:760px){.signin-open,.account-access .resets-button,.signin-code .resets-button{min-height:38px}}
 @container (max-width:250px){.signin-code code{font-size:21px;letter-spacing:1px}}
@@ -286,7 +292,7 @@ footer .health-panel{margin:0;font-size:9px}
 
 @media(max-width:1179px){.gateways{grid-template-columns:minmax(0,1fr);grid-template-rows:none;row-gap:36px}.gateway{grid-row:auto;grid-column:1!important;display:flex;flex-direction:column}.routing-linked{grid-row:auto;margin-top:-16px}}
 @media(max-width:760px){.gateway-head{flex-wrap:wrap}.gateway-status{height:auto;overflow:visible}.status-item{white-space:normal}.gateway-stats{margin-left:0;width:100%;gap:0}.gateway-stats .pool-stat{flex:1}.gateway-stats .pool-stat:first-child{border:0;padding-left:0}}
-@media(max-width:490px){.gateway-stats .pool-stat{padding-left:12px}.gateway-stats .pool-stat>span{white-space:normal}.routing-split{margin-left:0}.routing-choice-host>.route-confirm>div{flex-wrap:wrap;width:100%}.routing-choice-host .reset-primary{flex:1 1 auto}.routing-control>.routing-split{order:1}.routing-control>.routing-state,.routing-control>.routing-states,.routing-control>small{order:2}}
+@media(max-width:490px){.gateway-stats .pool-stat{padding-left:12px}.gateway-stats .pool-stat>span{white-space:normal}.routing-split{margin-left:0}.routing-control>.routing-split{order:1}.routing-control>.routing-state,.routing-control>.routing-states,.routing-control>small{order:2}}
 
 /* Gateway colours: Codex violet, Claude terracotta. Cards and table rows share each gateway's palette.
    The page keeps its navy and blue; status colours keep their meaning. */

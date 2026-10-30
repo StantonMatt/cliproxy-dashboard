@@ -336,7 +336,8 @@ def preference_status(accounts=None, provider='codex'):
             if isinstance(intended, dict) and all(e in intended for e in emails):
                 public['drift'] = any(actual[e] != intended[e] for e in emails)
             elif value.get('status') == 'active':
-                public['drift'] = sorted(actual.values()) != [0, 100]
+                expected = [0] if provider == 'codex' and len(emails) == 1 else [0, 100]
+                public['drift'] = sorted(actual.values()) != expected
         if public['status'] not in ('held', 'fallback', 'disabled'):
             age = time.time() - dt.datetime.fromisoformat(public['checked_at']).timestamp()
             if not -30 <= age <= 180:
@@ -924,6 +925,7 @@ class GatewayState:
         result['preference'] = preference_status(result['accounts'])
         result['claude_preference'] = preference_status(result.get('claude_accounts', []), provider='claude')
         result['routing_linked'] = routing_policy.routing_linked()
+        result['codex_account_count'] = len(routing_policy.identities('codex'))
         records = billing_records()
         fast_accounts = [dict(id=a['id'], email=a['email'], name=a['_fast_file'],
                               supports_ultrafast='(25x)' in a.get('plan', '').lower())

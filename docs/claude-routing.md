@@ -14,8 +14,11 @@ Routing controls are linked by default: one selection applies to Codex, then
 Claude. Splitting the controls allows an independent selection per gateway.
 Splitting preserves both saved selections and gateway priorities. Relinking
 applies the current Codex selection to Claude through `/api/routing-all`, so
-both gateways follow the shared choice. Both controls offer round-robin, earliest weekly reset, higher
-remaining weekly quota, and either preferred email. Preferences affect new
+both gateways follow the shared choice. Claude offers round-robin, earliest weekly reset, higher
+remaining weekly quota, and either preferred email. Codex now has only the Pro
+identity configured; its modes converge to neutral priority without quota data.
+Split routing to prefer Claude B independently. Shared preferred-email requests
+must name an identity configured for both providers. Preferences affect new
 sessions; healthy sessions retain gateway affinity. Without a saved Claude
 selection, the minute timer leaves Claude priorities untouched, preserving the
 existing A-first configuration on deployment.

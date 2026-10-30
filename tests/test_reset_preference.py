@@ -10,7 +10,12 @@ app = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(app)
 from signin_fixture import auth_file_row
 NOW = 1790160000
-A, B = app.EMAILS
+from codex_fixture import CODEX_PAIR, use_codex_pair
+A, B = CODEX_PAIR
+
+
+def setUpModule():
+    use_codex_pair(app)
 
 
 def fixture():

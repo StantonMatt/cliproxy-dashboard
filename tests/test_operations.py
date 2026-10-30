@@ -12,6 +12,11 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
 import operations as ops
 import server as app
+from codex_fixture import use_codex_pair
+
+
+def setUpModule():
+    use_codex_pair()
 
 spec = importlib.util.spec_from_file_location('router_ops', Path(__file__).resolve().parents[1] / 'scripts/router-ops.py')
 probe = importlib.util.module_from_spec(spec)

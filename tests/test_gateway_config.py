@@ -274,7 +274,7 @@ class BinaryResolverTests(unittest.TestCase):
                         auth = root / 'auth'; auth.mkdir()
                         emails = ['a@example.invalid', 'b@example.invalid']
                         for index, email in enumerate(emails):
-                            (auth / f'{index}.json').write_text(json.dumps({'email': email, 'access_token': 'dummy', 'refresh_token': ''}))
+                            (auth / f'{index}.json').write_text(json.dumps({'type': 'codex', 'email': email, 'access_token': 'dummy', 'refresh_token': ''}))
                         chosen = Path('/tmp/dummy-explicit-binary' if explicit else '/tmp/dummy-running-binary')
                         captured = []
                         def launch(command, **kwargs):

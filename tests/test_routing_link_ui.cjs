@@ -81,9 +81,32 @@ assert.equal($('routing-split').parentElement,$('claude-routing'));
 $('watch-section').hidden=true;
 render();
 assert.equal($('routing-all').hidden,true);
+assert.equal($('codex-routing').hidden,false);
 assert.equal($('claude-routing').hidden,true);
 assert.equal($('routing-split').hidden,true);
 $('watch-section').hidden=false;
+// One configured Codex account, linked or not: only Claude routing, without the switch. The count decides,
+// not the account list, which still holds the retired credential.
+context.fixture.gateway.accounts=[{id:'a',email:A},{id:'b',email:B,disabled:true}];
+for(const linked of [true,false]){
+  context.fixture.gateway.routing_linked=linked;context.fixture.gateway.codex_account_count=1;
+  render();
+  assert.equal($('routing-all').hidden,true,`linked ${linked}`);
+  assert.equal($('codex-routing').hidden,true);
+  assert.equal($('claude-routing').hidden,false);
+  assert.equal($('routing-split').hidden,true);
+  assert.equal($('routing-split').parentElement,$('claude-routing'));
+}
+// Without Claude either, there is no routing choice at all.
+$('watch-section').hidden=true;
+render();
+assert.equal($('codex-routing').hidden,true);assert.equal($('claude-routing').hidden,true);assert.equal($('routing-all').hidden,true);
+$('watch-section').hidden=false;
+// A second configured account brings the linked control back.
+context.fixture.gateway.routing_linked=true;context.fixture.gateway.codex_account_count=2;
+render();
+assert.equal($('routing-all').hidden,false);assert.equal($('routing-split').hidden,false);assert.equal($('routing-split').parentElement,$('routing-all'));
+delete context.fixture.gateway.codex_account_count;delete context.fixture.gateway.accounts;context.fixture.gateway.routing_linked=false;
 
 async function saving(){
   const posts=[];
@@ -150,6 +173,6 @@ async function saving(){
   await context.saveClaudeAccountRouting('claude-b',false,true);
   assert.equal(sent.length,0);
   assert.match(context.claudeRoutingRow(context.fixture.watch_accounts[1]),/disabled\s+title="Account identity not verified"/);
-  console.log('Routing link UI: linked default, per-gateway states, mismatch without a line, split rows, relinking, failures and Claude account switches passed');
+  console.log('Routing link UI: linked default, per-gateway states, mismatch without a line, split rows, one configured Codex account, relinking, failures and Claude account switches passed');
 }
 saving().catch(error=>{console.error(error);process.exitCode=1;});

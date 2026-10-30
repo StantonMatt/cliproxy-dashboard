@@ -1,6 +1,6 @@
 # Routing selector — 26 September 2026
 
-**Current status (2026-10-27):** This records the September 26 selection and deployment. Current controls support linked or independent Codex/Claude routing ([routing contract](claude-routing.md)); read the dashboard for the current saved choice rather than assuming the round-robin selection below.
+**Current status (2026-10-29):** This records the September 26 selection and deployment. Codex now has one configured Pro account; all its routing modes converge to neutral priority without quota data. Unconfigured Codex files, including the disabled retired Free account, are ignored; missing or duplicate configured identities still hold. Old pair baselines restore only configured identities, and an old saved preference for the retired account follows the sole remaining account. Claude keeps both accounts and independent routing ([routing contract](claude-routing.md)). The overview exposes `gateway.codex_account_count` as an integer (`1` for this setup).
 
 Round-robin is selected. Both Codex account priorities are neutral. The periodic preference controller now reads the persisted selection instead of always preferring the earlier reset.
 

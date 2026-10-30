@@ -26,9 +26,10 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gateway_config
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
+from routing_policy import EMAILS
 CONFIG = Path('/etc/cliproxyapi/config.yaml')
 AUTH = Path('/var/lib/cliproxyapi/auth')
-EMAILS = ['account-a@example.com', 'account-b@example.com']
 MARKER = 'ROUTER_FAILOVER_OK'
 
 
@@ -106,6 +107,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, help='Gateway executable (default: effective cliproxyapi ExecStart)')
     args = parser.parse_args(argv)
+    if len(EMAILS) != 2:
+        print('Skipped: Codex account failover requires exactly two configured accounts; '
+              f'{len(EMAILS)} configured. No credentials read or gateway started.')
+        return 0
     binary = (args.binary or gateway_config.resolve_gateway_binary()).resolve()
     assert os.geteuid() == 0, 'Run through sudo on Linux.'
     owner = pwd.getpwnam('cliproxyapi')
@@ -115,7 +120,9 @@ def main(argv=None):
     originals = {}
     for path in AUTH.glob('*.json'):
         value = json.loads(path.read_text())
-        if value.get('email') in EMAILS:
+        if value.get('type') == 'codex' and value.get('email') in EMAILS:
+            if value['email'] in originals:
+                raise RuntimeError('Configured Codex credentials are ambiguous')
             originals[value['email']] = value
     assert set(originals) == set(EMAILS)
     report = {'tested_at': dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -213,4 +220,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

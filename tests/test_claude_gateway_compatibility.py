@@ -18,6 +18,11 @@ import account_access
 import routing_policy
 import server
 import signin
+from codex_fixture import use_codex_pair
+
+
+def setUpModule():
+    use_codex_pair()
 
 spec = importlib.util.spec_from_file_location('mixed_provider_collector', ROOT / 'scripts/collect-usage.py')
 collector = importlib.util.module_from_spec(spec)

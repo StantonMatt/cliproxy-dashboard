@@ -39,6 +39,8 @@ The service's existing filesystem restrictions remain in force: `/etc/cliproxyap
 
 ## Model routes
 
+October 29, 2026: Codex now has one configured identity, `account-a@example.com` (Pro). The Free Codex account is disabled and scheduled for credential deletion when this code ships. Both Claude accounts, including Claude B at the retired Codex email, remain unchanged. Codex routing modes converge to neutral priority; there is no account failover. The two-account verification scripts skip with a clear message until two Codex identities are configured again.
+
 Verified 2026-10-27 through the management auth-file and per-account model listings: `account-a@example.com` is Pro and `account-b@example.com` is Free. The Free listing excludes `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` and `gpt-5.6-sol`; the Pro listing includes all four.
 
 October 16, 2026: removed `pro1` / `pro2` from the two Codex auth records through the loopback management API, without restarting the gateway. Clients use plain model names, and the gateway selects an account whose plan supports the model. The Free account is not offered `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` or `gpt-5.6-sol`; a direct live test on this date returned HTTP 400, “not supported when using Codex with a ChatGPT account”. Priorities, disabled flags and routing affinity are unchanged.

@@ -23,6 +23,8 @@ spec.loader.exec_module(app)
 
 
 def setUpModule():
+    from codex_fixture import use_codex_pair
+    use_codex_pair()
     directory = tempfile.TemporaryDirectory()
     unittest.addModuleCleanup(directory.cleanup)
     previous = app.routing_policy.STATE
@@ -1123,7 +1125,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                 state = app.GatewayState(resets, Mock())
                 state.access = Mock()
                 state.access.reconcile.side_effect = lambda rows, *args, **kwargs: rows
-                with patch.dict(app.routing_policy.PROVIDERS['codex'], emails=identities), \
+                with patch.object(app.routing_policy, 'EMAILS', identities), \
                         patch.object(app, 'api', side_effect=api), \
                         patch.object(app.routing_policy, 'reconcile', return_value={'status': 'active'}), \
                         patch.object(app, 'billing_records', return_value={}), \
@@ -1700,6 +1702,15 @@ class AvailabilityTests(unittest.TestCase):
         ]}
         result = pool_status(gateway, 1790337700)
         self.assertEqual(result, {'state': 'reduced', 'ready': 1, 'total': 2})
+
+    def test_single_account_pool_is_available_when_ready(self):
+        from availability import pool_status
+        now = 1700000000
+        gateway = {'online': True, 'checked_at': app.routing_policy.stamp(now),
+                   'accounts': [{'availability': {'state': 'ready'}}]}
+        self.assertEqual(pool_status(gateway, now), {'state': 'available', 'ready': 1, 'total': 1})
+        gateway['accounts'][0]['availability']['state'] = 'quota_exhausted'
+        self.assertEqual(pool_status(gateway, now), {'state': 'unavailable', 'ready': 0, 'total': 1})
 
 
 if __name__ == '__main__':

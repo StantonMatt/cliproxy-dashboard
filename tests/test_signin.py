@@ -16,6 +16,8 @@ from request_deadline import RequestDeadline
 
 
 def setUpModule():
+    from codex_fixture import use_codex_pair
+    use_codex_pair()
     directory = tempfile.TemporaryDirectory()
     unittest.addModuleCleanup(directory.cleanup)
     previous = app.routing_policy.STATE

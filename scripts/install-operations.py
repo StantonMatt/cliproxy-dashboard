@@ -10,10 +10,13 @@ from pathlib import Path
 import pwd
 import shutil
 import subprocess
+import sys
 import time
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'dashboard'))
+import routing_policy
 DEST = Path('/opt/personal-codex-router')
 CONFIG = Path('/etc/personal-codex-router/previews.json')
 OPS = Path('/var/lib/personal-codex-router-ops')
@@ -261,8 +264,11 @@ def main():
     before_codex = version_fingerprint()
     initial = overview()
     accounts = initial['gateway']['accounts']
-    if len(accounts) != 2 or not initial['gateway']['online']:
-        raise RuntimeError('Expected healthy account pair before deployment')
+    expected = routing_policy.identities('codex')
+    configured = [a for a in accounts if a.get('email') in expected]
+    if (not initial['gateway']['online'] or len(configured) != len(expected)
+            or {a.get('email') for a in configured} != set(expected)):
+        raise RuntimeError('Expected configured Codex accounts before deployment')
     if any(a.get('resets', {}).get('automatic') and any(
         c.get('expires_at') and 0 < c['expires_at'] - time.time() < 360 for c in a['resets'].get('credits', [])) for a in accounts):
         raise RuntimeError('An automatic reset is imminent; deploy after its expiry window')
