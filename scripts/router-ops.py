@@ -6,12 +6,17 @@ import os
 from pathlib import Path
 import pwd
 import subprocess
+import sys
 import time
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import site_config
+
 STATE = Path('/var/lib/personal-codex-router-ops')
-USER = 'user'
-HOME = Path('/home') / USER
+DESKTOP = site_config.desktop()
+USER = DESKTOP.pw_name
+HOME = Path(DESKTOP.pw_dir)
 COLLECTOR_STATUS = Path('/var/lib/personal-codex-router/collector-status.json')
 
 

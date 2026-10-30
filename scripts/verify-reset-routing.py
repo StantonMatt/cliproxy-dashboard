@@ -34,9 +34,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, help='Gateway executable (default: effective cliproxyapi ExecStart)')
     args = parser.parse_args(argv)
-    if len(policy.EMAILS) != 2:
+    emails = policy.identities('codex', policy.inventory_snapshot())
+    if len(emails) != 2:
         print('Skipped: reset-priority affinity verification requires exactly two configured Codex accounts; '
-              f'{len(policy.EMAILS)} configured. No credentials read or gateway started.')
+              f'{len(emails)} configured. No credentials read or gateway started.')
         return 0
     binary = (args.binary or gateway_config.resolve_gateway_binary()).resolve()
     assert os.geteuid() == 0
@@ -50,7 +51,7 @@ def main(argv=None):
         auth = root / 'auth'; auth.mkdir(mode=0o700); os.chown(auth, owner.pw_uid, owner.pw_gid)
         for source in support.AUTH.glob('*.json'):
             data = json.loads(source.read_text())
-            if data.get('type') != 'codex' or data.get('email') not in policy.EMAILS:
+            if data.get('type') != 'codex' or data.get('email') not in emails:
                 continue
             data.update(refresh_token='', disabled=False)
             data.pop('priority', None)
@@ -75,14 +76,14 @@ def main(argv=None):
                 support.wait_for(lambda: len(api('/auth-files')['files']) == 2)
                 ids = {r['email']: r['auth_index'] for r in api('/auth-files')['files']}
                 state = root / 'policy'; state.mkdir(mode=0o700)
-                a, b = policy.EMAILS
+                a, b = emails
                 def prefer(email):
                     now = time.time()
                     data = {'gateway': {'online': True, 'checked_at': policy.stamp(now), 'accounts': [
                         {'email': e, 'active': True, 'quota_checked_at': policy.stamp(now),
                          'windows': [{'seconds': 604800, 'remaining': 50,
                                       'resets_at': now + (86400 if e == email else 3 * 86400)}]}
-                        for e in policy.EMAILS]}}
+                        for e in emails]}}
                     policy.apply_plan(policy.choose(data, now), api, state)
                 def check(session, email, label):
                     support.stream(base, key, session)

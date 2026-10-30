@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Real HTTP controls against both isolated, synthetic dashboard previews."""
 import http.client
 import json
@@ -47,11 +48,10 @@ class FixtureControlTests(unittest.TestCase):
                                 self.fail('Synthetic preview did not start')
                             time.sleep(.05)
                     self.assertEqual(status, 200)
-                    self.assertEqual(overview['gateway']['claude_preference']['saved_preferred_email'],
-                                     'account-a@example.com')
+                    self.assertIsNone(overview['gateway']['claude_preference']['saved_preferred_email'])
                     for choice in ({'mode': 'round-robin'}, {'mode': 'earliest-weekly-reset'},
                                    {'mode': 'highest-remaining-quota'},
-                                   {'mode': 'preferred-account', 'preferred_email': 'account-b@example.com'}):
+                                   {'mode': 'preferred-account', 'preferred_email': 'alternate@example.test'}):
                         status, result = request('/api/claude-routing', choice)
                         self.assertEqual(status, 200, result)
                         status, overview = request('/api/overview')

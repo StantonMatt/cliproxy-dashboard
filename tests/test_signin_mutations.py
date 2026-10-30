@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Cross-process controller and completion barriers; synthetic transports only."""
 import contextlib
 import copy
@@ -62,11 +63,11 @@ class MutationBoundaryTests(unittest.TestCase):
         self.gateway = CloneGateway()
         self.addCleanup(self.gateway.close)
         for record in (self.gateway.row, self.gateway.runtime, self.gateway.saved):
-            record.update(email=routing.EMAILS[0], priority=100)
-        self.gateway.saved['id_token'] = self.gateway.runtime['id_token'] = jwt(email=routing.EMAILS[0])
-        self.gateway.tokens['id_token'] = jwt(email=routing.EMAILS[0])
+            record.update(email=CODEX_PAIR[0], priority=100)
+        self.gateway.saved['id_token'] = self.gateway.runtime['id_token'] = jwt(email=CODEX_PAIR[0])
+        self.gateway.tokens['id_token'] = jwt(email=CODEX_PAIR[0])
         self.gateway.other_rows = [dict(copy.deepcopy(self.gateway.row), name='second.json',
-                                       auth_index='account-b', email=routing.EMAILS[1], priority=0)]
+                                       auth_index='account-b', email=CODEX_PAIR[1], priority=0)]
         self.state = app.GatewayState(Mock(), Mock(), Mock())
         self.manager = self.state.signins
         self.manager.call = self.gateway.call
@@ -138,7 +139,7 @@ class MutationBoundaryTests(unittest.TestCase):
         self.gateway.row['id_token']['plan_type'] = 'pro'
         for record in (self.gateway.saved, self.gateway.runtime):
             record.update(plan_type=self.gateway.row['id_token']['plan_type'],
-                          id_token=jwt(email=routing.EMAILS[0], plan=self.gateway.row['id_token']['plan_type']))
+                          id_token=jwt(email=CODEX_PAIR[0], plan=self.gateway.row['id_token']['plan_type']))
         for record in (self.gateway.row, self.gateway.saved, self.gateway.runtime):
             record['disabled'] = kind != 'off'
             record['priority'] = 100

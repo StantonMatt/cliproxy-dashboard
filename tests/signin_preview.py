@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 #!/usr/bin/env python3
 """Local-only, synthetic dashboard for sign-in visual checks; never contacts OpenAI.
 
@@ -46,7 +47,7 @@ def main():
     isolate(app, args.state_dir)
     app.DB = args.state_dir / 'synthetic-usage.sqlite3'
     app.BILLING = args.state_dir / 'synthetic-billing.json'
-    emails = list(app.routing_policy.identities('codex'))
+    emails = list(app.routing_policy.identities('codex', inventory=CODEX_INVENTORY))
     original_valid_host = app.valid_host
     app.valid_host = lambda host: host == f'127.0.0.1:{args.port}' or original_valid_host(host)
     original_reconcile = app.routing_policy.reconcile
@@ -133,6 +134,8 @@ def main():
             fast_modes=fast_mode.FastModeManager(args.state_dir / 'fast-controls.json',
                 args.state_dir / 'fast-policy.json', args.state_dir / 'fast-status.json'))
         state._fetch_locked()
+        state.data['claude_accounts'] = app.claude_routing_projection(claude_fixture['rows'], app.utcnow())
+        state.data['inventory'] += [dict(r) for r in claude_fixture['rows']]
         # Give the signed-out card last-known allowance, like a real cached poll.
         for a in state.data['accounts']:
             if a['id'] == 'account-a' and scenario == 'free_signed_out':

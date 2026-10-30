@@ -34,8 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gateway_config
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMP = Path('/tmp/claude-1000/-home-user-Projects-personal-codex-router/'
-            '621b94de-78c4-4e16-984d-cb1cbdff8d18/scratchpad/gw')
+TEMP = Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'agent-scratch/personal-codex-router/quota-probe'
 MODEL = 'gpt-6-astra'
 # Prevent the Python client from using environment proxy settings.
 CLIENT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -598,11 +597,15 @@ def run(policy, binary, version='7.3.11'):
 
 
 def main(argv=None):
+    global MODEL, TEMP
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--model', default=MODEL, help='Model advertised by the isolated gateway')
+    parser.add_argument('--scratch-dir', type=Path, default=TEMP)
     parser.add_argument('--binary', type=Path,
                         help='Gateway executable (default: effective cliproxyapi ExecStart); isolated config only')
     parser.add_argument('--output', type=Path, default=ROOT / 'docs/quota-failover-verification.json')
     args = parser.parse_args(argv)
+    MODEL, TEMP = args.model, args.scratch_dir
     def interrupted(signum, frame):
         raise KeyboardInterrupt('Quota verification interrupted')
     signal.signal(signal.SIGTERM, interrupted)
@@ -618,7 +621,7 @@ def main(argv=None):
     policy = json.loads((ROOT / 'docs/failover-verification.json').read_text())['production_policy_used']
     tests, checks = run(policy, binary, version)
     report = {'tested_at': dt.datetime.now(dt.timezone.utc).isoformat(), 'binary': str(binary),
-              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'model': MODEL,
               'binary_version': version, 'upstream_revision': revision,
               'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'mock_http_version': 'HTTP/2 over TLS; SSE payloads',

@@ -16,10 +16,12 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gateway_config
+import site_config
 
-PROJECT = Path('/home/user/Projects/personal-codex-router')
+PROJECT = Path(__file__).resolve().parents[1]
 CONFIG = Path('/etc/cliproxyapi/config.yaml')
 KEY = Path('/etc/cliproxyapi/dashboard-management-key')
+BACKUPS = Path('/var/lib/cliproxyapi-dashboard-backups')
 
 
 def atomic_write(path, data, mode, uid, gid):
@@ -51,6 +53,8 @@ def activation_candidate(original, hashed, key_exists):
 def main():
     assert os.geteuid() == 0, 'Run with sudo.'
     os.umask(0o077)
+    user = site_config.desktop()
+    proxy = pwd.getpwnam('cliproxyapi')
     original = CONFIG.read_bytes()
     # Validate guards and the edit before staging any activation files.
     activation_candidate(original, 'preflight-placeholder', KEY.exists())
@@ -59,7 +63,7 @@ def main():
     panel = (PROJECT / 'references/management.html').read_bytes()
     assert 'sha256:' + hashlib.sha256(panel).hexdigest() == asset['digest']
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    backup = Path('/var/lib/cliproxyapi-dashboard-backups') / stamp
+    backup = BACKUPS / stamp
     backup.mkdir(parents=True, mode=0o700)
     backup.parent.chmod(0o700)
     shutil.copy2(CONFIG, backup / 'config.before.yaml')
@@ -67,8 +71,6 @@ def main():
     key = secrets.token_urlsafe(36)
     hashed = bcrypt.hashpw(key.encode(), bcrypt.gensalt(rounds=12)).decode()
     candidate = activation_candidate(original, hashed, KEY.exists())
-    proxy = pwd.getpwnam('cliproxyapi')
-    user = pwd.getpwnam('user')
     static = CONFIG.parent / 'static'
     static.mkdir(mode=0o750, exist_ok=True)
     os.chown(static, 0, proxy.pw_gid)

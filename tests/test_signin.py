@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 import copy
 import json
 from pathlib import Path
@@ -385,7 +386,7 @@ class SigninTests(unittest.TestCase):
     def test_paid_notice_only_for_completed_enabled_outcome_and_disabled_health_is_neutral(self):
         import operations
         now = self.clock[0]
-        account = {'email': operations.EMAILS[0], 'access_identity': 'a' * 64,
+        account = {'email': CODEX_PAIR[0], 'access_identity': 'a' * 64,
             'active': False, 'disabled': True, 'quota_attempted_at': app.routing_policy.stamp(now),
             'signin': {'last_outcome': {'kind': 'signed_in', 'at': now, 'enabled': False}}}
         gateway = {'online': True, 'checked_at': app.routing_policy.stamp(now), 'accounts': [account]}
@@ -403,7 +404,7 @@ class SigninTests(unittest.TestCase):
             outcome = {'kind': 'signed_in', 'at': now, 'enabled': False}
             if enable_failed:
                 outcome['enable_failed'] = True
-            account = {'email': operations.EMAILS[0], 'access_identity': 'a' * 64, 'active': not disabled,
+            account = {'email': CODEX_PAIR[0], 'access_identity': 'a' * 64, 'active': not disabled,
                        'disabled': disabled, 'auth_state': 'sign_in_required',
                        'quota_attempted_at': app.routing_policy.stamp(attempted), 'signin': {'last_outcome': outcome}}
             return account, {'online': True, 'checked_at': app.routing_policy.stamp(now), 'accounts': [account]}
@@ -512,6 +513,11 @@ class RoutingSwitchTests(unittest.TestCase):
 
 class SigninHTTPTests(unittest.TestCase):
     def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        manager = patch.object(app.routing_policy, 'STATE', Path(directory.name))
+        manager.start()
+        self.addCleanup(manager.stop)
         import http.client
         self.http_client = http.client
         self.httpd = app.ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
@@ -599,8 +605,8 @@ class SigninHTTPTests(unittest.TestCase):
         now, timeouts = [0], []
         gateway = FakeGateway()
         self.addCleanup(gateway.close)
-        gateway.row['email'] = app.routing_policy.EMAILS[0]
-        gateway.other_rows = [dict(copy.deepcopy(gateway.row), email=app.routing_policy.EMAILS[1],
+        gateway.row.update(email=CODEX_PAIR[0], priority=0)
+        gateway.other_rows = [dict(copy.deepcopy(gateway.row), email=CODEX_PAIR[1],
                                   name='second.json', auth_index='account-b')]
         def call(path, body=None, method=None, timeout=None):
             timeouts.append(timeout)

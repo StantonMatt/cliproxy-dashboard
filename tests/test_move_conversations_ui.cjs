@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 
-const A='account-a@example.com', B='account-b@example.com';
+const A='owner@example.test', B='alternate@example.test';
 const OPTIONS=['round-robin','earliest-weekly-reset','highest-remaining-quota',A,B];
 const LABELS={'round-robin':'Round-robin','earliest-weekly-reset':'Earliest reset','highest-remaining-quota':'Higher remaining quota'};
 const html=fs.readFileSync(path.join(__dirname,'../dashboard/static/index.html'),'utf8');
@@ -117,7 +117,7 @@ function snapshot({linked=true,available=true,codexAccounts=2}={}){
     accounts:[{id:'codex-a',email:A},{id:'codex-b',email:B,disabled:codexAccounts<2}],
     ...(codexAccounts==null ? {} : {codex_account_count:codexAccounts}),
     preference:active('preferred-account',B),claude_preference:active('preferred-account',B)},
-    usage:{},health:{},watch_accounts:[{id:'claude',email:A},{id:'claude-b',email:B}]};
+    usage:{},health:{},watch_accounts:[{id:'claude',email:A},{id:'claude-b',independent_windows:true,email:B}]};
 }
 const rows={
   codex:{row:'codex-routing',select:'routing-mode',feedback:'routing-feedback',retry:'routing-retry',route:'/api/routing',flag:'routingSaving',linked:false,
@@ -477,31 +477,21 @@ function applied(){
     assert.equal($('codex-routing').hidden,false);assert.equal($('claude-routing').hidden,false);
   }
 
-  // Request flow: a retired second Codex account has no series or legend entry unless shown history has its requests.
+  // Removed account history remains separate from current filename-keyed series.
   {
     const legends=[element('legend')];const querySelectorAll=document.querySelectorAll;
     document.querySelectorAll=selector=>selector==='[data-account-legend]' ? legends : [];
     vm.runInContext('renderLegend=realRenderLegend',context);
-    const codexEntries=()=>[...legends[0].innerHTML.matchAll(/<i class="(codex-\w+)"><\/i>([^<]*)/g)].map(([,key,name])=>key+' '+name);
-    for(const [count,hours,expected] of [
-      [1,[],['codex-one '+A]],
-      [1,[{auth_index:'codex-b',email:B,requests:0}],['codex-one '+A]],
-      [1,[{auth_index:'codex-b',email:B,requests:3}],['codex-one '+A,'codex-two '+B]],
-      [2,[],['codex-one '+A,'codex-two '+B]],
-      [null,[],['codex-one '+A,'codex-two '+B]]]){
-      await reset('all',{codexAccounts:count});context.fixture.usage={hours};vm.runInContext('today=current',context);
-      context.renderLegend();
-      assert.deepEqual(codexEntries(),expected,`legend with ${count} configured and ${JSON.stringify(hours)}`);
-      assert.equal(context.seriesNames()['codex-two'] ? 'named' : 'unnamed',expected.length>1 ? 'named' : 'unnamed');
-    }
-    // After deploy deletes the retired credential, its history keeps a separate series instead of joining the remaining account.
-    for(const [requests,expected] of [[3,['codex-one '+A,'codex-two Removed account']],[0,['codex-one '+A]]]){
-      await reset('all',{codexAccounts:1});
-      context.fixture.gateway.accounts=context.fixture.gateway.accounts.filter(a=>a.email===A);
+    await reset('all',{codexAccounts:1});
+    context.fixture.gateway.accounts=context.fixture.gateway.accounts.filter(a=>a.email===A);
+    const key=context.series('codex','codex-b');
+    assert.equal(key,'codex:removed:codex-b');
+    for(const requests of [3,0]) {
       context.fixture.usage={hours:[{auth_index:'codex-b',requests}]};vm.runInContext('today=current',context);
-      assert.equal(context.series('codex','codex-b'),'codex-two');
       context.renderLegend();
-      assert.deepEqual(codexEntries(),expected,`removed credential with ${requests} requests`);
+      assert.equal(legends[0].innerHTML.includes('Removed account'),requests>0);
+      assert(legends[0].innerHTML.includes(A));
+      if(requests)assert(legends[0].innerHTML.includes(key));
     }
     document.querySelectorAll=querySelectorAll;
   }
@@ -519,6 +509,6 @@ function applied(){
     document.querySelector=querySelector;
   }
 
-  assert.match(html,/<option selected value="account-a@example.com">Prefer account-a@example.com<\/option>/);
+  assert.doesNotMatch(html,/<option[^>]+value="[^"]*@/);
   console.log('Routing modal UI: open/cancel/Escape/backdrop/focus, errors inside the modal, refresh rules via render(), applying lock, outcomes, Try again, one configured Codex account, the retired chart series and the System TTL passed for all three rows');
 })().catch(error=>{console.error(error);process.exitCode=1;});

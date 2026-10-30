@@ -10,15 +10,15 @@ document.activeElement=document.body;
 const context=vm.createContext({document,Date,JSON,localStorage:{getItem:()=>null}});
 const source=fs.readFileSync(path.join(__dirname,'../dashboard/static/app.js'),'utf8');
 vm.runInContext(source.slice(0,source.indexOf("window.addEventListener('hashchange'")),context);
-const A='account-a@example.com',B='account-b@example.com';
+const A='owner@example.test',B='alternate@example.test';
 for(const prefix of ['routing','claude-routing'])document.getElementById(prefix+'-mode').options=
   ['round-robin','earliest-weekly-reset','highest-remaining-quota',A,B].map(value=>({value}));
 context.fixture={gateway:{online:true,preference:{policy:'round-robin',status:'active'}},
-  watch_accounts:[{id:'claude',email:A},{id:'claude-b',email:B}]};
+  watch_accounts:[{id:'claude',email:A},{id:'claude-b',independent_windows:true,email:B}]};
 vm.runInContext('current=fixture;failed=false',context);
 context.renderRouting(context.fixture.gateway,'claude');
 const el=id=>elements.get('claude-routing-'+id);
-assert.equal(el('mode').value,A,'Unsaved frontend default must match backend default');
+assert.equal(el('mode').value,'earliest-weekly-reset','Unsaved frontend default must match backend default');
 assert.equal(el('help').hidden,true);
 assert.equal(el('mode').disabled,false);
 assert.equal(el('mode').options[3].textContent,'Prefer '+A);
@@ -31,7 +31,7 @@ assert.match(el('state').textContent,/Held.*stale quota data/);
 assert.equal(el('state').hidden,false);
 context.fixture.gateway.claude_preference={policy:'round-robin',status:'active',drift:true,actual_priorities:{[A]:0,[B]:100}};
 context.renderRouting(context.fixture.gateway,'claude');
-assert.match(el('state').textContent,/Gateway priorities differ.*account-b/);
+assert.match(el('state').textContent,/Gateway priorities differ.*alternate/);
 context.fixture.read_only=true;
 context.renderRouting(context.fixture.gateway,'claude');
 assert.equal(el('mode').disabled,true);

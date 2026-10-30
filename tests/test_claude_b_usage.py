@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 import datetime as dt
 import importlib.util
 import json
@@ -282,7 +283,7 @@ class ClaudeBUsageTests(unittest.TestCase):
 
     def test_configured_email_published_and_validated_without_profile(self):
         boundary = 'a' * 64 + '@' + 'b' * 63 + '.' + 'c' * 63 + '.' + 'd' * 61
-        for value, expected in ((' account-b@example.com ', 'account-b@example.com'),
+        for value, expected in ((' alternate@example.test ', 'alternate@example.test'),
                                  (boundary, boundary), (boundary + 'd', None),
                                  ('bad', None), ('a@example.com\nother', None), ('', None)):
             with self.subTest(value=value), patch.dict(os.environ, {'CLAUDE_B_EMAIL': value}), \

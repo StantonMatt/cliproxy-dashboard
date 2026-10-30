@@ -350,9 +350,9 @@ layout no longer shifts. It offers the same choices and sends the same requests.
 ## Gateway upgrades
 
 Moves are disabled on any gateway version not in `MOVE_TESTED_GATEWAYS`
-(`dashboard/server.py`), 8.0.30 and 8.0.43 in this checkout, because on another build the
+(`dashboard/server.py`), 8.0.30, 8.0.43 and 8.0.47 in this checkout, because on another build the
 TTL readback could report `moved` even if the gateway didn’t release its pins.
-Legacy 8.0.7 is unverified for moves and would disable them. The staged 8.0.43
+Legacy 8.0.7 is unverified for moves and would disable them. The staged 8.0.47
 upgrade retains 8.0.30 as its rollback target. The
 list is separate from sign-in’s `TESTED_GATEWAYS` in `dashboard/signin.py`:
 sign-in’s check verifies credential persistence and never touches affinity, so
@@ -375,4 +375,4 @@ reads that config back, so it proves the helper’s sandbox and the
 dashboard/helper protocol, not the gateway’s behavior. Re-run it after
 changing the helper, its units or the dashboard’s move code.
 
-The [8.0.43 preparation](gateway-upgrade-8.0.43-2026-10-26.md) exercised both Codex and Claude pins against the exact installed binary with `tests/gateway_upgrade_isolated.py`. Both changed from a cache hit to `cache miss, new binding` after an in-place TTL edit. 8.0.30 remains live; deploying the new dashboard and restarting the gateway are future cutover steps.
+The [8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md) exercised both Codex and Claude pins against the exact installed binary with `tests/gateway_upgrade_isolated.py`. Both changed from a cache hit to `cache miss, new binding` after an in-place TTL edit. 8.0.30 remains live; deploying the new dashboard and restarting the gateway are future cutover steps.

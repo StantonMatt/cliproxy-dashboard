@@ -286,8 +286,8 @@ class BinaryResolverTests(unittest.TestCase):
                         with contextlib.ExitStack() as stack:
                             for mock in (
                                 patch.object(support, 'CONFIG', source), patch.object(support, 'AUTH', auth),
-                                patch.object(support, 'EMAILS', emails),
-                                patch.object(reset.policy, 'EMAILS', emails),
+                                patch.object(support, 'inventory_snapshot', return_value=[dict(type='codex',name=str(i),email=e) for i,e in enumerate(emails)]),
+                                patch.object(reset.policy, 'inventory_snapshot', return_value=[dict(type='codex',name=str(i),email=e) for i,e in enumerate(emails)]),
                                 patch.object(support, 'snapshot', return_value={}),
                                 patch.object(module.os, 'geteuid', return_value=0),
                                 patch.object(module.os, 'chown'),
@@ -311,16 +311,19 @@ class BinaryResolverTests(unittest.TestCase):
                 chosen = root / 'dummy-binary'; chosen.write_bytes(b'dummy')
                 output = root / 'report.json'
                 with patch.object(config, 'resolve_gateway_binary', return_value=chosen) as resolve, \
-                        patch.object(quota, 'TEMP', root), patch.object(quota.signal, 'signal'), \
+                        patch.object(quota, 'TEMP', root), patch.object(quota, 'MODEL', 'default-test-model'), patch.object(quota.signal, 'signal'), \
                         patch.object(quota.subprocess, 'run', return_value=SimpleNamespace(
                             stdout='CLIProxyAPI Version: 8.0.7, Commit: dummy,', stderr='')) as banner, \
                         patch.object(quota, 'run', return_value=([], [])) as run, \
                         contextlib.redirect_stdout(io.StringIO()):
-                    quota.main(['--output', str(output)] + (['--binary', str(chosen)] if explicit else []))
+                    quota.main(['--output', str(output)] + (['--binary', str(chosen), '--model', 'test-model',
+                               '--scratch-dir', str(root / 'scratch')] if explicit else []))
                 self.assertEqual(resolve.call_count, 0 if explicit else 1)
                 self.assertEqual(banner.call_args.args[0], [str(chosen), '-h'])
                 self.assertEqual(run.call_args.args[1], chosen)
                 self.assertEqual(json.loads(output.read_text())['binary'], str(chosen))
+                self.assertEqual(json.loads(output.read_text())['model'], 'test-model' if explicit else 'default-test-model')
+                self.assertEqual(banner.call_args.kwargs['cwd'], root / 'scratch' if explicit else root)
 
 
 if __name__ == '__main__':

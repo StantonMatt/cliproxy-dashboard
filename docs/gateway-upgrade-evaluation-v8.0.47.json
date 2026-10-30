@@ -1,0 +1,2947 @@
+{
+  "prepared_at": "2026-10-29",
+  "cutover_performed": false,
+  "live_version": "8.0.30",
+  "install": {
+    "release": "v8.0.47",
+    "published_at": "2026-10-29T00:27:13Z",
+    "asset": "CLIProxyAPI_8.0.47_linux_amd64.tar.gz",
+    "size": 24396070,
+    "archive_sha256": "2b5111dc6a0dfe0d607457787f794330d1b477bc9daa6337c26b0cd032a7827e",
+    "github_asset_digest": "sha256:2b5111dc6a0dfe0d607457787f794330d1b477bc9daa6337c26b0cd032a7827e",
+    "checksums_sha256": "a28932395a29208b37f2c048aea4793ba33400c8d437e6421e23591c2487e9d1",
+    "binary_sha256": "167fff6edf264f71b7e28923b71f97cf1b49957db1612a6e5e8e570f42aeb112",
+    "installed_size": 73150760,
+    "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+    "installed_path": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+    "owner": "root:root",
+    "mode": "0755",
+    "banner": "CLIProxyAPI Version: 8.0.47, Commit: 90c447d3, BuiltAt: 2026-10-29T00:27:43Z",
+    "staged_dropin_sha256": "8a2dc2738da46951034c54b5c5a51eed832a071999b2119626f2b63a7179f102",
+    "plugin_sha256": "eff6ea99f9e8ce5e9ac5e5c63d97c66c8ac5503773ee6db67c815d0136aee818"
+  },
+  "replacement": {
+    "8.0.47": {
+      "gateway": {
+        "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+        "version": "8.0.47",
+        "tested": true,
+        "seed": 953134927
+      },
+      "patch_only_control": {
+        "disk_changed": false,
+        "runtime_changed": false
+      },
+      "idle_pro_to_free": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "next_refresh_uses_new_token": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "race_waits": [
+        1.47,
+        1.47,
+        1.15,
+        1.28,
+        1.4,
+        1.43,
+        1.43,
+        1.48,
+        1.37,
+        1.43,
+        1.34,
+        1.45
+      ],
+      "replace_during_inflight_refresh": {
+        "passed": 12,
+        "failed": 0,
+        "failures": []
+      },
+      "replace_then_priority_and_enable_patches": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_runtime_equals_disk": {
+        "passed": 50,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_unconfirmed_watcher_runtime_equals_disk": {
+        "passed": 3,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_outcomes": {
+        "signed_in": 47,
+        "saved_unconfirmed": 3,
+        "unconfirmed_modes": [
+          "refresh_after",
+          "refresh_after",
+          "refresh_after"
+        ]
+      },
+      "restart_keeps_new_tokens": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "proxy_refused_hosts": [
+        "antigravity-hub-auto-updater-974169037036.us-central1.run.app:443",
+        "registry.npmjs.org:443"
+      ],
+      "ok": true
+    },
+    "8.0.30": {
+      "gateway": {
+        "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+        "version": "8.0.30",
+        "tested": true,
+        "seed": 761474924
+      },
+      "patch_only_control": {
+        "disk_changed": false,
+        "runtime_changed": false
+      },
+      "idle_pro_to_free": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "next_refresh_uses_new_token": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "race_waits": [
+        1.12,
+        1.42,
+        1.43,
+        1.48,
+        1.12,
+        1.26,
+        1.27,
+        1.17,
+        1.28,
+        1.27,
+        1.37,
+        1.43
+      ],
+      "replace_during_inflight_refresh": {
+        "passed": 12,
+        "failed": 0,
+        "failures": []
+      },
+      "replace_then_priority_and_enable_patches": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_runtime_equals_disk": {
+        "passed": 50,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_unconfirmed_watcher_runtime_equals_disk": {
+        "passed": 2,
+        "failed": 0,
+        "failures": []
+      },
+      "randomized_outcomes": {
+        "signed_in": 48,
+        "saved_unconfirmed": 2,
+        "unconfirmed_modes": [
+          "refresh_after",
+          "refresh_after"
+        ]
+      },
+      "restart_keeps_new_tokens": {
+        "passed": 1,
+        "failed": 0,
+        "failures": []
+      },
+      "proxy_refused_hosts": [
+        "antigravity-hub-auto-updater-974169037036.us-central1.run.app:443",
+        "registry.npmjs.org:443"
+      ],
+      "ok": true
+    }
+  },
+  "isolated": {
+    "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+    "checks": [
+      {
+        "name": "nested retry policy consumed",
+        "passed": true
+      },
+      {
+        "name": "nested fixture passes strict v8 config validation",
+        "passed": true
+      },
+      {
+        "name": "plain model routes advertised",
+        "passed": true,
+        "missing": []
+      },
+      {
+        "name": "codex gpt-6.1-sol completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6.1-sol reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-astra completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6-astra reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-sol completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6-sol reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-5.6-sol completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-5.6-sol reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-6-luna reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-5.6-terra completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-5.6-terra reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-5.6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "gpt-5.6-luna reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "claude claude-opus-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude-opus-5-5 reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude-sonnet-5-5 reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "claude claude-haiku-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude-haiku-5-5 reaches matching provider",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex affinity cache hit before TTL change",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex in-place TTL change releases pin",
+        "passed": true,
+        "previous_ttl": "1h",
+        "new_ttl": "1h0m1s"
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude affinity cache hit before TTL change",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude in-place TTL change releases pin",
+        "passed": true,
+        "previous_ttl": "1h0m1s",
+        "new_ttl": "1h0m0s"
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 429 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "codex-A",
+            "status": 429
+          },
+          {
+            "account": "codex-B",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 429 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 503 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "codex-A",
+            "status": 503
+          },
+          {
+            "account": "codex-B",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "codex gpt-6-luna completes",
+        "passed": true
+      },
+      {
+        "name": "codex 503 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 429 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "claude-B",
+            "status": 429
+          },
+          {
+            "account": "claude-A",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 429 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 503 fails over in same request",
+        "passed": true,
+        "attempts": [
+          {
+            "account": "claude-B",
+            "status": 503
+          },
+          {
+            "account": "claude-A",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "claude 503 rebind sticks",
+        "passed": true
+      },
+      {
+        "name": "/v1/models rejects unauthenticated access",
+        "passed": true
+      },
+      {
+        "name": "/v0/management/config rejects unauthenticated access",
+        "passed": true
+      },
+      {
+        "name": "claude claude-sonnet-5-5 completes",
+        "passed": true
+      },
+      {
+        "name": "Claude preserved thinking opts into drop_block",
+        "passed": true
+      },
+      {
+        "name": "sdk-ts native request preserves caller profile and system",
+        "passed": true
+      },
+      {
+        "name": "8.x usage queue is JSON list",
+        "passed": true
+      },
+      {
+        "name": "additive effective tier discarded",
+        "passed": true
+      },
+      {
+        "name": "existing collector persists both providers",
+        "passed": true,
+        "rows": 33
+      },
+      {
+        "name": "no unknown or removed config warnings",
+        "passed": true
+      }
+    ],
+    "gateway_pid": 250659,
+    "gateway_port": 35073,
+    "mock_port": 43105,
+    "version": "8.0.47",
+    "claude_wire": {
+      "thinking": {
+        "type": "adaptive",
+        "block_binding": {
+          "prefix_mismatch_behavior": "drop_block"
+        }
+      },
+      "user_agent": "claude-cli/2.1.304 (external, sdk-ts, agent-sdk/0.3.276)",
+      "history_types": [
+        [
+          "thinking",
+          "text"
+        ]
+      ]
+    },
+    "queue_records": 33,
+    "collection": {
+      "saved_records": 33,
+      "quarantined_records": 0,
+      "failed_spools": 0
+    },
+    "refused_external_hosts": [
+      "antigravity-hub-auto-updater-974169037036.us-central1.run.app:443",
+      "registry.npmjs.org:443"
+    ],
+    "gateway_exit": 0
+  },
+  "delta": {
+    "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+    "checks": [
+      {
+        "name": "valid X-Api-Key accepted with foreign bearer",
+        "passed": true
+      },
+      {
+        "name": "embedded catalog advertises gpt-6.1-terra",
+        "passed": true
+      },
+      {
+        "name": "wrong X-Api-Key with foreign bearer rejected",
+        "passed": true
+      },
+      {
+        "name": "default downstream gzip negotiates valid model JSON",
+        "passed": true
+      },
+      {
+        "name": "identity client receives uncompressed valid model JSON",
+        "passed": true
+      },
+      {
+        "name": "standard Responses compressed upstream SSE completes",
+        "passed": true
+      },
+      {
+        "name": "standard Responses private metadata filtered",
+        "passed": true
+      },
+      {
+        "name": "standard Responses moderation metadata policy",
+        "passed": true
+      },
+      {
+        "name": "standard Responses Codex metadata policy",
+        "passed": true
+      },
+      {
+        "name": "standard Responses downstream gzip negotiated",
+        "passed": true
+      },
+      {
+        "name": "Codex compressed upstream SSE completes",
+        "passed": true
+      },
+      {
+        "name": "Codex private metadata filtered",
+        "passed": true
+      },
+      {
+        "name": "Codex moderation metadata policy",
+        "passed": true
+      },
+      {
+        "name": "Codex Codex metadata policy",
+        "passed": true
+      },
+      {
+        "name": "Codex downstream gzip negotiated",
+        "passed": true
+      },
+      {
+        "name": "upstream request compression defaults off",
+        "passed": true
+      }
+    ],
+    "gateway_pid": 402157,
+    "gateway_port": 42597,
+    "mock_port": 41163,
+    "version": "8.0.47",
+    "gateway_exit": 0
+  },
+  "fast_mode": {
+    "8.0.47": {
+      "false": {
+        "gateway_pid": 417629,
+        "gateway_port": 42225,
+        "mock_port": 45209,
+        "gateway_version": "8.0.47",
+        "hot_enable_same_pid": true,
+        "status_init_and_reconfigure": true,
+        "auth_indexes": {
+          "A": "7de78d82181c89c4",
+          "B": "3c486798dd2d6a86"
+        },
+        "failover": [
+          {
+            "account": "A",
+            "tier": "<absent>"
+          },
+          {
+            "account": "B",
+            "tier": "priority"
+          }
+        ],
+        "library_path_update_same_pid": true,
+        "serial_policy_enforced": true,
+        "websocket_warning_count": 1,
+        "same_pid_after_all_toggles": true,
+        "installer_disable_unconfirmed": true,
+        "status_shutdown_removed": true,
+        "restart_indexes_unchanged": true,
+        "status_restart_current_pid": true,
+        "http_cases": 53,
+        "websocket_observed_tiers": [
+          "<absent>",
+          "<absent>"
+        ],
+        "cleanup": {
+          "gateway_pid": 418245,
+          "gateway_exit": 0,
+          "mock_server_stopped": true
+        }
+      },
+      "true": {
+        "gateway_pid": 418352,
+        "gateway_port": 58387,
+        "mock_port": 45967,
+        "gateway_version": "8.0.47",
+        "hot_enable_same_pid": true,
+        "status_init_and_reconfigure": true,
+        "auth_indexes": {
+          "A": "65be8bcd8dfccafc",
+          "B": "2bc6dfde2c466697"
+        },
+        "failover": [
+          {
+            "account": "A",
+            "tier": "<absent>"
+          },
+          {
+            "account": "B",
+            "tier": "priority"
+          }
+        ],
+        "library_path_update_same_pid": true,
+        "duplex_policy_enforced": true,
+        "websocket_warning_count": 1,
+        "same_pid_after_all_toggles": true,
+        "installer_disable_unconfirmed": true,
+        "status_shutdown_removed": true,
+        "restart_indexes_unchanged": true,
+        "status_restart_current_pid": true,
+        "http_cases": 53,
+        "websocket_observed_tiers": [
+          "<absent>",
+          "<absent>"
+        ],
+        "cleanup": {
+          "gateway_pid": 418955,
+          "gateway_exit": 0,
+          "mock_server_stopped": true
+        }
+      }
+    },
+    "8.0.30": {
+      "false": {
+        "gateway_pid": 458367,
+        "gateway_port": 42273,
+        "mock_port": 44203,
+        "gateway_version": "8.0.30",
+        "hot_enable_same_pid": true,
+        "status_init_and_reconfigure": true,
+        "auth_indexes": {
+          "A": "ed5d2b3e1afe6a8b",
+          "B": "034011617d7cd0cb"
+        },
+        "failover": [
+          {
+            "account": "A",
+            "tier": "<absent>"
+          },
+          {
+            "account": "B",
+            "tier": "priority"
+          }
+        ],
+        "library_path_update_same_pid": true,
+        "serial_policy_enforced": true,
+        "websocket_warning_count": 1,
+        "same_pid_after_all_toggles": true,
+        "installer_disable_unconfirmed": true,
+        "status_shutdown_removed": true,
+        "restart_indexes_unchanged": true,
+        "status_restart_current_pid": true,
+        "http_cases": 53,
+        "websocket_observed_tiers": [
+          "<absent>",
+          "<absent>"
+        ],
+        "cleanup": {
+          "gateway_pid": 459098,
+          "gateway_exit": 0,
+          "mock_server_stopped": true
+        }
+      },
+      "true": {
+        "gateway_pid": 459321,
+        "gateway_port": 40785,
+        "mock_port": 36107,
+        "gateway_version": "8.0.30",
+        "hot_enable_same_pid": true,
+        "status_init_and_reconfigure": true,
+        "auth_indexes": {
+          "A": "fd94e4df1aae9090",
+          "B": "23d1dd6e7a53a1eb"
+        },
+        "failover": [
+          {
+            "account": "A",
+            "tier": "<absent>"
+          },
+          {
+            "account": "B",
+            "tier": "priority"
+          }
+        ],
+        "library_path_update_same_pid": true,
+        "duplex_expected_policy_failure": true,
+        "websocket_warning_count": 1,
+        "same_pid_after_all_toggles": true,
+        "installer_disable_unconfirmed": true,
+        "status_shutdown_removed": true,
+        "restart_indexes_unchanged": true,
+        "status_restart_current_pid": true,
+        "http_cases": 53,
+        "websocket_observed_tiers": [
+          "<absent>",
+          "priority"
+        ],
+        "cleanup": {
+          "gateway_pid": 459805,
+          "gateway_exit": 0,
+          "mock_server_stopped": true
+        }
+      }
+    }
+  },
+  "websockets": {
+    "8.0.47": {
+      "fixture_tests": 6,
+      "integration_checks": 39,
+      "completed_synthetic_responses": 24,
+      "native_client": "codex-cli 0.166.0",
+      "native_skipped": false,
+      "experiments": [
+        {
+          "case": "serial-matrix",
+          "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+          "checks": [
+            {
+              "name": "safe_config_preflight",
+              "passed": true
+            },
+            {
+              "name": "A_first_followups_reconnect_policy",
+              "passed": true
+            },
+            {
+              "name": "A_upstream_connection_reused",
+              "passed": true
+            },
+            {
+              "name": "A_continuation_ids_survive",
+              "passed": true
+            },
+            {
+              "name": "B_first_followups_reconnect_policy",
+              "passed": true
+            },
+            {
+              "name": "B_upstream_connection_reused",
+              "passed": true
+            },
+            {
+              "name": "B_continuation_ids_survive",
+              "passed": true
+            },
+            {
+              "name": "scoped_flag_runtime_disk",
+              "passed": true
+            },
+            {
+              "name": "new_connection_http",
+              "passed": true
+            },
+            {
+              "name": "flag_patch_same_pid",
+              "passed": true
+            },
+            {
+              "name": "scoped_flag_runtime_disk",
+              "passed": true
+            },
+            {
+              "name": "new_connection_websocket",
+              "passed": true
+            },
+            {
+              "name": "flag_patch_same_pid",
+              "passed": true
+            },
+            {
+              "name": "scoped_flag_runtime_disk",
+              "passed": true
+            },
+            {
+              "name": "new_connection_http",
+              "passed": true
+            },
+            {
+              "name": "flag_patch_same_pid",
+              "passed": true
+            },
+            {
+              "name": "hot_reload_same_pid_inode",
+              "passed": true
+            },
+            {
+              "name": "duplex_denied_followup_enforced",
+              "passed": true
+            },
+            {
+              "name": "hot_reload_same_pid_inode",
+              "passed": true
+            },
+            {
+              "name": "steering_false_hot_applies_new_socket",
+              "passed": true
+            },
+            {
+              "name": "late_tier_setter_detected",
+              "passed": true
+            },
+            {
+              "name": "hot_reload_same_pid_inode",
+              "passed": true
+            },
+            {
+              "name": "late_rule_really_reintroduces_priority",
+              "passed": true
+            },
+            {
+              "name": "exact_usage_per_turn_account_all_token_fields",
+              "passed": true
+            },
+            {
+              "name": "no_mock_protocol_errors",
+              "passed": true
+            }
+          ],
+          "gateway_pid": 457185,
+          "harness_pid": 419011,
+          "gateway_port": 57117,
+          "mock_port": 33343,
+          "gateway_version": "8.0.47",
+          "usage": [
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 32
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 34
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 13,
+                "output_tokens": 23,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 36
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 14,
+                "output_tokens": 24,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 38
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 15,
+                "output_tokens": 25,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 40
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 16,
+                "output_tokens": 26,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 42
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 17,
+                "output_tokens": 27,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 44
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 18,
+                "output_tokens": 28,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 46
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 19,
+                "output_tokens": 29,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 48
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 20,
+                "output_tokens": 30,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 50
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 21,
+                "output_tokens": 31,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 52
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 22,
+                "output_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 54
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 23,
+                "output_tokens": 33,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 56
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 24,
+                "output_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 58
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 25,
+                "output_tokens": 35,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 60
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 26,
+                "output_tokens": 36,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 62
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 27,
+                "output_tokens": 37,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 64
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 28,
+                "output_tokens": 38,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 66
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 29,
+                "output_tokens": 39,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 68
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 30,
+                "output_tokens": 40,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 70
+              },
+              "failed": false
+            }
+          ],
+          "blocked_external_connects": 2,
+          "mock_errors": [],
+          "records": [
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 1,
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "total_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_1",
+              "sequence": 2,
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "total_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_2",
+              "sequence": 3,
+              "tokens": {
+                "input_tokens": 13,
+                "output_tokens": 23,
+                "total_tokens": 36,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 2,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 4,
+              "tokens": {
+                "input_tokens": 14,
+                "output_tokens": 24,
+                "total_tokens": 38,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 3,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 5,
+              "tokens": {
+                "input_tokens": 15,
+                "output_tokens": 25,
+                "total_tokens": 40,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 3,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_5",
+              "sequence": 6,
+              "tokens": {
+                "input_tokens": 16,
+                "output_tokens": 26,
+                "total_tokens": 42,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 3,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_6",
+              "sequence": 7,
+              "tokens": {
+                "input_tokens": 17,
+                "output_tokens": 27,
+                "total_tokens": 44,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 4,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 8,
+              "tokens": {
+                "input_tokens": 18,
+                "output_tokens": 28,
+                "total_tokens": 46,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 9,
+              "tokens": {
+                "input_tokens": 19,
+                "output_tokens": 29,
+                "total_tokens": 48,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 10,
+              "tokens": {
+                "input_tokens": 20,
+                "output_tokens": 30,
+                "total_tokens": 50,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 5,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 11,
+              "tokens": {
+                "input_tokens": 21,
+                "output_tokens": 31,
+                "total_tokens": 52,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 5,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_11",
+              "sequence": 12,
+              "tokens": {
+                "input_tokens": 22,
+                "output_tokens": 32,
+                "total_tokens": 54,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 13,
+              "tokens": {
+                "input_tokens": 23,
+                "output_tokens": 33,
+                "total_tokens": 56,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 14,
+              "tokens": {
+                "input_tokens": 24,
+                "output_tokens": 34,
+                "total_tokens": 58,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 6,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 15,
+              "tokens": {
+                "input_tokens": 25,
+                "output_tokens": 35,
+                "total_tokens": 60,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 6,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_15",
+              "sequence": 16,
+              "tokens": {
+                "input_tokens": 26,
+                "output_tokens": 36,
+                "total_tokens": 62,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 7,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 17,
+              "tokens": {
+                "input_tokens": 27,
+                "output_tokens": 37,
+                "total_tokens": 64,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 7,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_17",
+              "sequence": 18,
+              "tokens": {
+                "input_tokens": 28,
+                "output_tokens": 38,
+                "total_tokens": 66,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 8,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 19,
+              "tokens": {
+                "input_tokens": 29,
+                "output_tokens": 39,
+                "total_tokens": 68,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 8,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_19",
+              "sequence": 20,
+              "tokens": {
+                "input_tokens": 30,
+                "output_tokens": 40,
+                "total_tokens": 70,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "gateway_exit": 0,
+            "gateway_listening": false,
+            "mock_stopped": true,
+            "mock_listening": false
+          }
+        },
+        {
+          "case": "native-serial",
+          "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+          "checks": [
+            {
+              "name": "native_codex_exit",
+              "passed": true
+            },
+            {
+              "name": "native_turn_completed",
+              "passed": true
+            },
+            {
+              "name": "native_warmup_then_first_inference",
+              "passed": true
+            },
+            {
+              "name": "native_same_upstream_socket",
+              "passed": true
+            },
+            {
+              "name": "native_serial_enforces_first_user_turn",
+              "passed": true
+            },
+            {
+              "name": "exact_usage_per_turn_account_all_token_fields",
+              "passed": true
+            },
+            {
+              "name": "no_mock_protocol_errors",
+              "passed": true
+            }
+          ],
+          "gateway_pid": 457728,
+          "harness_pid": 419011,
+          "gateway_port": 45111,
+          "mock_port": 37133,
+          "gateway_version": "8.0.47",
+          "codex_pid": 457763,
+          "codex_exit": 0,
+          "codex_stopped": true,
+          "usage": [
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 32
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 34
+              },
+              "failed": false
+            }
+          ],
+          "blocked_external_connects": 4,
+          "mock_errors": [],
+          "records": [
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": false,
+              "previous_response_id": null,
+              "sequence": 1,
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "total_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 2,
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "total_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "gateway_exit": 0,
+            "gateway_listening": false,
+            "mock_stopped": true,
+            "mock_listening": false
+          }
+        },
+        {
+          "case": "native-duplex-versioned-policy",
+          "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+          "checks": [
+            {
+              "name": "native_codex_exit",
+              "passed": true
+            },
+            {
+              "name": "native_turn_completed",
+              "passed": true
+            },
+            {
+              "name": "native_warmup_then_first_inference",
+              "passed": true
+            },
+            {
+              "name": "native_same_upstream_socket",
+              "passed": true
+            },
+            {
+              "name": "native_duplex_enforces_first_user_turn",
+              "passed": true
+            },
+            {
+              "name": "exact_usage_per_turn_account_all_token_fields",
+              "passed": true
+            },
+            {
+              "name": "no_mock_protocol_errors",
+              "passed": true
+            }
+          ],
+          "gateway_pid": 458042,
+          "harness_pid": 419011,
+          "gateway_port": 45057,
+          "mock_port": 33793,
+          "gateway_version": "8.0.47",
+          "codex_pid": 458098,
+          "codex_exit": 0,
+          "codex_stopped": true,
+          "usage": [
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 32
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 34
+              },
+              "failed": false
+            }
+          ],
+          "blocked_external_connects": 4,
+          "mock_errors": [],
+          "records": [
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": false,
+              "previous_response_id": null,
+              "sequence": 1,
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "total_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 2,
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "total_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "gateway_exit": 0,
+            "gateway_listening": false,
+            "mock_stopped": true,
+            "mock_listening": false
+          }
+        }
+      ]
+    },
+    "8.0.30": {
+      "fixture_tests": 6,
+      "integration_checks": 39,
+      "completed_synthetic_responses": 24,
+      "native_client": "codex-cli 0.166.0",
+      "native_skipped": false,
+      "experiments": [
+        {
+          "case": "serial-matrix",
+          "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+          "checks": [
+            {
+              "name": "safe_config_preflight",
+              "passed": true
+            },
+            {
+              "name": "A_first_followups_reconnect_policy",
+              "passed": true
+            },
+            {
+              "name": "A_upstream_connection_reused",
+              "passed": true
+            },
+            {
+              "name": "A_continuation_ids_survive",
+              "passed": true
+            },
+            {
+              "name": "B_first_followups_reconnect_policy",
+              "passed": true
+            },
+            {
+              "name": "B_upstream_connection_reused",
+              "passed": true
+            },
+            {
+              "name": "B_continuation_ids_survive",
+              "passed": true
+            },
+            {
+              "name": "scoped_flag_runtime_disk",
+              "passed": true
+            },
+            {
+              "name": "new_connection_http",
+              "passed": true
+            },
+            {
+              "name": "flag_patch_same_pid",
+              "passed": true
+            },
+            {
+              "name": "scoped_flag_runtime_disk",
+              "passed": true
+            },
+            {
+              "name": "new_connection_websocket",
+              "passed": true
+            },
+            {
+              "name": "flag_patch_same_pid",
+              "passed": true
+            },
+            {
+              "name": "scoped_flag_runtime_disk",
+              "passed": true
+            },
+            {
+              "name": "new_connection_http",
+              "passed": true
+            },
+            {
+              "name": "flag_patch_same_pid",
+              "passed": true
+            },
+            {
+              "name": "hot_reload_same_pid_inode",
+              "passed": true
+            },
+            {
+              "name": "EXPECTED_FAILURE_duplex_denied_followup_bypasses_policy",
+              "passed": true
+            },
+            {
+              "name": "hot_reload_same_pid_inode",
+              "passed": true
+            },
+            {
+              "name": "steering_false_hot_applies_new_socket",
+              "passed": true
+            },
+            {
+              "name": "late_tier_setter_detected",
+              "passed": true
+            },
+            {
+              "name": "hot_reload_same_pid_inode",
+              "passed": true
+            },
+            {
+              "name": "late_rule_really_reintroduces_priority",
+              "passed": true
+            },
+            {
+              "name": "exact_usage_per_turn_account_all_token_fields",
+              "passed": true
+            },
+            {
+              "name": "no_mock_protocol_errors",
+              "passed": true
+            }
+          ],
+          "gateway_pid": 460207,
+          "harness_pid": 460092,
+          "gateway_port": 56451,
+          "mock_port": 35947,
+          "gateway_version": "8.0.30",
+          "usage": [
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 32
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 34
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 13,
+                "output_tokens": 23,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 36
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 14,
+                "output_tokens": 24,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 38
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 15,
+                "output_tokens": 25,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 40
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 16,
+                "output_tokens": 26,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 42
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 17,
+                "output_tokens": 27,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 44
+              },
+              "failed": false
+            },
+            {
+              "account": "B",
+              "tokens": {
+                "input_tokens": 18,
+                "output_tokens": 28,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 46
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 19,
+                "output_tokens": 29,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 48
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 20,
+                "output_tokens": 30,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 50
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 21,
+                "output_tokens": 31,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 52
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 22,
+                "output_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 54
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 23,
+                "output_tokens": 33,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 56
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 24,
+                "output_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 58
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 25,
+                "output_tokens": 35,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 60
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 26,
+                "output_tokens": 36,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 62
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 27,
+                "output_tokens": 37,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 64
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 28,
+                "output_tokens": 38,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 66
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 29,
+                "output_tokens": 39,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 68
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 30,
+                "output_tokens": 40,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 70
+              },
+              "failed": false
+            }
+          ],
+          "blocked_external_connects": 2,
+          "mock_errors": [],
+          "records": [
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 1,
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "total_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_1",
+              "sequence": 2,
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "total_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_2",
+              "sequence": 3,
+              "tokens": {
+                "input_tokens": 13,
+                "output_tokens": 23,
+                "total_tokens": 36,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 2,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 4,
+              "tokens": {
+                "input_tokens": 14,
+                "output_tokens": 24,
+                "total_tokens": 38,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 3,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 5,
+              "tokens": {
+                "input_tokens": 15,
+                "output_tokens": 25,
+                "total_tokens": 40,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 3,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_5",
+              "sequence": 6,
+              "tokens": {
+                "input_tokens": 16,
+                "output_tokens": 26,
+                "total_tokens": 42,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 3,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_6",
+              "sequence": 7,
+              "tokens": {
+                "input_tokens": 17,
+                "output_tokens": 27,
+                "total_tokens": 44,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "B",
+              "transport": "websocket",
+              "connection": 4,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 8,
+              "tokens": {
+                "input_tokens": 18,
+                "output_tokens": 28,
+                "total_tokens": 46,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 9,
+              "tokens": {
+                "input_tokens": 19,
+                "output_tokens": 29,
+                "total_tokens": 48,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 10,
+              "tokens": {
+                "input_tokens": 20,
+                "output_tokens": 30,
+                "total_tokens": 50,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 5,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 11,
+              "tokens": {
+                "input_tokens": 21,
+                "output_tokens": 31,
+                "total_tokens": 52,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 5,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_11",
+              "sequence": 12,
+              "tokens": {
+                "input_tokens": 22,
+                "output_tokens": 32,
+                "total_tokens": 54,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 13,
+              "tokens": {
+                "input_tokens": 23,
+                "output_tokens": 33,
+                "total_tokens": 56,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "http",
+              "connection": null,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 14,
+              "tokens": {
+                "input_tokens": 24,
+                "output_tokens": 34,
+                "total_tokens": 58,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 6,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 15,
+              "tokens": {
+                "input_tokens": 25,
+                "output_tokens": 35,
+                "total_tokens": 60,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 6,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_15",
+              "sequence": 16,
+              "tokens": {
+                "input_tokens": 26,
+                "output_tokens": 36,
+                "total_tokens": 62,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 7,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 17,
+              "tokens": {
+                "input_tokens": 27,
+                "output_tokens": 37,
+                "total_tokens": 64,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 7,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": "resp_17",
+              "sequence": 18,
+              "tokens": {
+                "input_tokens": 28,
+                "output_tokens": 38,
+                "total_tokens": 66,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 8,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 19,
+              "tokens": {
+                "input_tokens": 29,
+                "output_tokens": 39,
+                "total_tokens": 68,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 8,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": "resp_19",
+              "sequence": 20,
+              "tokens": {
+                "input_tokens": 30,
+                "output_tokens": 40,
+                "total_tokens": 70,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "gateway_exit": 0,
+            "gateway_listening": false,
+            "mock_stopped": true,
+            "mock_listening": false
+          }
+        },
+        {
+          "case": "native-serial",
+          "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+          "checks": [
+            {
+              "name": "native_codex_exit",
+              "passed": true
+            },
+            {
+              "name": "native_turn_completed",
+              "passed": true
+            },
+            {
+              "name": "native_warmup_then_first_inference",
+              "passed": true
+            },
+            {
+              "name": "native_same_upstream_socket",
+              "passed": true
+            },
+            {
+              "name": "native_serial_enforces_first_user_turn",
+              "passed": true
+            },
+            {
+              "name": "exact_usage_per_turn_account_all_token_fields",
+              "passed": true
+            },
+            {
+              "name": "no_mock_protocol_errors",
+              "passed": true
+            }
+          ],
+          "gateway_pid": 460530,
+          "harness_pid": 460092,
+          "gateway_port": 38075,
+          "mock_port": 35459,
+          "gateway_version": "8.0.30",
+          "codex_pid": 460608,
+          "codex_exit": 0,
+          "codex_stopped": true,
+          "usage": [
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 32
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 34
+              },
+              "failed": false
+            }
+          ],
+          "blocked_external_connects": 4,
+          "mock_errors": [],
+          "records": [
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": false,
+              "previous_response_id": null,
+              "sequence": 1,
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "total_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 2,
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "total_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "gateway_exit": 0,
+            "gateway_listening": false,
+            "mock_stopped": true,
+            "mock_listening": false
+          }
+        },
+        {
+          "case": "native-duplex-versioned-policy",
+          "binary": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+          "checks": [
+            {
+              "name": "native_codex_exit",
+              "passed": true
+            },
+            {
+              "name": "native_turn_completed",
+              "passed": true
+            },
+            {
+              "name": "native_warmup_then_first_inference",
+              "passed": true
+            },
+            {
+              "name": "native_same_upstream_socket",
+              "passed": true
+            },
+            {
+              "name": "EXPECTED_FAILURE_native_duplex_bypass",
+              "passed": true
+            },
+            {
+              "name": "exact_usage_per_turn_account_all_token_fields",
+              "passed": true
+            },
+            {
+              "name": "no_mock_protocol_errors",
+              "passed": true
+            }
+          ],
+          "gateway_pid": 460931,
+          "harness_pid": 460092,
+          "gateway_port": 48357,
+          "mock_port": 43005,
+          "gateway_version": "8.0.30",
+          "codex_pid": 460968,
+          "codex_exit": 0,
+          "codex_stopped": true,
+          "usage": [
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 32
+              },
+              "failed": false
+            },
+            {
+              "account": "A",
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1,
+                "cache_read_tokens": 1,
+                "cache_read_tokens_present": true,
+                "cache_creation_tokens": 0,
+                "total_tokens": 34
+              },
+              "failed": false
+            }
+          ],
+          "blocked_external_connects": 4,
+          "mock_errors": [],
+          "records": [
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "<absent>",
+              "generate": false,
+              "previous_response_id": null,
+              "sequence": 1,
+              "tokens": {
+                "input_tokens": 11,
+                "output_tokens": 21,
+                "total_tokens": 32,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            },
+            {
+              "account": "A",
+              "transport": "websocket",
+              "connection": 1,
+              "tier": "priority",
+              "generate": true,
+              "previous_response_id": null,
+              "sequence": 2,
+              "tokens": {
+                "input_tokens": 12,
+                "output_tokens": 22,
+                "total_tokens": 34,
+                "reasoning_tokens": 2,
+                "cached_tokens": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "gateway_exit": 0,
+            "gateway_listening": false,
+            "mock_stopped": true,
+            "mock_listening": false
+          }
+        }
+      ]
+    }
+  },
+  "source_checks": {
+    "8.0.44 compression defaults": {
+      "tag": "v8.0.44",
+      "revision": "1f917e77c4562623aa49e9804d999524151a2f96",
+      "path": "internal/config/config_types.go",
+      "passed": true
+    },
+    "8.0.44 schema7 opt-out": {
+      "tag": "v8.0.44",
+      "revision": "1f917e77c4562623aa49e9804d999524151a2f96",
+      "path": "internal/pluginhost/adapters_interceptors.go",
+      "passed": true
+    },
+    "8.0.44 discovery deprecation": {
+      "tag": "v8.0.44",
+      "revision": "1f917e77c4562623aa49e9804d999524151a2f96",
+      "path": "internal/config/config_types.go",
+      "passed": true
+    },
+    "8.0.45 transient turn rate limits": {
+      "tag": "v8.0.45",
+      "revision": "ad8bdd3f20bef44f0684b8a6096a216b2c76040d",
+      "path": "internal/runtime/executor/codex_executor_terminal.go",
+      "passed": true
+    },
+    "8.0.45 model refresh": {
+      "tag": "v8.0.45",
+      "revision": "ad8bdd3f20bef44f0684b8a6096a216b2c76040d",
+      "path": "internal/api/handlers/management/model_definitions.go",
+      "passed": true
+    },
+    "8.0.45 unconsumed body guard": {
+      "tag": "v8.0.45",
+      "revision": "ad8bdd3f20bef44f0684b8a6096a216b2c76040d",
+      "path": "internal/api/server_middleware.go",
+      "passed": true
+    },
+    "8.0.46 private metadata SSE": {
+      "tag": "v8.0.46",
+      "revision": "9717e325ba6ab2c7483ea93ccb5f2047eb2e7dd5",
+      "path": "sdk/api/handlers/openai/openai_responses_handlers.go",
+      "passed": true
+    },
+    "8.0.46 late interrupt": {
+      "tag": "v8.0.46",
+      "revision": "9717e325ba6ab2c7483ea93ccb5f2047eb2e7dd5",
+      "path": "sdk/api/handlers/openai/openai_responses_websocket_forward.go",
+      "passed": true
+    },
+    "8.0.47 auth opt-out": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "internal/pluginhost/adapters_auth.go",
+      "passed": true
+    },
+    "8.0.47 patch opt-in": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "internal/pluginhost/adapters_interceptors.go",
+      "passed": true
+    },
+    "8.0.47 ABI1 schema8": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "sdk/pluginabi/types.go",
+      "passed": true
+    },
+    "8.0.47 embedded terra": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "internal/registry/models/models.json",
+      "passed": true
+    },
+    "8.0.47 client terra": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "internal/registry/models/codex_client_models.json",
+      "passed": true
+    },
+    "8.0.45 early WS retry preserves downstream": {
+      "tag": "v8.0.45",
+      "revision": "ad8bdd3f20bef44f0684b8a6096a216b2c76040d",
+      "path": "internal/runtime/executor/codex_websockets_stream.go",
+      "passed": true
+    },
+    "8.0.45 downstream retained on upstream loss": {
+      "tag": "v8.0.45",
+      "revision": "ad8bdd3f20bef44f0684b8a6096a216b2c76040d",
+      "path": "internal/runtime/executor/codex_websockets_duplex.go",
+      "passed": true
+    },
+    "8.0.46 late upstream interrupt ownership": {
+      "tag": "v8.0.46",
+      "revision": "9717e325ba6ab2c7483ea93ccb5f2047eb2e7dd5",
+      "path": "internal/runtime/executor/codex_websockets_session.go",
+      "passed": true
+    },
+    "8.0.47 TTL resets selector": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "sdk/cliproxy/service_config.go",
+      "passed": true
+    },
+    "8.0.47 duplex per-frame policy fix": {
+      "tag": "v8.0.47",
+      "revision": "90c447d3a8727d115aa7552ec93ce023736ed492",
+      "path": "internal/runtime/executor/codex_websockets_duplex.go",
+      "change_commit": "0fe38224e5292855b1a3afdcf036c0a185b082d7",
+      "passed": true
+    }
+  },
+  "duplex_reassessment": {
+    "initial_assertion_failed": true,
+    "old_expected_tiers": [
+      "<absent>",
+      "priority"
+    ],
+    "observed_tiers": [
+      "<absent>",
+      "<absent>"
+    ],
+    "steering_true": true,
+    "gateway_pid": 409004,
+    "gateway_port": 59035,
+    "mock_port": 45815,
+    "source_commit": "0fe38224e5292855b1a3afdcf036c0a185b082d7",
+    "resolution": "Require per-frame enforcement specifically on 8.0.47; retain pinned bypass on 8.0.30 and 8.0.43.",
+    "cleanup": {
+      "gateway_pid": 409004,
+      "gateway_exit": 0,
+      "mock_server_stopped": true
+    }
+  },
+  "plugin_sandbox": {
+    "unit": "pcr-plugin-19ab62294c.service",
+    "gateway_port": 52975,
+    "mock_port": 38487,
+    "binary": "/opt/cliproxyapi/8.0.47/cli-proxy-api",
+    "sandbox": {
+      "UMask": "0077",
+      "CapabilityBoundingSet": "",
+      "User": "cliproxyapi",
+      "Group": "cliproxyapi",
+      "PrivateTmp": "yes",
+      "ProtectKernelTunables": "yes",
+      "ProtectKernelModules": "yes",
+      "ProtectControlGroups": "yes",
+      "ProtectHome": "yes",
+      "ProtectSystem": "strict",
+      "NoNewPrivileges": "yes",
+      "SystemCallArchitectures": "native",
+      "LockPersonality": "yes",
+      "RestrictAddressFamilies": "AF_INET AF_INET6 AF_UNIX",
+      "RestrictSUIDSGID": "yes"
+    },
+    "pid": 528447,
+    "version": "8.0.47",
+    "ok": true,
+    "marker_current_pid": true,
+    "shadow_mappings": [
+      "/tmp/cliproxy-pluginhost/pid-528447/cliproxy-plugin-fast-mode-policy-eff6ea99f9e8ce5e9ac5e5c63d97c66c.so"
+    ],
+    "equivalent_sandbox": true,
+    "cleanup": {
+      "unit_stopped": true,
+      "state_directory_removed": true,
+      "mock_stopped": true
+    }
+  },
+  "verification": {
+    "focused_tests": {
+      "signin_retry": 33,
+      "move_conversations": 40,
+      "credential_replace": 37,
+      "install_fast_mode_plugin": 47,
+      "claude_gateway_compatibility": 8
+    },
+    "full_python_suite": {
+      "passed": 855,
+      "failures": 0,
+      "sqlite_resource_warnings": true
+    },
+    "allowlist_regression_controls": [
+      {
+        "gate": "sign-in",
+        "fails_without_8_0_47_allowlist": true,
+        "reason": "flow refused before session creation"
+      },
+      {
+        "gate": "move",
+        "fails_without_8_0_47_allowlist": true,
+        "reason": "move unavailable"
+      }
+    ],
+    "offline_unit_verify": {
+      "exit_code": 0,
+      "diagnostics": "Two unrelated installed XFS CPUAccounting warnings"
+    },
+    "documentation_shell_and_python_syntax": "passed, 12 embedded Python blocks",
+    "git_diff_check": "passed"
+  },
+  "live_baseline": {
+    "pid": 4574,
+    "executable": "/opt/cliproxyapi/8.0.30/cli-proxy-api",
+    "ActiveEnterTimestamp": "Tue 2026-10-27 17:43:06 -03",
+    "ExecMainStartTimestamp": "Tue 2026-10-27 17:43:06 -03",
+    "NRestarts": 0,
+    "unchanged_process_and_active_dropins": true,
+    "unchanged_protected_trees": [
+      "/etc/cliproxyapi",
+      "/opt/personal-codex-router",
+      "/opt/cliproxyapi/8.0.30",
+      "/opt/cliproxyapi/8.0.43",
+      "/opt/cliproxyapi/8.0.7",
+      "/etc/systemd/system/cliproxyapi.service.d"
+    ],
+    "changed_baseline_files": [],
+    "added_files": [
+      "/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.47.conf.staged"
+    ],
+    "production_auth_contents_read": false,
+    "task_wrote_production_auth": false,
+    "candidate_hash_owner_mode_verified": true,
+    "staged_dropin": "/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.47.conf.staged"
+  },
+  "cleanup": {
+    "all_owned_processes_exited": true,
+    "checked_pids": [
+      250659,
+      257244,
+      267455,
+      313131,
+      313581,
+      402157,
+      409004,
+      417629,
+      418245,
+      418352,
+      418955,
+      419011,
+      421135,
+      457185,
+      457728,
+      457763,
+      458042,
+      458098,
+      458367,
+      459098,
+      459321,
+      459805,
+      460092,
+      460207,
+      460530,
+      460608,
+      460931,
+      460968,
+      528447,
+      528663,
+      533444
+    ],
+    "remaining_owned_processes": [],
+    "no_persistent_server_or_browser_tab": true,
+    "mock_listeners_closed": true,
+    "transient_unit_stopped": true,
+    "synthetic_auth_config_ca_and_copied_libraries_removed": true,
+    "duplicate_archive_extracted_binary_and_source_removed": true,
+    "removed_task_owned_plugin_shadows": [
+      "/tmp/cliproxy-pluginhost/pid-418955"
+    ],
+    "evidence_directory": "/home/user/.cache/agent-scratch/personal-codex-router/upgrade-8.0.47"
+  },
+  "not_verified": [
+    "real OAuth/provider refresh and quota",
+    "real upstream signatures and billing",
+    "live T3/Claude Code/dashboard UI and streaming",
+    "Mac client/access acceptance",
+    "actual remote model catalog refresh/live catalog",
+    "negotiated permessage-deflate and all compression codecs",
+    "specific retry-hint, early-429, disconnect, late-interrupt and descriptor-exhaustion injections",
+    "rejected-turn accounting and sustained load",
+    "Windows upgrade"
+  ]
+}

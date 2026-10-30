@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 import copy
 import importlib.util
 import json
@@ -65,7 +66,7 @@ class PreferenceTests(unittest.TestCase):
 
     def test_partial_update_recovers_and_rollback_preserves_other_fields(self):
         rows = {e: {'email': e, 'name': str(i), 'type': 'codex', 'priority': None,
-                    'prefix': 'unchanged', 'access_token': 'NEVER_PERSIST_THIS'} for i, e in enumerate(app.EMAILS)}
+                    'prefix': 'unchanged', 'access_token': 'NEVER_PERSIST_THIS'} for i, e in enumerate(CODEX_PAIR)}
         writes = []
         def call(path, body=None, method=None):
             if method == 'PATCH':
@@ -90,7 +91,7 @@ class PreferenceTests(unittest.TestCase):
 
     def test_manual_priority_is_not_overwritten(self):
         def call(*args):
-            return {'files': [{'type': 'codex', 'email': e, 'name': e, 'priority': 5} for e in app.EMAILS]}
+            return {'files': [{'type': 'codex', 'email': e, 'name': e, 'priority': 5} for e in CODEX_PAIR]}
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             with self.assertRaises(app.Hold): app.apply_plan(app.choose(fixture(), NOW), call, Path(directory))
 

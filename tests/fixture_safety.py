@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Fail-closed boundaries shared by local dashboard preview fixtures."""
 
 
@@ -10,8 +11,6 @@ def isolate(app, directory):
     # Their roster must not depend on the production Codex configuration.
     from codex_fixture import CODEX_PAIR
     import operations
-    app.routing_policy.EMAILS = CODEX_PAIR
-    operations.EMAILS = CODEX_PAIR
     app.urlopen = forbidden_transport
     app.claude_request = forbidden_transport
     app.routing_policy.urlopen = forbidden_transport
@@ -47,10 +46,10 @@ def claude_routing(app, directory):
     import time
     policy = app.routing_policy
     app.PREFERENCE = directory / 'routing/status.json'
-    rows = [dict(type='claude', name=f'claude-{i}.json', email=email,
+    rows = [dict(type='claude', name=f'claude-{i}.json', auth_index=f'claude-{i}', email=email,
                  note='Claude '+chr(65+i), priority=100 if i == 0 else 0,
-                 disabled=False, status='active') for i, email in enumerate(policy.identities('claude'))]
-    fixture = {'scenario': 'normal'}
+                 disabled=False, status='active') for i, email in enumerate(policy.identities('claude', inventory=CODEX_INVENTORY))]
+    fixture = {'scenario': 'normal', 'rows': rows}
     def request(path, body=None, method=None, timeout=None):
         if fixture['scenario'] == 'unconfirmed':
             raise OSError('Synthetic unavailable gateway')
@@ -86,6 +85,6 @@ def claude_routing(app, directory):
                           resets_at=now+offset) for kind, seconds, label, used, offset in (
                 ('five_hour', 18000, '5-hour limit', 20, 10000),
                 ('seven_day', 604800, 'Weekly · all models', 75-i*40, 200000+i*100000))], resets=None)
-            for i, email in enumerate(policy.identities('claude'))]
+            for i, email in enumerate(policy.identities('claude', inventory=CODEX_INVENTORY))]
     app.watch_accounts = watch
     return fixture

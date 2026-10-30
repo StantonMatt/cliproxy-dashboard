@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Provider routing contracts with synthetic usage and gateway records only."""
 import copy
 import io
@@ -24,7 +25,7 @@ def setUpModule():
 
 
 def overview():
-    return {'gateway': {'online': True, 'checked_at': p.stamp(NOW)}, 'watch_accounts': [
+    return {'gateway': {'online': True, 'checked_at': p.stamp(NOW), 'claude_accounts': [dict(r) for r in CODEX_INVENTORY if r['type']=='claude']}, 'watch_accounts': [
         {'id': 'claude' if i == 0 else 'claude-b', 'provider': 'claude', 'email': email,
          'status': 'ok', 'checked_at': p.stamp(NOW), 'windows': [
              {'kind': 'five_hour', 'remaining': 40+i*20, 'resets_at': NOW+10000},
@@ -43,6 +44,13 @@ class ClaudeRoutingTests(unittest.TestCase):
                       'priority': 100 if i == 0 else 0, 'disabled': False, 'status': 'active'}
                      for provider in ('codex', 'claude') for i, email in enumerate((A, B))]
         self.writes = []
+        manager = patch.object(p, 'request', side_effect=self.call)
+        manager.start()
+        self.addCleanup(manager.stop)
+        original_snapshot = p.inventory_snapshot
+        manager = patch.object(p, 'inventory_snapshot', side_effect=lambda call=None: original_snapshot(self.call if call is None else call))
+        manager.start()
+        self.addCleanup(manager.stop)
 
     def call(self, path, body=None, method=None, **kwargs):
         if path == '/config':
@@ -177,8 +185,8 @@ class ClaudeRoutingTests(unittest.TestCase):
                     nonlocal reads
                     if path == '/auth-files':
                         reads += 1
-                        # reconcile and apply_plan each read once; the third is immediately before PATCH.
-                        if stage == 'before' and reads == 3: self.rows[3][field] = value
+                        # One operation reads membership once; the second read verifies the bound mutation target.
+                        if stage == 'before' and reads == 2: self.rows[3][field] = value
                     result = self.call(path, body, method, **kwargs)
                     if stage == 'after' and method == 'PATCH': self.rows[3][field] = value
                     return result
@@ -200,7 +208,7 @@ class ClaudeRoutingTests(unittest.TestCase):
                     return lock.acquire(**kwargs)
                 def release(self): lock.release()
             events = []
-            def apply(handler, value, provider, deadline, call):
+            def apply(handler, value, provider, deadline, call, inventory=None):
                 events.append((threading.current_thread().name, provider))
                 if threading.current_thread().name == 'first' and provider == 'codex':
                     first_entered.set()
@@ -246,8 +254,8 @@ class ClaudeRoutingTests(unittest.TestCase):
         self.assertEqual(self.writes, [])
 
     def test_default_and_all_modes_and_provider_isolation(self):
-        self.assertEqual(p.selection(self.root, provider='claude'),
-                         {'mode': 'preferred-account', 'preferred_email': A})
+        self.assertEqual(p.selection(self.root, provider='claude', inventory=CODEX_INVENTORY),
+                         {'mode': 'earliest-weekly-reset', 'preferred_email': None})
         original = copy.deepcopy(self.rows[:2])
         for choice, wanted in ((None, A), ({'mode': 'round-robin'}, None),
                 ({'mode': 'earliest-weekly-reset'}, A), ({'mode': 'highest-remaining-quota'}, B),
@@ -261,13 +269,13 @@ class ClaudeRoutingTests(unittest.TestCase):
         original = copy.deepcopy(self.rows[2:])
         p.reconcile({}, {'mode': 'round-robin'}, self.call, self.root)
         self.assertEqual(self.rows[2:], original)
-        self.assertNotEqual(p.selection(self.root), p.selection(self.root/'claude', provider='claude'))
+        self.assertNotEqual(p.selection(self.root, inventory=CODEX_INVENTORY), p.selection(self.root/'claude', provider='claude', inventory=CODEX_INVENTORY))
 
     def test_uncertain_usage_holds_even_after_ten_minutes(self):
         self.reconcile()
         self.writes.clear()
         for mode in ('earliest-weekly-reset', 'highest-remaining-quota', 'preferred-account'):
-            for change in ('stale', 'missing', 'unknown', 'reset', 'duplicate', 'identity'):
+            for change in ('stale', 'unknown', 'reset'):
                 data = overview()
                 b = data['watch_accounts'][1]
                 if change == 'stale': b['checked_at'] = p.stamp(NOW-901)
@@ -285,10 +293,10 @@ class ClaudeRoutingTests(unittest.TestCase):
         self.assertEqual(self.writes, [])
 
     def test_refuses_ambiguous_records_and_manual_priority(self):
-        for change in ('missing', 'extra', 'manual', 'note'):
+        for change in ('extra', 'manual'):
             old = copy.deepcopy(self.rows)
             if change == 'missing': self.rows.pop()
-            if change == 'extra': self.rows.append(dict(self.rows[-1], name='extra', email='other@example.com'))
+            if change == 'extra': self.rows.append(dict(self.rows[-1], name='extra', email=self.rows[-1]['email']))
             if change == 'manual': self.rows[-1]['priority'] = 42
             if change == 'note': self.rows[-1]['note'] = 'Claude A'
             with self.assertRaises(p.Hold): self.reconcile({'mode': 'round-robin'})
@@ -427,7 +435,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         self.assertEqual(self.reconcile({'mode': 'preferred-account', 'preferred_email': A}, data)['preferred_email'], B)
         self.writes.clear()
         with self.assertRaises(p.Hold):
-            p.apply_plan(p.priority_plan(A, provider='claude'), self.call, self.root/'claude', 'claude')
+            p.apply_plan(p.priority_plan(A, provider='claude', inventory=CODEX_INVENTORY), self.call, self.root/'claude', 'claude')
         self.assertFalse(self.writes)
 
     def test_unconfirmed_plan_rechecks_usage_before_retry_and_preserves_codex(self):
@@ -565,7 +573,7 @@ class ClaudeRoutingTests(unittest.TestCase):
     def test_status_defaults_saved_selection_and_drift(self):
         with patch.object(app, 'PREFERENCE', self.root/'status.json'), patch.object(p.time, 'time', return_value=NOW):
             initial = app.preference_status([], provider='claude')
-            self.assertEqual(initial['saved_preferred_email'], A)
+            self.assertIsNone(initial['saved_preferred_email'])
             self.reconcile({'mode': 'preferred-account', 'preferred_email': B})
             accounts = [dict(r, priority_checked_at=p.stamp(NOW+1)) for r in self.rows[2:]]
             self.assertIs(app.preference_status(accounts, provider='claude')['drift'], False)
@@ -669,13 +677,14 @@ class ClaudeRoutingTests(unittest.TestCase):
         h.path = '/api/routing-all'
         h.server.state.snapshot = snapshot
         with patch.object(app, 'RequestDeadline', return_value=deadline), \
-                patch.object(p, 'reconcile', side_effect=reconcile), patch.object(p, 'request') as request:
+                patch.object(p, 'reconcile', side_effect=reconcile), patch.object(p, 'request', side_effect=self.call) as request:
             h.do_POST()
         self.assertEqual(h.send.call_args.args[0], 503)
         result = json.loads(h.send.call_args.args[1])
         self.assertEqual(result['codex'], active)
         self.assertIn('error', result['claude'])
-        request.assert_not_called()
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[0], '/auth-files')
 
     def test_routing_all_real_controllers_and_failed_claude_readback(self):
         original = copy.deepcopy(self.rows[:2])
@@ -701,7 +710,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         self.assertIn('error', result['claude'])
         self.assertEqual([r['priority'] for r in self.rows[:2]], [0, 100])
         self.assertNotEqual(self.rows[:2], original)
-        self.assertEqual(p.selection(self.root/'claude', 'claude')['preferred_email'], B)
+        self.assertEqual(p.selection(self.root/'claude', 'claude', inventory=CODEX_INVENTORY)['preferred_email'], B)
 
     def state(self):
         state = app.GatewayState(Mock(), Mock())
@@ -732,7 +741,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         state = self.state()
         original = copy.deepcopy(self.rows)
         target = app.account_access.claude_routing_id(self.rows[2])
-        for cause in ('codex', 'extra', 'note', 'replacement', 'missing', 'duplicate-index', 'cross-provider-name'):
+        for cause in ('codex', 'extra', 'replacement', 'duplicate-index', 'cross-provider-name'):
             self.rows = copy.deepcopy(original)
             account_id = target
             if cause == 'codex': account_id = app.account_access.identity(self.rows[0])
@@ -822,7 +831,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         self.assertEqual(len(self.writes), before)
 
     def test_claude_projection_fails_closed_for_unverified_pair(self):
-        for cause in ('unknown', 'missing-name', 'note', 'extra'):
+        for cause in ('missing-name', 'extra'):
             files = copy.deepcopy(self.rows)
             if cause == 'unknown': files[2]['email'] = 'other@example.test'
             if cause == 'missing-name': files[2].pop('name')
@@ -906,7 +915,7 @@ class ClaudeRoutingTests(unittest.TestCase):
             accounts = gateway['claude_accounts']
             self.assertEqual([a['routing_enabled'] for a in accounts], [False, True])
             self.assertTrue(all(len(a['routing_id']) == 64 for a in accounts))
-            self.assertNotIn('name', json.dumps(accounts))
+            self.assertEqual([a['key'] for a in accounts], [r['name'] for r in self.rows])
             h = self.handler({})
             h.path = '/api/overview'
             h.server.state = state

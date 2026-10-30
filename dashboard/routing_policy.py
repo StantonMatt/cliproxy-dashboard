@@ -18,20 +18,44 @@ from urllib.request import Request, urlopen
 
 from account_access import runtime_matches
 from request_deadline import RequestDeadline
+import usage_adapters
 
-EMAILS = ('account-a@example.com',)
-CLAUDE_EMAILS = ('account-a@example.com', 'account-b@example.com')
 STATE = Path('/var/lib/personal-codex-router-routing')
 KEY = Path('/etc/cliproxyapi/dashboard-management-key')
 MODES = ('round-robin', 'earliest-weekly-reset', 'highest-remaining-quota', 'preferred-account')
 PROVIDERS = {
     'codex': {'modes': MODES, 'default': 'earliest-weekly-reset'},
-    'claude': {'emails': CLAUDE_EMAILS, 'modes': MODES, 'default': 'preferred-account'},
+    'claude': {'modes': MODES, 'default': 'earliest-weekly-reset'},
 }
 
 
-def identities(provider):
-    return EMAILS if provider == 'codex' else PROVIDERS[provider]['emails']
+def inventory_snapshot(call=None):
+    """Read inventory once; an absent/invalid response is never an empty roster."""
+    value = (call or request)('/auth-files')
+    if not isinstance(value, dict) or not isinstance(value.get('files'), list):
+        raise Hold('Gateway inventory is unavailable')
+    return copy.deepcopy(value['files'])
+
+
+def inventory_for(overview):
+    gateway = overview.get('gateway', {})
+    if 'inventory' in gateway:
+        return gateway['inventory']
+    # Public projections also carry filename keys; useful for read-only callers.
+    return [dict(a, type=provider, name=a.get('key', a.get('name')))
+            for provider, field in (('codex', 'accounts'), ('claude', 'claude_accounts'))
+            for a in gateway.get(field, [])]
+
+
+def identities(provider, inventory):
+    return tuple(a.get('email') for a in sorted(inventory, key=lambda a: a.get('name') or '')
+                 if a.get('type', a.get('provider')) == provider and a.get('email'))
+
+
+def membership(inventory, provider):
+    return [{k: a.get(k) for k in ('name', 'email', 'auth_index')}
+            for a in sorted(inventory, key=lambda a: a.get('name') or '')
+            if a.get('type') == provider]
 
 
 def state_path(provider='codex'):
@@ -90,8 +114,8 @@ def observations(gateway):
     Keep eligibility, allowance, and their original observation timestamps
     together. Never make cached quota appear fresh when constructing input.
     """
-    result = {k: copy.deepcopy(gateway[k]) for k in ('online', 'checked_at') if k in gateway}
-    fields = ('id', 'label', 'email', 'active', 'disabled', 'access_state', 'auth_state', 'priority',
+    result = {k: copy.deepcopy(gateway[k]) for k in ('online', 'checked_at', 'inventory') if k in gateway}
+    fields = ('key', 'provider', 'id', 'label', 'email', 'active', 'disabled', 'access_state', 'auth_state', 'priority',
               'quota_checked_at', 'quota_error', 'windows', 'availability')
     result['accounts'] = [{k: copy.deepcopy(account[k]) for k in fields if k in account}
                           for account in gateway.get('accounts', [])]
@@ -101,6 +125,8 @@ def observations(gateway):
 def ineligible_reason(account):
     availability = account.get('availability') or {}
     state = availability.get('state')
+    if state == 'no_data':
+        return 'no_data'
     if account.get('access_state') == 'disable_unconfirmed' or state == 'disable_unconfirmed':
         return 'disable_unconfirmed'
     if account.get('disabled') or state == 'disabled':
@@ -123,21 +149,17 @@ def claude_runtime_available(runtime):
 
 def claude_observations(overview, now):
     gateway = overview.get('gateway', {})
-    accounts = list(overview.get('watch_accounts', []))
-    expected = {'claude': identities('claude')[0], 'claude-b': identities('claude')[1]}
-    for account_id, email in expected.items():
-        runtime = [r for r in gateway.get('claude_accounts', []) if r.get('email') == email]
-        if (not any(a.get('id') == account_id for a in accounts) and len(runtime) == 1
-                and (runtime[0].get('disabled') is True or runtime[0].get('status') == 'disabled')):
-            accounts.append({'id': account_id, 'email': email})
-    if (len(accounts) != 2 or {a.get('id') for a in accounts} != set(expected)
-            or any(a.get('email') != expected.get(a.get('id')) for a in accounts)):
-        raise DataHold('Claude usage account pair is incomplete or ambiguous')
+    watched = overview.get('watch_accounts', [])
+    accounts = []
+    runtime_rows = gateway.get('claude_accounts', [])
+    for runtime in sorted(runtime_rows, key=lambda a: a.get('name', a.get('key', ''))):
+        email = runtime.get('email')
+        observed = usage_adapters.claude_observation(runtime, runtime_rows, watched, now)
+        accounts.append(dict(observed, email=email, _runtime=runtime))
     result = []
     for account in accounts:
         label = account['email']
-        runtime = next((r for r in gateway.get('claude_accounts', [])
-                        if r.get('email') == account['email']), {})
+        runtime = account['_runtime']
         disabled = runtime.get('disabled') is True or runtime.get('status') == 'disabled'
         unavailable = not claude_runtime_available(runtime)
         if disabled:
@@ -147,6 +169,9 @@ def claude_observations(overview, now):
         if unavailable:
             result.append(dict(email=account['email'], active=False,
                                availability={'state': 'provider_unavailable'}))
+            continue
+        if not account.get('id'):
+            result.append(dict(email=account['email'], active=False, availability={'state': 'no_data'}))
             continue
         if account.get('status') != 'ok' or account.get('error'):
             raise DataHold(f'quota unavailable for {label}')
@@ -183,10 +208,11 @@ def claude_observations(overview, now):
     return {'gateway': {**gateway, 'accounts': result}}
 
 
-def eligible_accounts(overview, now, provider='codex'):
+def eligible_accounts(overview, now, provider='codex', inventory=None):
+    inventory = inventory_for(overview) if inventory is None else inventory
     if provider == 'claude':
         overview = claude_observations(overview, now)
-    emails = identities(provider)
+    emails = identities(provider, inventory)
     gateway = overview.get('gateway', {})
     if not gateway.get('online'):
         raise Hold('Gateway observations are unavailable')
@@ -198,6 +224,12 @@ def eligible_accounts(overview, now, provider='codex'):
     candidates, excluded = {}, {}
     for account in accounts:
         email, label = account['email'], account_label(account)
+        row = next((r for r in inventory if r.get('type') == provider and r.get('email') == email), {})
+        if account.get('key') and account['key'] != row.get('name'):
+            raise DataHold('Account observations no longer match gateway membership')
+        if provider == 'codex' and account.get('id') != row.get('auth_index'):
+            excluded[email] = 'no_data'
+            continue
         reason = ineligible_reason(account)
         # Disabled/revoked credentials cannot serve regardless of quota. Other
         # active accounts still need valid observations before changing priority.
@@ -247,18 +279,19 @@ def eligible_accounts(overview, now, provider='codex'):
     return candidates, excluded
 
 
-def priority_plan(email, reset=None, reason=None, provider='codex'):
-    emails = identities(provider)
+def priority_plan(email, reset=None, reason=None, provider='codex', inventory=None):
+    emails = identities(provider, inventory)
     return {'preferred_email': email, 'weekly_resets_at': reset, 'reason': reason,
             'priorities': {e: 100 if e == email else 0 for e in emails}}
 
 
-def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='codex'):
+def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='codex', inventory=None):
+    inventory = inventory_for(overview) if inventory is None else inventory
     if mode not in ('earliest-weekly-reset', 'highest-remaining-quota'):
         raise ValueError('Choose an automatic routing mode')
-    if provider == 'codex' and len(identities(provider)) == 1:
-        return priority_plan(None, reason='Only one Codex account is configured', provider=provider)
-    candidates, _ = eligible_accounts(overview, now, provider)
+    if len(identities(provider, inventory)) <= 1:
+        return priority_plan(None, reason='Fewer than two accounts are configured', provider=provider, inventory=inventory)
+    candidates, _ = eligible_accounts(overview, now, provider, inventory)
     if not candidates:
         raise Hold('No account currently reports available allowance')
     # Never compare a weekly percentage with a longer window's percentage.
@@ -272,11 +305,16 @@ def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='
         if (quota and lead < 5) or (not quota and lead <= 900):
             winner = current
             reason = 'Keeping the current account within the stability margin'
-    elif current not in candidates and sum(
-            rank(e) == rank(winner) if quota else rank(e) - rank(winner) <= 900
-            for e in candidates) > 1:
-        return priority_plan(None, None if quota else candidates[winner]['reset'], provider=provider)
-    return priority_plan(winner, candidates[winner]['reset'], reason, provider)
+    elif current not in candidates:
+        leaders = {e for e in candidates if (
+            rank(e) == rank(winner) if quota else rank(e) - rank(winner) <= 900)}
+        if len(leaders) > 1:
+            plan = priority_plan(None, None if quota else candidates[winner]['reset'], provider=provider, inventory=inventory)
+            # Preserve neutral priorities when everyone ties; otherwise demote non-leaders.
+            if len(leaders) < len(plan['priorities']):
+                plan['priorities'].update({e: 100 for e in leaders})
+            return plan
+    return priority_plan(winner, candidates[winner]['reset'], reason, provider, inventory)
 
 
 def request(path, body=None, method=None, base='http://127.0.0.1:8317', timeout=15):
@@ -289,23 +327,15 @@ def request(path, body=None, method=None, base='http://127.0.0.1:8317', timeout=
         return json.load(response)
 
 
-def records(call, provider='codex'):
-    emails = identities(provider)
-    files = call('/auth-files').get('files', [])
-    # Codex policy owns only configured identities, including disabled ones.
-    # Retired credentials are ignored; duplicates of a configured email hold.
-    rows = [a for a in files if a.get('type') == provider
-            and (provider == 'claude' or a.get('email') in emails)]
-    if len(rows) != len(emails) or {a.get('email') for a in rows} != set(emails):
+def records(call=None, provider='codex', inventory=None):
+    inventory = inventory_snapshot(call) if inventory is None else inventory
+    rows = sorted((a for a in inventory if a.get('type') == provider), key=lambda a: a.get('name') or '')
+    emails = [a.get('email') for a in rows]
+    if any(not isinstance(e, str) or not e for e in emails) or len({e.casefold() for e in emails if isinstance(e, str)}) != len(emails):
         raise Hold('Gateway accounts are incomplete or ambiguous')
     if any(not isinstance(a.get('name'), str) or not a['name']
-           or sum(f.get('name') == a['name'] for f in files) != 1 for a in rows):
+           or sum(f.get('name') == a['name'] for f in inventory) != 1 for a in rows):
         raise Hold('Gateway account filenames are incomplete or ambiguous')
-    if provider == 'claude':
-        for i, email in enumerate(emails):
-            row = next(a for a in rows if a['email'] == email)
-            if row.get('note') in ('Claude A', 'Claude B') and row['note'] != 'Claude ' + chr(65+i):
-                raise Hold('Claude account identity conflicts with its label')
     return {a['email']: a for a in rows}
 
 
@@ -339,9 +369,10 @@ def set_routing_linked(linked, deadline=None):
     return {'linked': linked}
 
 
-def apply_plan(plan, call, state_dir, provider='codex'):
-    emails = identities(provider)
-    rows = records(call, provider)
+def apply_plan(plan, call, state_dir, provider='codex', inventory=None):
+    inventory = inventory_snapshot(call) if inventory is None else inventory
+    emails = identities(provider, inventory)
+    rows = records(provider=provider, inventory=inventory)
     if provider == 'claude' and any(plan['priorities'][email] > 0 and
                                   (row.get('disabled') is True or row.get('status') == 'disabled')
                                   for email, row in rows.items()):
@@ -366,6 +397,8 @@ def apply_plan(plan, call, state_dir, provider='codex'):
 
     def verified_rows():
         actual = records(call, provider)
+        if set(actual) != set(rows):
+            raise Hold('Gateway membership changed; priorities left on hold')
         if any(any(actual[email].get(k) != rows[email].get(k)
                    for k in ('type', 'email', 'name', 'auth_index')) for email in emails):
             raise Hold('Gateway account identity changed; priorities left on hold')
@@ -399,74 +432,84 @@ def rollback(call, state_dir):
         baseline_path = state_dir / 'baseline.json'
         recorded = baseline_path.exists()
         baseline = json.loads(baseline_path.read_text()) if recorded else None
-        rows = records(call)
+        inventory = inventory_snapshot(call)
+        emails = identities('codex', inventory)
+        rows = records(inventory=inventory)
         if any(rows[e].get('priority') not in (None, 0, 100) or
-               (recorded and e in baseline and rows[e]['name'] != baseline[e]['name']) for e in EMAILS):
+               (recorded and e in baseline and rows[e]['name'] != baseline[e]['name']) for e in emails):
             raise Hold('Account files or priorities changed; rollback left them untouched')
         if recorded:
             baseline = {**{e: {'name': rows[e]['name'], 'priority': rows[e].get('priority')}
-                           for e in EMAILS if e not in baseline}, **baseline}
+                           for e in emails if e not in baseline}, **baseline}
         if not recorded:
             if call('/config').get('routing', {}).get('strategy') != 'round-robin':
                 raise Hold('Gateway strategy changed; inspect before applying priorities')
-            baseline = {e: {'name': rows[e]['name'], 'priority': 0} for e in EMAILS}
-            write_json(state_dir / 'selection.json', validate_selection({'mode': 'round-robin'}))
+            baseline = {e: {'name': rows[e]['name'], 'priority': 0} for e in emails}
+            write_json(state_dir / 'selection.json', validate_selection({'mode': 'round-robin'}, inventory=inventory))
         write_json(state_dir / 'suspension.json', {'suspended': True})
-        for email in EMAILS:
+        for email in emails:
             call('/auth-files/fields', baseline[email], 'PATCH')
         actual = records(call)
-        if any(not runtime_matches(actual[email], {'priority': baseline[email]['priority']}) for email in EMAILS):
+        if set(actual) != set(rows):
+            raise Hold('Gateway membership changed during rollback')
+        if any(not runtime_matches(actual[email], {'priority': baseline[email]['priority']}) for email in emails):
             raise Hold('Gateway has not confirmed restored priorities')
         write_json(state_dir / 'status.json', {
             'policy': 'baseline' if recorded else 'round-robin',
             'status': 'disabled', 'checked_at': stamp(time.time()),
             'selected_email': None, 'preferred_email': None, 'weekly_resets_at': None,
-            'suspended': True, 'intended_priorities': {e: baseline[e]['priority'] for e in EMAILS},
+            'suspended': True, 'intended_priorities': {e: baseline[e]['priority'] for e in emails},
             'hold_reason': None, 'held_since': None, 'pending_plan': False,
         })
         return {'status': 'restored', 'policy': 'baseline' if recorded else 'round-robin'}
 
 
-def validate_selection(value, provider='codex'):
+def validate_selection(value, provider='codex', inventory=None):
     if not isinstance(value, dict) or value.get('mode') not in PROVIDERS[provider]['modes']:
         raise ValueError('Choose a supported routing mode')
     mode, email = value['mode'], value.get('preferred_email')
-    if mode == 'preferred-account' and email not in identities(provider):
+    if mode == 'preferred-account' and 'preferred_key' in value:
+        matches = [a for a in (inventory or []) if a.get('type') == provider and a.get('name') == value['preferred_key']]
+        if not isinstance(value['preferred_key'], str) or len(matches) != 1:
+            raise ValueError('Choose a connected account')
+        email = matches[0].get('email')
+    if mode == 'preferred-account' and email not in identities(provider, inventory):
         raise ValueError('Choose a connected account')
     return {'mode': mode, 'preferred_email': email if mode == 'preferred-account' else None}
 
 
-def selection(state_dir=None, provider='codex'):
+def selection(state_dir=None, provider='codex', inventory=None):
     state_dir = state_path(provider) if state_dir is None else state_dir
     path = state_dir / 'selection.json'
+    default = {'mode': PROVIDERS[provider]['default'], 'preferred_email': None}
     if not path.exists():
-        return {'mode': PROVIDERS[provider]['default'],
-                'preferred_email': identities(provider)[0] if provider == 'claude' else None}
+        return default
     value = json.loads(path.read_text())
-    if (provider == 'codex' and len(identities(provider)) == 1 and isinstance(value, dict)
-            and value.get('mode') == 'preferred-account'
-            and value.get('preferred_email') not in identities(provider)):
-        # A retired saved preference follows the sole remaining account. New
-        # API selections still go through strict validation.
-        value = {**value, 'preferred_email': identities(provider)[0]}
-    return validate_selection(value, provider)
+    if (inventory is None and isinstance(value, dict) and value.get('mode') == 'preferred-account'
+            and isinstance(value.get('preferred_email'), str) and value['preferred_email']):
+        return {'mode': value['mode'], 'preferred_email': value['preferred_email']}
+    if (isinstance(value, dict) and value.get('mode') == 'preferred-account'
+            and value.get('preferred_email') not in identities(provider, inventory)):
+        return default
+    return validate_selection(value, provider, inventory)
 
 
-def selected_plan(selected, overview, now, current=None, provider='codex'):
-    selected = validate_selection(selected, provider)
-    if provider == 'codex' and len(identities(provider)) == 1:
-        return priority_plan(None, reason='Only one Codex account is configured', provider=provider)
+def selected_plan(selected, overview, now, current=None, provider='codex', inventory=None):
+    inventory = inventory_for(overview) if inventory is None else inventory
+    selected = validate_selection(selected, provider, inventory)
+    if len(identities(provider, inventory)) <= 1:
+        return priority_plan(None, reason='Fewer than two accounts are configured', provider=provider, inventory=inventory)
     if selected['mode'] in ('earliest-weekly-reset', 'highest-remaining-quota'):
-        return choose(overview, now, selected['mode'], current, provider)
+        return choose(overview, now, selected['mode'], current, provider, inventory)
     if selected['mode'] == 'round-robin':
-        return priority_plan(None, provider=provider)
-    candidates, excluded = eligible_accounts(overview, now, provider)
+        return priority_plan(None, provider=provider, inventory=inventory)
+    candidates, excluded = eligible_accounts(overview, now, provider, inventory)
     email = selected['preferred_email']
     if email in candidates:
-        return priority_plan(email, provider=provider)
-    other = next((e for e in identities(provider) if e in candidates), None)
+        return priority_plan(email, provider=provider, inventory=inventory)
+    other = next((e for e in identities(provider, inventory) if e in candidates), None)
     reason = f"Preferred account {email}: {excluded.get(email, 'unavailable')}"
-    return priority_plan(other, reason=reason, provider=provider)
+    return priority_plan(other, reason=reason, provider=provider, inventory=inventory)
 
 
 def read_status(state_dir):
@@ -485,9 +528,8 @@ def public_status(status):
         'checked_at', 'intended_priorities', 'hold_reason', 'held_since', 'reason', 'suspended')}
 
 
-def reconcile(overview, selected=None, call=request, state_dir=None, provider='codex'):
+def reconcile(overview, selected=None, call=request, state_dir=None, provider='codex', inventory=None):
     state_dir = state_path(provider) if state_dir is None else state_dir
-    emails = identities(provider)
     state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     with (state_dir / 'controller.lock').open('a') as lock:
         try:
@@ -496,16 +538,24 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
             raise Hold('Routing update already in progress; try again') from None
         now = time.time()
         previous = read_status(state_dir)
-        wanted = validate_selection(selected, provider) if selected is not None else selection(state_dir, provider)
         if selected is None and suspended(state_dir):
             previous.update(status='disabled', checked_at=stamp(now), suspended=True,
                             hold_reason=None, held_since=None, pending_plan=False)
             write_json(state_dir / 'status.json', previous)
             return public_status(previous)
+        inventory = inventory_snapshot(call) if inventory is None else inventory
+        emails = identities(provider, inventory)
+        wanted = validate_selection(selected, provider, inventory) if selected is not None else selection(state_dir, provider, inventory)
+        if not any(a.get('type') == provider for a in inventory):
+            status = dict(policy=wanted['mode'], status='idle', checked_at=stamp(now),
+                          selected_email=None, preferred_email=None, intended_priorities={},
+                          pending_plan=False, membership=membership(inventory, provider))
+            write_json(state_dir / 'status.json', status)
+            return public_status(status)
         config = call('/config')
         if config.get('routing', {}).get('strategy') != 'round-robin':
             raise Hold('Gateway strategy changed; inspect before applying priorities')
-        rows = records(call, provider)
+        rows = records(provider=provider, inventory=inventory)
         if provider == 'claude' and any(row.get('priority') not in (None, 0, 100) for row in rows.values()):
             raise Hold('Unexpected manual priority; policy did not overwrite it')
         if selected is not None:
@@ -513,6 +563,10 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
             write_json(state_dir / 'suspension.json', {'suspended': False})
         status = dict(previous, policy=wanted['mode'], selected_email=wanted['preferred_email'],
                       checked_at=stamp(now), suspended=False)
+        if previous.get('membership') != membership(inventory, provider):
+            previous['pending_plan'] = False
+            status['pending_plan'] = False
+        status['membership'] = membership(inventory, provider)
         if selected is not None:
             status['pending_plan'] = False
             if (wanted['mode'] != previous.get('policy')
@@ -524,7 +578,7 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
                           plan_status=target, status='applying')
             write_json(state_dir / 'status.json', status)
             try:
-                changed = apply_plan(plan, call, state_dir, provider)
+                changed = apply_plan(plan, call, state_dir, provider, inventory)
             except Exception:
                 status.update(status='held', hold_reason='Routing update incomplete; automatic retry pending',
                               held_since=status.get('held_since') or stamp(now))
@@ -540,21 +594,25 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
             plan = {k: previous.get(k) for k in ('preferred_email', 'weekly_resets_at', 'reason')}
             plan['priorities'] = previous['intended_priorities']
             apply(plan, previous.get('plan_status', 'active'))
-            rows = records(call, provider)
+            rows = {e: dict(row, priority=plan['priorities'][e]) for e, row in rows.items()}
         if provider == 'claude':
-            overview = {**overview, 'gateway': {**overview.get('gateway', {}),
-                                              'claude_accounts': list(rows.values())}}
+            gateway = overview.get('gateway', {})
+            # Fresh inventory owns runtime identity and state; cached usage must
+            # be rebound before gateway/watch precedence selects an observation.
+            claude_accounts = usage_adapters.bind_claude_usage(
+                [dict(row) for row in rows.values()], gateway.get('usage_accounts', []))
+            overview = {**overview, 'gateway': {**gateway, 'claude_accounts': claude_accounts}}
         winners = [e for e in emails if rows[e].get('priority') == 100]
         current = winners[0] if len(winners) == 1 else None
         try:
-            plan = selected_plan(wanted, overview, now, current, provider)
+            plan = selected_plan(wanted, overview, now, current, provider, inventory)
         except Hold as error:
             held_since = status.get('held_since') or stamp(now)
             status.update(status='held', hold_reason=str(error), held_since=held_since,
                           reason=str(error))
             status.setdefault('intended_priorities', {e: rows[e].get('priority') or 0 for e in emails})
             if provider == 'codex' and isinstance(error, DataHold) and now - dt.datetime.fromisoformat(held_since).timestamp() >= 600:
-                plan = priority_plan(None, reason='Quota data held for 10 minutes; using neutral priorities')
+                plan = priority_plan(None, reason='Quota data held for 10 minutes; using neutral priorities', inventory=inventory)
                 apply(plan, 'fallback')
             write_json(state_dir / 'status.json', status)
             return public_status(status)
@@ -572,6 +630,7 @@ def reconcile_providers():
             overview = json.load(response)
     except Exception:
         pass  # Each policy reports a hold and retains its saved selection.
+    inventory = inventory_snapshot()
     results, failed = {}, False
     for provider in PROVIDERS:
         if provider == 'claude' and not (state_path(provider) / 'selection.json').exists():
@@ -580,7 +639,7 @@ def reconcile_providers():
         try:
             observed = observations(overview.get('gateway', {})) if provider == 'codex' else overview
             deadline = RequestDeadline()
-            results[provider] = reconcile(observed, call=deadline.wrap(request, maximum=15), provider=provider)
+            results[provider] = reconcile(observed, call=deadline.wrap(request, maximum=15), provider=provider, inventory=inventory)
         except Exception:
             results[provider] = {'status': 'held', 'reason': 'Routing check could not be completed'}
             failed = True
@@ -604,9 +663,14 @@ def main():
         if args.rollback:
             result = rollback(request, STATE)
         else:
-            wanted = selection()
+            if args.apply and suspended(STATE):
+                print(json.dumps(reconcile({})))
+                return 0
+            inventory = inventory_snapshot()
+            emails = identities('codex', inventory)
+            wanted = selection(inventory=inventory)
             overview = {}
-            if wanted['mode'] != 'round-robin' and len(EMAILS) > 1 and not suspended(STATE):
+            if wanted['mode'] != 'round-robin' and len(emails) > 1 and not suspended(STATE):
                 req = Request('http://127.0.0.1:8320/api/overview', headers={'X-Router-Request': '1'})
                 try:
                     with urlopen(req, timeout=15) as response:
@@ -614,7 +678,7 @@ def main():
                 except Exception:
                     if not args.apply:
                         raise
-            result = reconcile(overview) if args.apply else selected_plan(wanted, overview, time.time())
+            result = reconcile(overview, inventory=inventory) if args.apply else selected_plan(wanted, overview, time.time(), inventory=inventory)
         print(json.dumps(result))
         return 0
     except Exception:

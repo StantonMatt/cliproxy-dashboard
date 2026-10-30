@@ -20,7 +20,7 @@ const windows = [
 const a = {id: 'claude', label: 'Claude A', email: 'a@example.com', plan: 'Max (20x)', status: 'ok',
   checked_at: new FakeDate(clock).toISOString(), windows, extra_usage: {enabled: false},
   resets: {eligible: true, service: 'ok', grants: [{id: 'grant', resets_left: 1}]}};
-const b = {...a, id: 'claude-b', label: 'Claude B', plan: 'Pro', email: null, resets: null, extra_usage: null};
+const b = {...a, id: 'claude-b', independent_windows:true, label: 'Claude B', plan: 'Pro', email: null, resets: null, extra_usage: null};
 const render = accounts => {
   context.renderWatch({gateway: {accounts: [{}, {}]}, watch_accounts: accounts});
   return elements.get('watch-grid').innerHTML;
@@ -30,8 +30,8 @@ const combined = render([a, b]);
 assert.equal(combined.slice(0, combined.indexOf('</article>') + 10), before);
 assert.equal(elements.get('claude-account-count').textContent, '2 / 2');
 assert.equal((combined.match(/class="account-card claude-card"/g) || []).length, 2);
-const emailHtml = render([{...b, email: 'account-b@example.com'}]);
-assert.match(emailHtml, /<span title="account-b@example.com">account-b@example.com<\/span>/);
+const emailHtml = render([{...b, email: 'alternate@example.test'}]);
+assert.match(emailHtml, /<span title="alternate@example.test">alternate@example.test<\/span>/);
 // No "Claude A/B" subtitle: the email and plan badge identify the card.
 assert.doesNotMatch(emailHtml + before, /class="account-email"|Claude [AB]</);
 const bHtml = render([b]);
@@ -42,7 +42,7 @@ render([b]);
 assert.equal(elements.get('watch-section').hidden, false);
 assert.equal(elements.get('claude-account-count').textContent, '1 / 1');
 for (const status of ['missing_token', 'error', 'unavailable']) {
-  const errorHtml = render([{...b, email: 'account-b@example.com', status,
+  const errorHtml = render([{...b, email: 'alternate@example.test', status,
     checked_at: new FakeDate(clock - 3600000).toISOString(), attempted_at: b.checked_at, error: status}]);
   assert.match(errorHtml, status === 'missing_token' ? /Sign-in token missing/ : /Unavailable/);
   assert.match(errorHtml, /watch-state-down/);
@@ -99,6 +99,24 @@ assert.match(render([expiresOnPage]), /pace-bar/);
 clock += 1000;
 assert.doesNotMatch(render([expiresOnPage]), /pace-bar|aria-valuenow/);
 assert.match(render([expiresOnPage]), /Waiting for usage data/);
+// Gateway windows expire between polls even though their watch-specific flag is false.
+{
+  const gateway = {...b, independent_windows: false, usage_source: 'gateway',
+    checked_at: new FakeDate(clock).toISOString(), windows: windows.map(w => ({...w,
+      usage_source: 'gateway', measured_at: new FakeDate(clock).toISOString(), resets_at: clock / 1000 + 1}))};
+  const original = JSON.stringify(gateway);
+  assert.match(render([gateway]), /84<span class="percent">%<\/span>/);
+  assert.match(render([gateway]), /5-hour limit<\/span><span>96% remaining/);
+  clock += 1000;
+  for (const offset of [0, 1000]) {
+    clock += offset;
+    const expired = render([gateway]);
+    assert.match(expired, /Waiting for usage data/);
+    assert.match(expired, /5-hour limit<\/span><span>—<\/span>/);
+    assert.doesNotMatch(expired, /pace-bar|aria-valuenow|84<span class="percent">/);
+  }
+  assert.equal(JSON.stringify(gateway), original);
+}
 clock += 901000;
 const stale = render([b]);
 assert.match(stale, /last known/);

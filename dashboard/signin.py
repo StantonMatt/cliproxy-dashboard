@@ -34,7 +34,7 @@ REDIRECT = 'https://auth.openai.com/deviceauth/callback'
 AUTH = 'https://api.openai.com/auth'
 # Gateway builds whose Codex persistence was validated with
 # tests/gateway_replace_integration.py. Extend only after re-running it.
-TESTED_GATEWAYS = ('8.0.30', '8.0.43')
+TESTED_GATEWAYS = ('8.0.30', '8.0.43', '8.0.47')
 # The gateway's own /api-call timeout (defaultAPICallTimeout, api_tools.go:24), plus margin.
 ECHO_LINGER_SECONDS = 65
 # Completion's sync, verify and enable after the save; expiry ends as saved_unconfirmed.

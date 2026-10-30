@@ -76,13 +76,12 @@ test('Overview renders health without reading notification items or creating not
   assert.doesNotMatch(source,/claudeNotices|router-dismissed-notices|data-notice-|data-dismiss-|api\/notifications\/dismiss/);
   assert.doesNotMatch(css,/account-notice|notice-actions|notification-warning|codex-notice|claude-notice/);
 });
-test('F4: third-account grid fallback',()=>{
+test('F4: a third account wraps inside its section instead of needing a grid fallback',()=>{
   const h=harness();h.context.fixture.watch_accounts.push({...h.context.fixture.watch_accounts[0],id:'third',email:C});
-  h.context.renderWatch(h.context.fixture);assert.equal(h.get('watch-grid').classList.contains('many-accounts'),true);
-  h.context.fixture.gateway.accounts.push({id:'third',email:C,windows:[]});h.context.renderAccounts(h.context.fixture.gateway);
-  assert.equal(h.get('account-grid').classList.contains('many-accounts'),true);
-  h.context.fixture.watch_accounts.pop();h.context.renderWatch(h.context.fixture);assert.equal(h.get('watch-grid').classList.contains('many-accounts'),false);
-  assert.match(css,/\.gateway>[^}]*many-accounts[^}]*grid-template-rows:auto/);
+  h.context.renderWatch(h.context.fixture);assert.equal((h.get('watch-grid').innerHTML.match(/class="account-card claude-card/g) || []).length,3);
+  assert.match(css,/\.gateway\{--n:1;flex:var\(--n\) 1 min\(100%,calc\(var\(--n\)\*var\(--card-min\) \+ \(var\(--n\) - 1\)\*var\(--card-gap\)\)\)/);
+  assert.match(css,/\.gateway>\.account-grid,\.gateway>\.watch-grid\{display:flex;flex-wrap:wrap/);
+  assert.doesNotMatch(css+source,/many-accounts|grid-template-rows:subgrid/);
 });
 test('F7/S6: readiness requires online gateway and fresh positive core windows',async()=>{
   const h=harness(),c=h.context,a=c.fixture.watch_accounts[0];assert.equal(c.claudeRoutable(a),true);
@@ -112,13 +111,17 @@ test('S3: confirmation cannot transfer to a replacement routing identity',async(
   await c.saveClaudeAccountRouting('claude',false,true);assert.equal(calls,0);
   c.renderWatch(c.fixture);assert.doesNotMatch(h.get('watch-grid').innerHTML,/data-claude-route-off/);
 });
-test('S7: row email identifies Claude first and unknown history has its own series and legend',()=>{
-  const h=harness(),c=h.context;assert.equal(c.series('claude','ca',B),'claude-two');
-  c.fixture.watch_accounts.pop();assert.equal(c.series('claude','cb',B),'claude-two');assert.equal(c.series('claude','missing'),'claude-unknown');assert.equal(c.series('claude','ca',C),'claude-unknown');
-  c.fixture.gateway.claude_accounts=[{auth_index:'cb',email:B}];assert.equal(c.series('claude','cb'),'claude-two');
-  const legend={};h.document.querySelectorAll=()=>[legend];c.renderLegend();assert.doesNotMatch(legend.innerHTML,/Unknown account/);
-  c.fixture.usage={claude:{accounts:[{auth_index:'missing',requests:7}]}};c.renderLegend();assert.match(legend.innerHTML,/claude-unknown[^]*Unknown account/);
-  assert.equal(c.seriesNames()['claude-unknown'],'Unknown account');assert.match(css,/\.claude-unknown\{background:var\(--faint\)\}/);
-  c.renderChart('usage-chart',{hours:[],claude:{hours:[{hour:new Date().toISOString(),auth_index:'missing',requests:7}]}},'today');assert.match(h.get('usage-chart').innerHTML,/Unknown account 7/);assert.doesNotMatch(h.get('usage-chart').innerHTML,/NaN/);
+test('S7: filename series preserve removed history separately',()=>{
+  const h=harness(),c=h.context;
+  assert.equal(c.series('claude','ca',B),'claude:claude-b');
+  c.fixture.watch_accounts.pop();
+  assert.equal(c.series('claude','cb',B),'claude:removed:cb');
+  assert.equal(c.series('claude','missing'),'claude:removed:missing');
+  const legend={};h.document.querySelectorAll=()=>[legend];c.renderLegend();
+  assert.doesNotMatch(legend.innerHTML,/Removed account/);
+  c.fixture.usage={claude:{accounts:[{auth_index:'missing',requests:7}],hours:[{hour:new Date().toISOString(),auth_index:'missing',requests:7}]}};
+  c.renderLegend();assert.match(legend.innerHTML,/claude:removed:missing[^]*Removed account/);
+  assert.equal(c.seriesNames()['claude:removed:missing'],'Removed account');
+  c.renderChart('usage-chart',c.fixture.usage,'today');assert.match(h.get('usage-chart').innerHTML,/Removed account 7/);assert.doesNotMatch(h.get('usage-chart').innerHTML,/NaN/);
 });
 (async()=>{let failed=0;for(const [name,fn] of tests){try{await fn();console.log('PASS '+name);}catch(error){failed++;console.error('FAIL '+name+'\n'+error.stack);}}if(failed)process.exitCode=1;})();

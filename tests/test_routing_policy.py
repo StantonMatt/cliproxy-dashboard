@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 import copy
 import contextlib
 import datetime as dt
@@ -76,10 +77,10 @@ class RoutingTests(unittest.TestCase):
         self.assertTrue(self.rows[1]['unavailable'])
         with patch.object(policy.time,'time',return_value=1700000000):
             policy.reconcile(self.quota_overview(),call=self.api,state_dir=self.root)
-        self.assertEqual(policy.selection(self.root)['preferred_email'],B)
+        self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY)['preferred_email'],B)
     def test_invalid_choice_never_writes(self):
         for choice in ({'mode':'bad'},{'mode':'preferred-account','preferred_email':'unknown'},[],None):
-            with self.assertRaises(ValueError):policy.validate_selection(choice)
+            with self.assertRaises(ValueError):policy.validate_selection(choice, inventory=CODEX_INVENTORY)
         self.assertEqual(self.writes,[])
     def test_partial_failure_persists_intent_then_next_tick_finishes(self):
         def fail(path,body=None,method=None):
@@ -111,7 +112,7 @@ class RoutingTests(unittest.TestCase):
                 patch.object(sys,'argv',['routing-policy','--rollback']),contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(policy.main(),0)
         self.assertEqual([r['priority'] for r in self.rows],[0,0])
-        self.assertEqual(policy.selection(self.root)['mode'],'round-robin')
+        self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY)['mode'],'round-robin')
         self.assertEqual(json.loads(output.getvalue()),{'status':'restored','policy':'round-robin'})
         self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'disabled')
         self.assertFalse((self.root/'baseline.json').exists())
@@ -168,8 +169,9 @@ class RoutingTests(unittest.TestCase):
 
     def quota_overview(self, a=92, b=86):
         now=1700000000
-        return {'gateway':{'online':True,'checked_at':policy.stamp(now),'accounts':[
-            {'email':e,'active':True,'quota_checked_at':policy.stamp(now),
+        return {'gateway':{'online':True,'checked_at':policy.stamp(now),
+            'inventory':[dict(type='codex',name=e,email=e,auth_index=e) for e in (A,B)],'accounts':[
+            {'id':e,'email':e,'active':True,'quota_checked_at':policy.stamp(now),
              'windows':[{'seconds':604800,'remaining':remaining,'resets_at':now+reset}]}
             for e,remaining,reset in ((A,a,20000),(B,b,10000))]}}
 
@@ -209,7 +211,7 @@ class RoutingTests(unittest.TestCase):
             self.assertEqual(result['status'],'held')
             self.assertTrue(result['hold_reason'])
             self.assertEqual(result['held_since'],policy.stamp(1700000000))
-            self.assertEqual(policy.selection(self.root)['mode'],'highest-remaining-quota')
+            self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY)['mode'],'highest-remaining-quota')
             status=json.loads((self.root/'status.json').read_text())
             self.assertEqual(status['hold_reason'],result['hold_reason'])
 
@@ -341,7 +343,7 @@ class RoutingTests(unittest.TestCase):
     def test_saved_quota_mode_rebalances_then_can_return_to_round_robin(self):
         with patch.object(policy.time,'time',return_value=1700000000):
             policy.reconcile(self.quota_overview(),{'mode':'highest-remaining-quota'},self.api,self.root)
-            self.assertEqual(policy.selection(self.root)['mode'],'highest-remaining-quota')
+            self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY)['mode'],'highest-remaining-quota')
             self.assertEqual([r['priority'] for r in self.rows],[100,0])
             policy.reconcile(self.quota_overview(80,86),call=self.api,state_dir=self.root)
             self.assertEqual([r['priority'] for r in self.rows],[0,100])
@@ -351,7 +353,7 @@ class RoutingTests(unittest.TestCase):
             policy.reconcile(self.quota_overview(80,80),call=self.api,state_dir=self.root)
             self.assertEqual([r['priority'] for r in self.rows],[0,100])
             policy.reconcile({}, {'mode':'round-robin'},self.api,self.root)
-            self.assertEqual(policy.selection(self.root)['mode'],'round-robin')
+            self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY)['mode'],'round-robin')
             self.assertTrue(self.rows[1]['unavailable'])
 
     def current_overview(self, now, a=92, b=86):
@@ -376,7 +378,7 @@ class RoutingTests(unittest.TestCase):
         with patch.object(policy.time,'time',return_value=now):
             result=policy.reconcile(overview,{'mode':'preferred-account','preferred_email':B},self.api,self.root)
         self.assertEqual(result['status'],'held')
-        self.assertEqual(result['hold_reason'],'stale quota data for account-a@example.com')
+        self.assertEqual(result['hold_reason'],'stale quota data for owner@example.test')
         self.assertEqual(self.writes,[])
         self.assertEqual(overview['gateway']['accounts'][1]['windows'][0]['remaining'],0)
         self.assertEqual(overview['gateway']['accounts'][1]['availability']['state'],'quota_exhausted')
@@ -394,10 +396,10 @@ class RoutingTests(unittest.TestCase):
                 account=data['gateway']['accounts'][1 if failure=='stale' else 0]
                 if failure=='stale':
                     account['quota_checked_at']=policy.stamp(now-181)
-                    reason='stale quota data for account-b@example.com'
+                    reason='stale quota data for alternate@example.test'
                 else:
                     account.update(quota_error='PRIVATE_ERROR',auth_state='unknown')
-                    reason='quota error for account-a@example.com: quota_unavailable'
+                    reason='quota error for owner@example.test: quota_unavailable'
                 with patch.object(policy.time,'time',return_value=now):
                     result=policy.reconcile(data,call=self.api,state_dir=self.root)
                 self.assertEqual(result['status'],'held' if elapsed<600 else 'fallback')
@@ -448,7 +450,7 @@ class RoutingTests(unittest.TestCase):
             self.assertEqual(result['selected_email'],A)
             self.assertIn('no remaining allowance',result['reason'])
             self.assertEqual(result['intended_priorities'],{A:0,B:100})
-            self.assertEqual(policy.selection(self.root),selected)
+            self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY),selected)
             result=policy.reconcile(self.quota_overview(1,86),call=self.api,state_dir=self.root)
         self.assertEqual(result['preferred_email'],A)
         self.assertIsNone(result['reason'])
@@ -466,7 +468,7 @@ class RoutingTests(unittest.TestCase):
             self.assertEqual(result['selected_email'],B)
             result=policy.reconcile(self.quota_overview(),call=self.api,state_dir=self.root)
             self.assertEqual(result['preferred_email'],B)
-            self.assertEqual(policy.selection(self.root),selected)
+            self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY),selected)
 
     def test_account_availability_prevents_promotion_in_all_selecting_modes(self):
         for mode in ('earliest-weekly-reset','highest-remaining-quota','preferred-account'):
@@ -528,7 +530,7 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual([r['priority'] for r in self.rows],[0,100])
         self.assertEqual(result['intended_priorities'],{A:0,B:100})
         self.assertEqual(result['status'],'held')
-        self.assertEqual(result['hold_reason'],'stale quota data for account-a@example.com')
+        self.assertEqual(result['hold_reason'],'stale quota data for owner@example.test')
         status=json.loads((self.root/'status.json').read_text())
         self.assertFalse(status['pending_plan'])
         self.assertNotIn('PRIVATE_ERROR',json.dumps(status))
@@ -548,7 +550,7 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(result['preferred_email'],A)
         self.assertEqual([r['priority'] for r in self.rows],[100,0])
         self.assertFalse(json.loads((self.root/'status.json').read_text())['pending_plan'])
-        self.assertEqual(policy.selection(self.root),{'mode':'preferred-account','preferred_email':A})
+        self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY),{'mode':'preferred-account','preferred_email':A})
 
     def test_round_robin_selection_replaces_half_applied_plan(self):
         def fail(path,body=None,method=None):
@@ -583,7 +585,7 @@ class RoutingTests(unittest.TestCase):
         with patch.object(policy.time,'time',return_value=1700000000):
             policy.reconcile(self.quota_overview(),selected,self.api,self.root)
             policy.rollback(self.api,self.root)
-        self.assertEqual(policy.selection(self.root),selected)
+        self.assertEqual(policy.selection(self.root, inventory=CODEX_INVENTORY),selected)
         self.assertTrue(policy.suspended(self.root))
         def no_gateway(*args):self.fail('Suspended reconciliation called the gateway')
         for now in (1700000001,1700003600):
@@ -633,7 +635,7 @@ class RoutingTests(unittest.TestCase):
                 patch.object(policy,'reconcile',return_value={'status':'held'}) as reconcile, \
                 patch.object(sys,'argv',['routing-policy','--apply']),contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(policy.main(),0)
-        reconcile.assert_called_once_with({})
+        reconcile.assert_called_once_with({}, inventory=CODEX_INVENTORY)
 
     def test_preferred_mode_timer_fetches_overview(self):
         data=self.quota_overview()
@@ -644,7 +646,7 @@ class RoutingTests(unittest.TestCase):
                 patch.object(sys,'argv',['routing-policy','--apply']),contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(policy.main(),0)
         self.assertEqual(fetch.call_args.args[0].full_url,'http://127.0.0.1:8320/api/overview')
-        reconcile.assert_called_once_with(data)
+        reconcile.assert_called_once_with(data, inventory=CODEX_INVENTORY)
 
     def test_cli_and_timer_wrapper_accept_expected_controller_states(self):
         wrapper=Path(__file__).resolve().parents[1]/'scripts/prefer-earliest-reset.py'
@@ -684,4 +686,4 @@ class RoutingTests(unittest.TestCase):
                 patch.object(sys,'argv',['routing-policy','--apply']),contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(policy.main(),0)
         self.assertEqual(fetch.call_args.args[0].full_url,'http://127.0.0.1:8320/api/overview')
-        reconcile.assert_called_once_with(data)
+        reconcile.assert_called_once_with(data, inventory=CODEX_INVENTORY)

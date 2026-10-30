@@ -9,7 +9,7 @@ Snapshots live in `/var/lib/personal-codex-router-backups/`, owned by root with 
 ## Contents and retention
 
 - Gateway settings, management asset/key, gateway-owned Codex and Claude OAuth account files, router settings and billing confirmations.
-- Installed dashboard/scripts and this source project, plus relevant systemd units and preview firewall/configuration.
+- Installed dashboard/scripts and the source checkout (including docs and plugin sources), plus relevant systemd units and preview firewall/configuration. A full install records its checkout path as `source_checkout` in root-owned `/etc/personal-codex-router/site.json`; backups use that path. Without it, running from a checkout uses that checkout. Run a full install from the new location after moving the checkout; an absent checkout is skipped.
 - Usage database, created with SQLite's online backup API and checked with `integrity_check`. WAL and SHM sidecars are never copied.
 - Pending allowlisted usage spools, including interrupted temporary files and the `failed/` subdirectory, preserved as stable bytes even when malformed.
 - Shared Codex `config.toml`, `auth.json`, `AGENTS.md`, saved global/sidebar settings, daemon settings, startup unit, separate Linux client settings, launcher, desktop entry, and dedicated loopback SSH configuration/key.

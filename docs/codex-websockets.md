@@ -31,7 +31,7 @@ upstream:
 
 With steering false, sequential turns still reuse an upstream WebSocket and keep
 continuation IDs. Every turn re-enters account policy enforcement. With steering
-true, follow-up creates bypass the fast-mode plugin in **both 8.0.30 and 8.0.43**.
+true, follow-up creates bypass the fast-mode plugin in **8.0.30 and 8.0.43**.
 The installed Codex CLI sends a `generate: false` warmup before its first actual
 inference: duplex mode protects the warmup but lets the denied account's first
 user-turn inference retain priority. Do not enable duplex while relying on the
@@ -39,6 +39,14 @@ per-account fast-mode toggle. A duplex follow-up 429 before `response.created`
 also has a known missing failure-usage record; successful-response accounting was
 verified separately. Serial error handling may close the socket and require client
 recovery; transparent failover of every follow-up is not guaranteed.
+
+8.0.47 adds per-frame before/after-auth hooks in upstream `0fe38224`, fixing
+the tested duplex create-follow-up and native-warmup policy bypass. The initial
+old expectation failed and prompted the source reassessment recorded in the
+[8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md). Keep steering explicitly
+false for this rollout: full-duplex/error interactions and the 8.0.30 rollback
+still need that safeguard. The installed v0.1.2 plugin warning is unconditional
+and remains stale on 8.0.47.
 
 Later payload rules can restore `service_tier` after the plugin removes it.
 Check `requests.payload` and historical `payload`, including `default`,
@@ -64,16 +72,16 @@ aliases are resolved in canonical → `oauth.providers.codex` → `codex` order.
 
 ## Morning rollout (separate authorization required)
 
-**Recommend after the 8.0.43 cutover and its existing acceptance gates are green.**
-Both installed versions passed these tests, but changing one variable at a time
-makes rollback and attribution clearer. Put the explicit-false safeguard into the
+**Recommend after the [8.0.47 cutover](gateway-upgrade-8.0.47-2026-10-29.md) and its existing acceptance gates are green.**
+The candidate and rollback versions passed these tests. Changing one variable
+at a time makes rollback and attribution clearer. Put the explicit-false safeguard into the
 fresh config retained for the upgrade, then enable credential/client transport as
 a separate step. Do not enable steering as part of either change. This document's
 commands were prepared and checked offline; they were not applied to production.
 
 1. On Linux, use the reviewed checkout containing these files. Confirm the
    effective binary, record the initial PID, run the preflight, and capture a fresh
-   private config backup. Keep management on loopback, both account identities,
+   private config backup. Keep management on loopback, existing account identities,
    priorities, model routes and routing affinity unchanged. Follow the same-inode,
    fsync and guarded-input conventions in
    [gateway_config.py](../scripts/gateway_config.py) and the
@@ -181,14 +189,15 @@ commands were prepared and checked offline; they were not applied to production.
    before relying on the safeguard. On any verification failure, stop before
    credential/client enablement; reconcile current bytes with the private backup.
 
-3. Enable `websockets` on the **two existing file-backed Codex credentials** using
+3. Enable `websockets` on the **one existing file-backed Codex credential** using
    only the scoped fields PATCH. Run the following on Linux; the key remains in
-   process memory, not shell arguments or printed output. It selects exactly two
-   Codex file-backed entries, preserves other metadata, verifies the runtime flag
+   process memory, not shell arguments or printed output. It selects exactly one
+   Codex file-backed entry, preserves other metadata, verifies the runtime flag
    and stable public identity/routing fields, and records the previous flags in a
-   private rollback file. It never reads raw credential files. Check both accounts
+   private rollback file. It never reads raw credential files. Check the account
    in the local dashboard beforehand if the set has changed; the command refuses
-   a different count. Keep the private rollback file until acceptance is complete.
+   a different count (the Free account was removed on October 29). Keep the private
+   rollback file until acceptance is complete.
 
    ```sh
    sudo -n python3 -B - true <<'PY'
@@ -209,7 +218,7 @@ commands were prepared and checked offline; they were not applied to production.
    before_pid = pid()
    rows = call('/auth-files')['files']
    codex = [r for r in rows if r.get('provider') == 'codex' and r.get('source') == 'file' and not r.get('runtime_only', False)]
-   assert len(codex) == 2 and all(r.get('name') for r in codex)
+   assert len(codex) == 1 and all(r.get('name') for r in codex)
    stable = ('id', 'name', 'provider', 'email', 'account', 'account_id', 'auth_index', 'prefix', 'priority', 'disabled')
    snapshot = lambda r: {k: r.get(k) for k in stable}
    backup = pathlib.Path('/var/lib/cliproxyapi-upgrade-backups') / (time.strftime('websocket-flags-%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + str(time.time_ns()) + '.json')
@@ -222,7 +231,7 @@ commands were prepared and checked offline; they were not applied to production.
        after = next(r for r in call('/auth-files')['files'] if r.get('name') == row['name'])
        assert after.get('websockets') is enabled and snapshot(after) == snapshot(row)
    assert pid() == before_pid
-   print(json.dumps({'two_credentials_verified': True, 'websockets': enabled, 'same_pid': True}))
+   print(json.dumps({'one_credential_verified': True, 'websockets': enabled, 'same_pid': True}))
    print('Private previous-flags file:', backup)
    PY
    ```
@@ -231,7 +240,7 @@ commands were prepared and checked offline; they were not applied to production.
    isolated tests checked both saved JSON and management-list values and observed
    new connections switch HTTP→WS→HTTP with the same gateway PID. The production
    command intentionally does not open credential files to repeat that check.
-   If a PATCH/verification fails partway through, stop and set **both** flags false
+   If a PATCH/verification fails partway through, stop and set the flag false
    with the same command using `false`; do not proceed with partial enablement.
    An unchanged health/status snapshot may be inspected privately too, but status
    can legitimately change as active requests run.
@@ -353,8 +362,8 @@ commands were prepared and checked offline; they were not applied to production.
    `codex -c model_providers.personal_codex_gateway.supports_websockets=false`;
    on Mac CLI use `linux_gateway` instead.
 2. Rerun the scoped credential command above with its `true` argument changed to
-   `false`. It PATCHes **only** `websockets` for the same two Codex file entries,
-   validates both booleans and preserves identity/priority/routing fields. Keep
+   `false`. It PATCHes **only** `websockets` for the same Codex file entry,
+   validates the boolean and preserves identity/priority/routing fields. Keep
    management on Linux loopback. It takes its own fresh previous-flags snapshot;
    use the earlier private snapshot if reconciling the pre-rollout state later.
 3. Close/reconnect all affected client sessions. Credential false and client false
@@ -382,14 +391,14 @@ their own disposable gateway usage queues.
 
 ```sh
 python3 -B tests/codex_websockets_isolated.py --check-only
-~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.43/cli-proxy-api
+~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api
 ~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.30/cli-proxy-api
 # Existing broader plugin suite, parameterized for either steering mode:
-~/.local/bin/heavy python3 -B tests/fast_mode_isolated.py --binary /opt/cliproxyapi/8.0.43/cli-proxy-api --library /opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.1.2.so --response-steering false
+~/.local/bin/heavy python3 -B tests/fast_mode_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api --library /opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.1.2.so --response-steering false
 # Repeat with --response-steering true and with the 8.0.30 binary.
 ```
 
-On 2026-10-27, each binary passed **39 new integration assertions, 24 completed
+On 2026-10-27, 8.0.30 and 8.0.43 each passed **39 new integration assertions, 24 completed
 synthetic responses, and 6 fixture test methods** (including a family/protocol
 matrix). The installed Linux Codex 0.164.0 ran successfully with isolated homes
 and no inherited credentials: warmup→first inference reused one upstream socket,
@@ -398,6 +407,18 @@ The expected-failure assertions deliberately require the known bypass; they fail
 if upstream behavior changes, prompting reassessment rather than silently keeping
 this limitation. The broader suite passed 53 HTTP policy cases plus its failover,
 reload, status and WebSocket checks on each binary in each steering mode.
+
+On 2026-10-29, 8.0.47 and the 8.0.30 rollback each passed **39 assertions,
+24 completed synthetic responses and six fixture tests** with native Codex
+**0.166.0**. Both versions passed the broader **53 HTTP cases in each steering
+mode**. Upstream `0fe38224` adds ordinary interceptor hooks to subsequent duplex
+business frames in 8.0.47. Its initial old expected-bypass assertion failed,
+triggering a source reassessment; the final tests require denied follow-up and
+native-warmup enforcement on exactly 8.0.47 while retaining the expected bypass
+on 8.0.30/8.0.43. This does not authorize steering enablement. New evidence and
+cleanup manifests are under
+`~/.cache/agent-scratch/personal-codex-router/upgrade-8.0.47/` and summarized in the
+[upgrade evaluation](gateway-upgrade-evaluation-v8.0.47.json).
 
 The serial matrix verifies denied and allowed first/follow-up/reconnect frames,
 connection reuse, exact continuation IDs, scoped credential false→true→false

@@ -16,7 +16,7 @@ def main():
     if not user or pwd.getpwnam(user).pw_uid < 500:
         raise SystemExit('Run with sudo from your normal Mac account.')
     directory = Path('/Library/Application Support/PersonalCodexRouter')
-    plist = Path('/Library/LaunchDaemons/com.user.personal-router-url.plist')
+    plist = Path('/Library/LaunchDaemons/org.personal-codex-router.url-helper.plist')
     if directory.exists() or plist.exists():
         raise SystemExit('The address helper already exists. Refusing to overwrite it.')
     with socket.socket() as probe:
@@ -27,7 +27,7 @@ def main():
     shutil.copyfile(Path(__file__).with_name('loopback-forwarder.py'), script)
     script.chmod(0o644);os.chown(script, 0, 0)
     config = {
-        'Label': 'com.user.personal-router-url',
+        'Label': 'org.personal-codex-router.url-helper',
         'ProgramArguments': ['/usr/bin/python3', str(script)],
         'UserName': user,
         'RunAtLoad': True,

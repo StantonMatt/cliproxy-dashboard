@@ -101,11 +101,11 @@ test('unverified identity blocks mutation and clears an old confirmation',async(
 });
 test('Recent account chips and chart identities survive unknown or disabled routing',()=>{
   const h=harness();
-  const before=h.c.providerChip('claude','cb'),name=h.c.seriesNames()['claude-two'];
+  const before=h.c.providerChip('claude','cb'),name=h.c.seriesNames()['claude:claude-b'];
   for(const change of [a=>{a.routing_enabled=false;},a=>{a.routing_enabled=null;a.routing_id=null;},a=>{a.runtime_available=false;}]){
     change(h.data.watch_accounts[1]);
-    assert.equal(h.c.providerChip('claude','cb'),before);assert.equal(h.c.series('claude','cb'),'claude-two');
-    assert.equal(h.c.seriesNames()['claude-two'],name);
+    assert.equal(h.c.providerChip('claude','cb'),before);assert.equal(h.c.series('claude','cb'),'claude:claude-b');
+    assert.equal(h.c.seriesNames()['claude:claude-b'],name);
   }
 });
 (async()=>{let failures=0;for(const [name,fn] of tests){try{await fn();}catch(error){failures++;console.error(name,error);}}

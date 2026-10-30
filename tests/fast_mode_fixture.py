@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 #!/usr/bin/env python3
 """Synthetic dashboard for visual checks; never reads or calls live services.
 
@@ -90,7 +91,7 @@ def build_state(directory):
     app.BILLING = directory / 'billing.json'
     app.PREFERENCE = directory / 'routing/status.json'
     app.CLAUDE_USAGE = directory / 'watch/claude.json'
-    claude_routing(app, directory)
+    claude_fixture = claude_routing(app, directory)
     app.health = lambda _: {'gateway': {'status': 'healthy'}, 'accounts': [],
                             'usage_collection': {'status': 'healthy'}}
     fast.enforcement = lambda *args: 'active'
@@ -109,7 +110,7 @@ def build_state(directory):
             'history': [{'changed_at': changed_at, 'allow_fast': allowed}] if changed else []}
         files.append(auth_file_row({'type': 'codex', 'email': email,
             'id_token': jwt(email=email, workspace='workspace-' + account_id)}, account_id + '.json', account_id))
-        state.data['accounts'].append({'id': account_id, 'email': email, 'label': email,
+        state.data['accounts'].append({'key': account_id + '.json', 'id': account_id, 'email': email, 'label': email,
             '_fast_file': account_id + '.json', 'plan': 'Pro (25x)' if account_id == 'on-fast' else 'Pro (10x)', 'active': True, 'disabled': False,
             'auth_state': 'authenticated', 'quota_error': None, 'quota_checked_at': fast.stamp(now),
             'windows': [{'label': 'Weekly', 'seconds': 604800, 'remaining': 96 if i % 2 == 0 else 94,
@@ -160,10 +161,12 @@ def build_state(directory):
     def snapshot():
         value = original()
         for i, account in enumerate(value['accounts']):
-            account['email'] = app.routing_policy.identities('codex')[i % 2]
+            account['email'] = app.routing_policy.identities('codex', inventory=CODEX_INVENTORY)[i % 2]
             account['label'] = account['email']
             if account['id'] == 'off-unavailable':
                 account['fast_mode']['enforcement'] = 'unavailable'
+        value['claude_accounts'] = value.get('claude_accounts') or app.claude_routing_projection(claude_fixture['rows'], app.utcnow())
+        value['inventory'] = [dict(type=p, name=a.get('key') or a.get('name') or a.get('id'), email=a.get('email'), auth_index=a.get('auth_index') or a.get('id'), disabled=a.get('disabled'), status=a.get('status', 'active')) for p, field in (('codex','accounts'),('claude','claude_accounts')) for a in value.get(field, [])]
         return value
     state.snapshot = snapshot
     state.refresh = lambda: False
@@ -172,7 +175,7 @@ def build_state(directory):
 
 def routing_view(provider, value, scenario):
     """Synthetic routing status in the dashboard's preference shape."""
-    emails = list(app.routing_policy.identities('codex'))
+    emails = list(app.routing_policy.identities('codex', inventory=CODEX_INVENTORY))
     preferred = value['email'] if value['mode'] == 'preferred-account' else emails[1]
     view = {'policy': value['mode'], 'status': 'active', 'checked_at': fast.stamp(time.time()), 'preferred_email': preferred,
             'selected_email': value['email'], 'saved_mode': value['mode'], 'saved_preferred_email': value['email'],
@@ -196,8 +199,8 @@ def build_overview(directory):
     import sqlite3
     state = build_state(directory)
     now = time.time()
-    b = list(app.routing_policy.identities('codex'))[1]
-    claude_a, claude_b = app.routing_policy.identities('claude')
+    b = list(app.routing_policy.identities('codex', inventory=CODEX_INVENTORY))[1]
+    claude_a, claude_b = app.routing_policy.identities('claude', inventory=CODEX_INVENTORY)
     first = next(x for x in state.data['accounts'] if x['id'] == 'on-fast')
     second = next(x for x in state.data['accounts'] if x['id'] == 'on-none')
     first.update(plan='Free', plan_type='free', disabled=True, active=False, access_state='disabled',

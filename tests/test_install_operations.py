@@ -1,9 +1,13 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 from contextlib import ExitStack, redirect_stdout
 import importlib.util
 import io
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -18,13 +22,70 @@ backup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backup)
 
 
+PREPARE_DISCONNECTED = installer.prepare_disconnected_directory
+
+
 class InstallOperationsTests(unittest.TestCase):
+    def setUp(self):
+        user = SimpleNamespace(pw_name='operator', pw_dir='/home/operator', pw_uid=1234, pw_gid=1235)
+        self.site = {'desktop_user': 'operator', 'devices': [
+            {'name': 'Laptop', 'tailscale_ip': '100.64.0.11'}],
+            'claude_b': {'email': 'account-b@example.com', 'plan': 'Max (20x)'}}
+        for context in (patch.object(installer.site_config, 'load', return_value=self.site),
+                        patch.object(installer.site_config, 'desktop', return_value=user),
+                        patch.object(installer.site_config, 'SITE', ROOT / 'README.md'),
+                        patch.object(backup, 'HOME', Path(user.pw_dir))):
+            self.addCleanup(context.stop)
+            context.start()
+        installer.configure_site(self.site)
+        disconnected = patch.object(installer, 'prepare_disconnected_directory')
+        self.mock_disconnected = disconnected.start()
+        self.addCleanup(disconnected.stop)
+
+    def test_disconnect_backup_directory_matches_dashboard_sandbox_and_is_private(self):
+        # Invoke the original helper in an isolated path while all ownership writes are mocked.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'disconnected'
+            proxy = SimpleNamespace(pw_uid=1234, pw_gid=1235)
+            with patch.object(installer, 'DISCONNECTED', target), \
+                    patch.object(installer.pwd, 'getpwnam', return_value=proxy), \
+                    patch.object(installer.os, 'chown') as chown:
+                helper = PREPARE_DISCONNECTED
+                helper()
+                self.assertEqual(target.stat().st_mode & 0o777, 0o700)
+                chown.assert_called_once_with(target, 1234, 1235)
+                target.rmdir()
+                target.symlink_to(Path(directory))
+                with self.assertRaises(RuntimeError):
+                    helper()
+        unit = (ROOT / 'scripts/personal-codex-router-dashboard.service').read_text()
+        writable = [Path(path.lstrip('-')) for line in unit.splitlines() if line.startswith('ReadWritePaths=')
+                    for path in line.partition('=')[2].split()]
+        self.assertTrue(any(installer.DISCONNECTED.is_relative_to(path) for path in writable))
+
+    def test_t3_usage_backend_starts_without_older_dashboard_modules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for source,dest,_ in installer.install_files(t3_usage_only=True):
+                installed=root / dest.relative_to(installer.DEST)
+                installed.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(source,installed)
+            # These existing scripts are loaded from outside dashboard/.
+            for name in ('claude-redeemer.py','collect-claude-usage.py'):
+                shutil.copyfile(ROOT / 'scripts' / name,root / name)
+            result=subprocess.run([sys.executable,'-B','-c',
+                                   "import server; assert server.routing_policy.identities('codex', []) == ()"],
+                                  cwd=root / 'dashboard',capture_output=True,text=True,timeout=10)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_t3_usage_scope_dry_run_and_manifest_are_backend_only(self):
         files = installer.install_files(t3_usage_only=True)
-        self.assertEqual(files, [(ROOT / 'dashboard' / name, installer.DEST / 'dashboard' / name, 0o644)
-                                 for name in ('server.py', 't3_usage.py')])
+        backend = {path.name for path in (ROOT / 'dashboard').glob('*.py')}
+        self.assertEqual(set(files), {(ROOT / 'dashboard' / name, installer.DEST / 'dashboard' / name, 0o644)
+                                     for name in backend})
         self.assertTrue(set(files) <= set(installer.install_files()))
-        self.assertTrue(set(files) <= set(installer.install_files(account_access_only=True)))
+        self.assertTrue({item for item in installer.install_files(account_access_only=True)
+                         if item[0].parent == ROOT / 'dashboard'} <= set(files))
         self.assertEqual(installer.backup_paths(files, t3_usage_only=True), [dest for _, dest, _ in files])
         output = io.StringIO()
         with patch('sys.argv', ['install-operations.py', '--t3-usage-only']), redirect_stdout(output), \
@@ -36,7 +97,7 @@ class InstallOperationsTests(unittest.TestCase):
             operation.assert_not_called()
         self.assertIn('restart personal-codex-router-dashboard.service only', output.getvalue())
         self.assertIn('No keys provisioned', output.getvalue())
-        self.assertEqual(output.getvalue().count('Install dashboard/'), 2)
+        self.assertEqual(output.getvalue().count('Install dashboard/'), len(backend))
         self.assertNotIn('Back up if present: /etc', output.getvalue())
         with patch('sys.argv', ['install-operations.py', '--t3-usage-only', '--account-access-only']), \
                 redirect_stdout(io.StringIO()), patch('sys.stderr', io.StringIO()):
@@ -88,21 +149,21 @@ class InstallOperationsTests(unittest.TestCase):
             self.assertEqual(json.loads(output.getvalue())['scope'], 't3-usage')
 
     def test_account_access_manifest_is_exact_and_preview_is_read_only(self):
-        expected = {'t3_usage.py', 'account_access.py', 'signin.py', 'credential_replace.py', 'request_deadline.py', 'server.py',
+        expected = {'t3_usage.py', 'providers.py', 'usage_adapters.py', 'account_access.py', 'account_add.py', 'account_mutations.py', 'signin.py', 'credential_replace.py', 'request_deadline.py', 'server.py',
                     'availability.py', 'operations.py', 'routing_policy.py', 'static/index.html', 'static/app.js',
                     'static/billing.js', 'static/style.css'}
         units = ('personal-codex-router-preference.service', 'personal-codex-router-dashboard.service')
         files = installer.install_files(account_access_only=True)
         self.assertEqual({dest for _, dest, _ in files},
                          {installer.DEST / 'dashboard' / name for name in expected}
-                         | {installer.DEST / name for name in ('router-preview.mjs', 'router-backup.py')}
+                         | {installer.DEST / name for name in ('router-preview.mjs', 'router-backup.py', 'site_config.py')}
                          | {Path('/etc/systemd/system') / unit for unit in units})
         self.assertEqual({source for source, _, _ in files},
                          {ROOT / 'dashboard' / name for name in expected}
-                         | {ROOT / 'scripts' / name for name in ('router-preview.mjs', 'router-backup.py')}
+                         | {ROOT / 'scripts' / name for name in ('router-preview.mjs', 'router-backup.py', 'site_config.py')}
                          | {ROOT / 'scripts' / unit for unit in units})
-        self.assertEqual(len(files), len(expected) + 4)
-        self.assertTrue(all(mode == (0o755 if source.name in ('router-preview.mjs', 'router-backup.py') else 0o644)
+        self.assertEqual(len(files), len(expected) + 5)
+        self.assertTrue(all(mode == (0o755 if source.name in ('router-preview.mjs', 'router-backup.py', 'site_config.py') else 0o644)
                             for source, _, mode in files))
         self.assertEqual(installer.backup_paths(files, account_access_only=True), [d for _, d, _ in files])
         output = io.StringIO()
@@ -157,7 +218,7 @@ class InstallOperationsTests(unittest.TestCase):
                     patch.object(installer.os, 'chown'), patch.object(Path, 'mkdir'), patch.object(Path, 'chmod'),
                     patch.object(installer.grp, 'getgrnam', return_value=SimpleNamespace(gr_gid=2345)),
                     patch.object(installer, 'version_fingerprint', return_value='stable'),
-                    patch.object(installer, 'overview', return_value={'gateway': {'online': True, 'accounts': [{'email': email} for email in installer.routing_policy.identities('codex')]}}),
+                    patch.object(installer, 'overview', return_value={'gateway': {'online': True, 'accounts': [{'email': 'account-a@example.com'}]}}),
                     patch.object(installer, 'pre_apply_backup', backup_call),
                     patch.object(installer, 'prepare_watch_paths', prepare_watch),
                     patch.object(installer, 'command', command), patch.object(installer, 'user_command', user_command),
@@ -232,7 +293,7 @@ class InstallOperationsTests(unittest.TestCase):
             operation.assert_not_called()
         self.assertIn('Restart personal-codex-router-dashboard.service and personal-codex-router-preview.service',
                       output.getvalue())
-        self.assertIn('Restart personal-codex-router-claude-redeemer.service for user', output.getvalue())
+        self.assertIn('Restart personal-codex-router-claude-redeemer.service for operator', output.getvalue())
         self.assertNotIn('restart only dashboard', output.getvalue())
 
     def test_apply_restarts_services_after_replacing_scripts_even_when_already_running(self):
@@ -244,7 +305,7 @@ class InstallOperationsTests(unittest.TestCase):
             (root / 'backup.json').write_text(json.dumps({'snapshot': 'fixture'}))
             user = SimpleNamespace(pw_uid=1234, pw_gid=1235)
             ts = {'Self': {'UserID': 1}, 'Peer': {'personal': {
-                'UserID': 1, 'TailscaleIPs': [installer.PHONE, installer.MAC]}}}
+                'UserID': 1, 'TailscaleIPs': ['100.64.0.11']}}}
             calls = Mock()
             command = Mock(side_effect=lambda *args: json.dumps(ts) if args[0] == 'tailscale' else
                            'active' if args[-1] == 'personal-codex-router-move.path' else '123')
@@ -265,8 +326,10 @@ class InstallOperationsTests(unittest.TestCase):
                        patch.object(installer.pwd, 'getpwnam', return_value=user),
                        patch.object(installer, 'version_fingerprint', return_value='stable'),
                        patch.object(installer, 'overview', return_value={
-                           'gateway': {'online': True, 'accounts': [{'email': email} for email in installer.routing_policy.identities('codex')]}}),
+                           'gateway': {'online': True, 'accounts': [{'email': 'account-a@example.com'}]}}),
                        patch.object(installer, 'pre_apply_backup'), patch.object(installer, 'prepare_watch_paths'),
+                       patch.object(installer, 'device_preflight', return_value=None),
+                       patch.object(installer, 'write_site'), patch.object(installer, 'write_previews'),
                        patch.object(installer, 'command', command),
                        patch.object(installer, 'user_command', user_command),
                        patch.object(installer, 'install_file', install_file), redirect_stdout(io.StringIO())]
@@ -296,11 +359,17 @@ class InstallOperationsTests(unittest.TestCase):
                     patch.object(installer, 'command', return_value='failed'):
                 with self.assertRaisesRegex(RuntimeError, 'move.path is not active'):
                     installer.check_move_ready()
+            clock = iter(range(0, 100, 5))
             with patch.object(installer, 'MOVE_REQUESTS', requests), \
-                    patch.object(installer, 'command', return_value='active'):
+                    patch.object(installer, 'command', return_value='active'), \
+                    patch.object(installer.time, 'monotonic', side_effect=lambda: next(clock)), \
+                    patch.object(installer.time, 'sleep'):
                 with self.assertRaisesRegex(RuntimeError, 'missing'):
                     installer.check_move_ready()
-                requests.mkdir()
+            # The directory appearing during the wait is accepted.
+            with patch.object(installer, 'MOVE_REQUESTS', requests), \
+                    patch.object(installer, 'command', return_value='active'), \
+                    patch.object(installer.time, 'sleep', side_effect=lambda _: requests.mkdir()):
                 installer.check_move_ready()
 
     def test_only_the_full_install_ships_and_enables_conversation_moves(self):
@@ -361,8 +430,8 @@ class InstallOperationsTests(unittest.TestCase):
         output = io.StringIO()
         with patch('sys.argv', ['install-operations.py']), redirect_stdout(output):
             installer.main()
-        self.assertIn('user:cliproxyapi, 2750', output.getvalue())
-        self.assertIn('Enable/start personal-codex-router-claude-usage.timer for user', output.getvalue())
+        self.assertIn('operator:cliproxyapi, 2750', output.getvalue())
+        self.assertIn('Enable/start personal-codex-router-claude-usage.timer for operator', output.getvalue())
         self.assertIn(str(installer.WATCH), output.getvalue())
 
     def test_keepalive_script_units_preview_and_backups(self):
@@ -372,7 +441,7 @@ class InstallOperationsTests(unittest.TestCase):
         output = io.StringIO()
         with patch('sys.argv', ['install-operations.py']), redirect_stdout(output):
             installer.main()
-        self.assertIn('Enable/start personal-codex-router-claude-keepalive.timer for user', output.getvalue())
+        self.assertIn('Enable/start personal-codex-router-claude-keepalive.timer for operator', output.getvalue())
         for name in ('claude-token-keepalive.py', 'personal-codex-router-claude-keepalive.service',
                      'personal-codex-router-claude-keepalive.timer'):
             dest = (installer.DEST if name.endswith('.py') else installer.USER_UNIT_DIR) / name
@@ -402,7 +471,7 @@ class InstallOperationsTests(unittest.TestCase):
             installer.user_command(user, 'daemon-reload')
             installer.user_command(user, 'enable', '--now', 'personal-codex-router-claude-usage.timer')
         self.assertEqual(command.call_args_list[0].args,
-                         ('/usr/sbin/runuser', '-u', 'user', '--', '/usr/bin/env',
+                         ('/usr/sbin/runuser', '-u', 'operator', '--', '/usr/bin/env',
                           'XDG_RUNTIME_DIR=/run/user/1234',
                           'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1234/bus',
                           '/usr/bin/systemctl', '--user', 'daemon-reload'))
@@ -523,7 +592,7 @@ class InstallOperationsTests(unittest.TestCase):
                     patch.object(installer.grp, 'getgrnam', return_value=SimpleNamespace(gr_gid=2345)),
                     patch.object(installer.pwd, 'getpwnam', return_value=user),
                     patch.object(installer, 'version_fingerprint', return_value='stable'),
-                    patch.object(installer, 'overview', return_value={'gateway': {'online': True, 'accounts': [{'email': email} for email in installer.routing_policy.identities('codex')]}}),
+                    patch.object(installer, 'overview', return_value={'gateway': {'online': True, 'accounts': [{'email': 'account-a@example.com'}]}}),
                     patch.object(installer, 'pre_apply_backup', backup_call),
                     patch.object(installer, 'prepare_watch_paths'), patch.object(installer, 'command', command),
                     patch.object(installer, 'user_command', user_command), patch.object(installer, 'install_file'),

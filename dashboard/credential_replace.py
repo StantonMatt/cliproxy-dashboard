@@ -1,4 +1,4 @@
-"""The only dashboard code that writes the gateway's auth directory.
+"""Codex credential replacement and the gateway's shared per-file lock.
 
 Since CLIProxyAPI v8.0.25 the Codex credential on disk is the source of truth:
 a management PATCH without creation intent restores every token field from disk
@@ -7,8 +7,9 @@ A sign-in therefore replaces the token fields on disk under the gateway's own
 per-file flock (internal/auth/codex/filelock_unix.go:11-24, `Abs(path)+".lock"`),
 which gateway Codex saves, including an in-flight refresh, also hold.
 
-Management upload and delete write the auth directory without that lock. The
-file is re-checked (inode, size, mtime and ctime) immediately before the rename,
+Management delete writes the auth directory without that lock (v8.0.47 Codex
+uploads do acquire it). Account disconnect reuses this lock for local removal.
+The file is re-checked (inode, size, mtime and ctime) immediately before the rename,
 so an upload or delete since the read refuses the write; only the instant
 between that check and the rename stays open.
 

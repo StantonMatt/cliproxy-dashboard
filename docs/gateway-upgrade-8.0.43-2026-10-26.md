@@ -1,5 +1,7 @@
 # Gateway 8.0.43 upgrade preparation — 2026-10-26
 
+Superseded as the cutover target by the [8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md); this page preserves the October 26 evidence.
+
 **8.0.30 is still live. 8.0.43 is installed and staged; no cutover was performed.**
 The user chooses the restart window. This implementation worker did not run a
 review loop, commit, push, deploy the dashboard, reload systemd or signal the

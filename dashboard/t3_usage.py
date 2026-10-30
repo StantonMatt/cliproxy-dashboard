@@ -8,6 +8,7 @@ import re
 import time
 
 from request_deadline import RequestDeadline
+import usage_adapters
 
 KEYS = Path('/etc/personal-codex-router/t3-usage-keys.json')
 CODEX_URL = 'https://chatgpt.com/backend-api/wham/usage'
@@ -58,7 +59,7 @@ def codex_projection(payload, identity, account_id=None):
 
 
 def claude_body(observation, now):
-    independent = observation.get('id') == 'claude-b'
+    independent = observation.get('independent_windows') is True
     if observation.get('status') not in (('ok', 'stale') if independent else ('ok',)):
         return None
     if not independent and not fresh(observation.get('checked_at'), now, 900):
@@ -132,9 +133,8 @@ def accounts(cache, now):
                         and isinstance(candidate, dict) and candidate.get('rate_limit')):
                     body = candidate
             else:
-                matches = [w for w in watched if w.get('email') == email]
-                if current and len(matches) == 1:
-                    body = claude_body(matches[0], now)
+                if current:
+                    body = claude_body(usage_adapters.claude_observation(row, rows, watched, now), now)
             result.append((public, body))
     return result
 

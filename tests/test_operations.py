@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 import copy
 import datetime as dt
 import importlib.util
@@ -34,7 +35,7 @@ class OperationsTests(unittest.TestCase):
     def setUp(self):
         self.now = dt.datetime(2026, 10, 8, 15, tzinfo=dt.timezone.utc).timestamp()
         self.stamp = dt.datetime.fromtimestamp(self.now, dt.timezone.utc).isoformat()
-        self.account = {'email': ops.EMAILS[0], 'active': True, 'auth_state': 'authenticated',
+        self.account = {'email': CODEX_PAIR[0], 'active': True, 'auth_state': 'authenticated',
                         'quota_attempted_at': self.stamp, 'quota_error': None, 'windows': [{'remaining': 44}],
                         'billing': {'renewal_date': '2026-10-14', 'confirmed': True}}
         self.gateway = {'online': True, 'checked_at': self.stamp, 'accounts': [self.account]}
@@ -235,7 +236,7 @@ class OperationsTests(unittest.TestCase):
         initial = ops.health(self.gateway, self.now, self.path)
         self.assertEqual(initial['codex']['status'], 'unknown')
         self.assertEqual(initial['backup']['status'], 'unknown')
-        self.assertEqual([r['status'] for r in initial['accounts']], ['healthy', 'unknown'])
+        self.assertEqual([r['status'] for r in initial['accounts']], ['healthy'])
         (self.path / 'health.json').write_text(json.dumps({'checked_at': self.stamp, 'codex': {'status': 'healthy'}}))
         (self.path / 'backup.json').write_text(json.dumps({'last_success_at': self.stamp, 'ok': True}))
         self.assertEqual(ops.health(self.gateway, self.now, self.path)['codex']['status'], 'healthy')
@@ -248,7 +249,7 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(ops.health(self.gateway, self.now, self.path)['backup']['status'], 'failed')
 
     def test_quota_401_is_signin_but_generic_403_and_outage_are_unknown(self):
-        record = {'email': ops.EMAILS[0], 'auth_index': 'a', 'id_token': {}}
+        record = {'email': CODEX_PAIR[0], 'auth_index': 'a', 'id_token': {}}
         for status, expected in [(401, 'sign_in_required'), (403, 'unknown'), (500, 'unknown')]:
             with patch.object(app, 'api', return_value={'status_code': status}):
                 self.assertEqual(app.fetch_account(record)['auth_state'], expected)
@@ -313,7 +314,7 @@ class OperationsTests(unittest.TestCase):
                             resets={'available': 2, 'eligible': True, 'error': None,
                                     'credits': [{'id': 'later', 'expires_at': self.now + 900}]})
         other = copy.deepcopy(self.account)
-        other.update(id='second', label='Second', email=ops.EMAILS[1])
+        other.update(id='second', label='Second', email=CODEX_PAIR[1])
         other['availability'] = {'state':'quota_exhausted' if both else 'ready','scope':'account'}
         other['windows'][0].update(remaining=0 if both else 30, resets_at=self.now + 1800)
         other['resets']['credits'] = [{'id': 'earlier', 'expires_at': self.now + 300}]
@@ -386,10 +387,10 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(item['kind'], 'weekly_exhausted')
         self.assertEqual(item['urgency'], 'normal')
         self.assertEqual(item['message'], 'Weekly limit reached · using the other account')
-        self.assertEqual(item['accounts'], [{'account_id': 'first', 'label': ops.EMAILS[0],
+        self.assertEqual(item['accounts'], [{'account_id': 'first', 'label': CODEX_PAIR[0],
                                             'weekly_resets_at': self.now + 3600,
                                             'reset_credits_available': 2}])
-        self.assertEqual(item['action'], {'type': 'redeem_reset', 'account_id': 'first', 'label': ops.EMAILS[0]})
+        self.assertEqual(item['action'], {'type': 'redeem_reset', 'account_id': 'first', 'label': CODEX_PAIR[0]})
         store.update(self.gateway, self.now + 10)
         self.assertEqual(store.view()['items'][0]['id'], item['id'])
 
@@ -402,10 +403,10 @@ class OperationsTests(unittest.TestCase):
         item = store.view()['items'][0]
         self.assertEqual(item['kind'], 'pool_exhausted')
         self.assertEqual(item['urgency'], 'critical')
-        self.assertEqual(item['email'], 'Both Codex accounts')
+        self.assertEqual(item['email'], 'All Codex accounts')
         self.assertEqual(item['message'], 'Weekly limits reached · Codex requests fail · resets in 30m')
         self.assertEqual([a['reset_credits_available'] for a in item['accounts']], [2, 2])
-        self.assertEqual(item['action'], {'type': 'redeem_reset', 'account_id': 'second', 'label': ops.EMAILS[1]})
+        self.assertEqual(item['action'], {'type': 'redeem_reset', 'account_id': 'second', 'label': CODEX_PAIR[1]})
         other['resets']['eligible'] = False
         store.update(self.gateway, self.now + 10)
         self.assertEqual(store.view()['items'][0]['action']['account_id'], 'first')
@@ -548,7 +549,23 @@ class OperationsTests(unittest.TestCase):
         other['windows'][0]['remaining'] = 10
         store.update(self.gateway, self.now + 20)
         self.assertEqual(store.view()['items'], [])
-        self.assertEqual(store.rows['exhausted:' + ops.EMAILS[0]]['id'], first)
+        self.assertEqual(store.rows['exhausted:' + CODEX_PAIR[0]]['id'], first)
+
+    def test_pool_exhaustion_retires_when_codex_accounts_are_removed(self):
+        self.exhausted_accounts(both=True)
+        for count in (0,1):
+            with self.subTest(count=count):
+                store=ops.NoticeStore(self.path / ('notices-'+str(count)+'.json'),self.path)
+                store.update(self.gateway,self.now)
+                self.assertTrue(store.rows['exhausted:pool']['active'])
+                self.assertIn('action',store.rows['exhausted:pool'])
+                reduced=copy.deepcopy(self.gateway)
+                reduced['accounts']=reduced['accounts'][:count]
+                store.update(reduced,self.now+10)
+                self.assertFalse(store.rows['exhausted:pool']['active'])
+                self.assertNotIn('action',store.rows['exhausted:pool'])
+                self.assertEqual([item['kind'] for item in store.view()['items']],
+                                 ['weekly_exhausted'] if count else [])
 
     def test_pool_recovery_restores_uncertain_single_notice_until_fresh_recovery(self):
         other = self.exhausted_accounts()
@@ -558,7 +575,7 @@ class OperationsTests(unittest.TestCase):
         other['windows'][0]['remaining'] = 0
         store.update(self.gateway, self.now + 10)
         self.assertEqual([item['kind'] for item in store.view()['items']], ['pool_exhausted'])
-        self.assertTrue(store.rows['exhausted:' + ops.EMAILS[0]]['hidden'])
+        self.assertTrue(store.rows['exhausted:' + CODEX_PAIR[0]]['hidden'])
         self.account['quota_error'] = 'Quota unavailable'
         other['windows'][0]['remaining'] = 10
         other['availability']['state'] = 'ready'
@@ -568,7 +585,7 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(item['kind'], 'weekly_exhausted')
         self.assertNotIn('action', item)
         self.assertFalse(store.rows['exhausted:pool']['active'])
-        self.assertFalse(store.rows['exhausted:' + ops.EMAILS[0]]['hidden'])
+        self.assertFalse(store.rows['exhausted:' + CODEX_PAIR[0]]['hidden'])
         store = ops.NoticeStore(store.path, self.path)
         self.account['windows'][0]['remaining'] = 20
         store.update(self.gateway, self.now + 30)
@@ -589,7 +606,7 @@ class OperationsTests(unittest.TestCase):
         self.account['quota_error'] = 'Quota unavailable'
         other['windows'][0]['remaining'] = 10
         store.update(self.gateway, self.now + 20)
-        row = store.rows['exhausted:' + ops.EMAILS[0]]
+        row = store.rows['exhausted:' + CODEX_PAIR[0]]
         self.assertEqual(row['id'], first)
         self.assertTrue(row['active'])
         self.assertTrue(row['dismissed'])
@@ -620,7 +637,7 @@ class OperationsTests(unittest.TestCase):
         self.account.update(auth_state='authenticated', active=False, windows=[],
                             quota_error='Allowance not reported by provider')
         store.update(self.gateway, self.now + 10)
-        self.assertFalse(store.rows['signin:' + ops.EMAILS[0]]['active'])
+        self.assertFalse(store.rows['signin:' + CODEX_PAIR[0]]['active'])
         self.account['auth_state'] = 'sign_in_required'
         store.update(self.gateway, self.now + 20)
         self.assertNotEqual(store.view()['items'][0]['id'], first)

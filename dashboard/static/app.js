@@ -60,7 +60,7 @@ function startFor(value) {
   return d.toISOString();
 }
 function usageSince(usage) {
-  return [usage.since,usage.claude?.since].filter(value=>Number.isFinite(Date.parse(value)))
+  return Object.values(usageProviders(usage)).map(s=>s.since).filter(value=>Number.isFinite(Date.parse(value)))
     .sort((a,b)=>Date.parse(a)-Date.parse(b))[0] || null;
 }
 function totals(rows) {
@@ -85,31 +85,72 @@ function accountFor(id) { return current?.gateway.accounts.find(a => a.id === id
 function accountName(account) { return account?.email || 'Unknown account'; }
 // Card names may wrap in the four-across row; break emails before the @, never mid-word.
 const cardName = name => esc(name).replace('@', '<wbr>@');
-// Claude usage rows carry the gateway auth index; the watch cards carry the email.
-function claudeEmail(id) {
-  return (current?.gateway.claude_accounts || []).find(a => a.auth_index === id)?.email || null;
+function providerData(data=current) {
+  return data?.providers || [
+    {id:'codex',name:'Codex',accent:'codex',routable:codexRoutable(data?.gateway),accounts:data?.gateway?.accounts || []},
+    {id:'claude',name:'Claude',accent:'claude',routable:true,accounts:data?.watch_accounts || []}
+  ];
 }
-// Chart and table colours: each gateway has its own hue, with a lighter or darker shade for its second account.
-function claudeSeriesEmails() {
-  const configured=Array.from($('claude-routing-mode').options || []).map(o=>o.value).filter(v=>v.includes('@'));
-  return ['claude','claude-b'].map((id,i)=>(current?.watch_accounts || []).find(a=>a.id===id)?.email || configured[i]);
+function usageProviders(u) {
+  return u?.providers || {codex:u || {}, ...(u?.claude ? {claude:u.claude} : {})};
 }
-function series(provider, id, email) {
-  if (provider === 'claude') {
-    const mail = email || claudeEmail(id);
-    const [first,second] = claudeSeriesEmails();
-    return mail && mail === first ? 'claude-one' : mail && mail === second ? 'claude-two' : 'claude-unknown';
-  }
-  const accounts = current?.gateway.accounts || [];
-  const a = accountFor(id) || accounts.find(x => email && x.email === email);
-  // History from a credential no longer listed (a removed account) keeps its own series.
-  return accounts.length && (!a || accounts.indexOf(a) === 1) ? 'codex-two' : 'codex-one';
+function providerName(id) { return providerData().find(p=>p.id===id)?.name || id; }
+// Codex violet, Claude terracotta, Grok monochrome; any other provider takes the page's navy and blue with its initial.
+const providerMarks = {codex:'openai', claude:'claude', xai:'xai'};
+function providerAccent(p) { return [p?.accent,p?.id].find(id=>Object.hasOwn(providerMarks,id || '')) || 'other'; }
+function providerIcon(p, marked=false) {
+  const mark=providerMarks[providerAccent(p)];
+  return `<span class="provider-icon${marked ? ' '+providerAccent(p)+'-mark' : ''}">${mark ? icon(mark) : `<span class="monogram" aria-hidden="true">${esc(String(p.name || p.id || '?').charAt(0).toUpperCase())}</span>`}</span>`;
 }
+const accentOf = id => providerAccent(providerData().find(p=>p.id===id) || {id});
+// Email, then the gateway's own label, then "<Provider> account" numbered from the second unnamed account.
+function accountLabel(a) {
+  if (a?.email) return a.email;
+  if (a?.label && a.label!==a.key) return a.label;
+  const p=providerData().find(p=>p.id===a?.provider), unnamed=(p?.accounts || []).filter(x=>!x.email && (!x.label || x.label===x.key));
+  const n=unnamed.findIndex(x=>x.key===a?.key)+1;
+  return `${p?.name || providerName(a?.provider)} account${n>1 ? ' '+n : ''}`;
+}
+// Every card's account actions sit behind one ⋯ button; the menu is a single popover (openCardMenu).
+let cardMenu=null;
+const accountActions = () => Array.isArray(current?.add_providers);
+const menuId = (provider, key) => `menu-${provider}-${key}`;
+function cardMenuButton(provider, a, name, attrs='') {
+  if(!accountActions() || !a?.key)return '';
+  const open=cardMenu?.provider===provider && cardMenu.key===a.key;
+  return `<button type="button" class="card-menu" id="${esc(menuId(provider,a.key))}" data-menu-provider="${esc(provider)}" data-menu-key="${esc(a.key)}" aria-label="Account actions · ${esc(name)}" aria-haspopup="menu" aria-controls="card-menu" aria-expanded="${open}"${attrs ? ' '+attrs : ''}>${icon('more')}</button>`;
+}
+const hasRuntimeId = value => value!=null && String(value).trim()!=='';
+function providerAccount(provider, id, email, key) {
+  const p=providerData().find(p=>p.id===provider);
+  // A recorded filename is authoritative, including when that credential has been removed.
+  if(key)return p?.accounts.find(a=>a.key===key);
+  const named=hasRuntimeId(id) && p?.accounts.find(a=>a.key===id);
+  if(named)return named;
+  const runtime=provider==='claude' && hasRuntimeId(id) ? (current?.gateway.claude_accounts || []).find(a=>a.auth_index===id) : null;
+  email=email || runtime?.email;
+  return (hasRuntimeId(id) && p?.accounts.find(a=>a.id===id || a.auth_index===id)) ||
+    (email && p?.accounts.find(a=>a.email===email));
+}
+function claudeEmail(id) { return providerAccount('claude',id)?.email; }
+function series(provider, id, email, key) {
+  const a=providerAccount(provider,id,email,key);
+  return provider+':'+(a?.key || a?.id || a?.email || 'removed:'+(key || (hasRuntimeId(id) ? id : email || 'unknown')));
+}
+function seriesColor(key) {
+  const palettes={codex:['var(--codex)','var(--codex-2)','#b497d8','#afa0ea'],claude:['var(--claude)','var(--claude-2)','#e9a77e','#b9836f'],
+    xai:['var(--xai)','var(--xai-2)','#b4b7bd','#7d8087'],other:['var(--blue)','#5f9bd6','#a9d2ff','#4a7cb0']};
+  const palette=palettes[accentOf(key.split(':')[0])];
+  let hash=0;for(const char of key)hash=(Math.imul(hash,31)+char.charCodeAt(0))>>>0;
+  return palette[hash%palette.length];
+}
+function seriesDot(key) { return `<i data-series="${esc(key)}" style="background:${seriesColor(key)}"></i>`; }
 // Until the gateway's first snapshot arrives, account routing and identities are unknown, not off.
 function gatewayLoading(data=current) { return data?.gateway?.online == null; }
-function providerChip(provider, id, email) {
-  const name = email || (provider === 'claude' ? claudeEmail(id) : accountFor(id)?.email) || (gatewayLoading() ? '—' : 'Unknown account');
-  return `<span class="account-chip" title="${provider === 'claude' ? 'Claude' : 'Codex'} · ${esc(name)}"><i class="${series(provider, id, email)}"></i>${esc(name)}</span>`;
+function providerChip(provider, id, email, key) {
+  const a=providerAccount(provider,id,email,key);
+  const name=a ? accountLabel(a) : email || (gatewayLoading() ? '—' : 'Removed account');
+  return `<span class="account-chip" title="${esc(providerName(provider))} · ${esc(name)}">${seriesDot(series(provider,id,email,key))}${esc(name)}</span>`;
 }
 function countdown(epoch) {
   if (!epoch) return 'Not reported';
@@ -153,16 +194,17 @@ function currency(amount, code) {
 }
 function watchState(a) {
   if (failed) return {text: 'Status stale', tone: 'warn'};
-  if (a.id === 'claude-b' && a.status === 'missing_token') return {text: 'Sign-in token missing', tone: 'down'};
-  if (a.id === 'claude-b' && (a.status === 'error' || a.status === 'unavailable')) return {text: 'Unavailable', tone: 'down'};
+  if(a.watch_observed===false)return {text:a.disabled?'Disabled':a.availability?.state==='ready'?'Ready to route · no usage data':availabilityLabel(a,current?.gateway || {}),tone:'warn'};
+  if (a.independent_windows===true && a.status === 'missing_token') return {text: 'Sign-in token missing', tone: 'down'};
+  if (a.independent_windows===true && (a.status === 'error' || a.status === 'unavailable')) return {text: 'Unavailable', tone: 'down'};
   let checked = Date.parse(a.checked_at);
-  if (a.id === 'claude-b') {
+  if (a.independent_windows===true) {
     const measured = (Array.isArray(a.windows) ? a.windows : [])
       .filter(w => ['five_hour', 'seven_day'].includes(w.kind))
       .map(w => Date.parse(Object.hasOwn(w, 'measured_at') ? w.measured_at : a.checked_at));
     checked = measured.length && measured.every(Number.isFinite) ? Math.min(...measured) : NaN;
   }
-  const updated = a.id === 'claude-b' ? (Number.isFinite(checked) ? relative(checked) : '')
+  const updated = a.independent_windows===true ? (Number.isFinite(checked) ? relative(checked) : '')
     : (a.checked_at ? relative(a.checked_at) : '');
   if (a.status === 'stale' || (Number.isFinite(checked) && Date.now()-checked > 15*60*1000) ||
       (a.status === 'ok' && !Number.isFinite(checked))) return {text: 'Stale' + (updated ? ' · ' + updated.charAt(0).toLowerCase() + updated.slice(1) : ''), tone: 'warn'};
@@ -175,7 +217,7 @@ function extraUsageText(extra) {
   if (extra.used != null && extra.limit != null) return `${currency(extra.used,extra.currency)} of ${currency(extra.limit,extra.currency)}`;
   return extra.used != null ? `${currency(extra.used,extra.currency)} used` : 'On';
 }
-function watchFor(id) { return (current?.watch_accounts || []).find(a => a.id === id); }
+function watchFor(id) { return (current?.watch_accounts || []).find(a => a.id === id) || providerData().find(p=>p.id==='claude')?.accounts.map(a=>({...a,id:a.watch_id || a.key})).find(a=>a.id===id); }
 function watchResets(a) { return a?.resets && typeof a.resets === 'object' ? a.resets : null; }
 function watchGrants(r) { return Array.isArray(r?.grants) ? r.grants.filter(g => g && typeof g === 'object') : []; }
 function grantExpired(g, now=Date.now()/1000) { return Number.isFinite(g.ends_at) && g.ends_at<=now; }
@@ -259,10 +301,9 @@ function claudeRoutingRow(a) {
     ${claudeRouteErrors.has(a.id) ? `<div class="fast-usage error" role="status">${esc(claudeRouteErrors.get(a.id))}</div>` : ''}`;
 }
 function renderWatch(data) {
-  const accounts = Array.isArray(data.watch_accounts) ? data.watch_accounts : [];
+  const accounts = data.providers ? (data.providers.find(p=>p.id==='claude')?.accounts || []).map(a=>({...a,id:a.watch_id || a.key})) : Array.isArray(data.watch_accounts) ? data.watch_accounts : [];
   reconcileClaude(accounts);
-  $('watch-grid').classList?.toggle('many-accounts',accounts.length>2);
-  $('watch-section').hidden = !accounts.length && !data.gateway?.claude_accounts?.length && !data.gateway?.claude_preference?.saved_mode;
+  $('watch-section').hidden = data.providers ? !data.providers.some(p=>p.id==='claude') : !accounts.length && !data.gateway?.claude_accounts?.length && !data.gateway?.claude_preference?.saved_mode;
   const routes = data.gateway?.claude_accounts;
   $('claude-account-count').textContent = Array.isArray(routes) && routes.length
     ? `${routes.filter(r => !r.disabled && r.status !== 'disabled').length} / ${routes.length}`
@@ -280,13 +321,13 @@ function renderWatch(data) {
   // Rows below the facts line up across cards: a card without resets keeps an empty row when another card shows them.
   const resetsRow = accounts.some(hasResets);
   $('watch-grid').innerHTML = accounts.map(a => {
-    const label = a.id === 'claude' ? 'Claude A' : a.label || 'Claude';
+    const label = a.label || a.email || a.key || 'Claude';
     const name = a.email || label;
     const state = watchState(a);
     const windows = (Array.isArray(a.windows) ? a.windows : []).map(w =>
-      a.id === 'claude-b' && a.status === 'missing_token'
+      a.independent_windows===true && a.status === 'missing_token'
         ? {...w, used: null, remaining: null, resets_at: null}
-        : a.id === 'claude-b' && Number.isFinite(w.resets_at) && w.resets_at <= Date.now()/1000
+        : (a.independent_windows===true || w.usage_source==='gateway') && Number.isFinite(w.resets_at) && w.resets_at <= Date.now()/1000
           ? {...w, used: null, remaining: null} : w);
     const note = a.attempted_at ? `Last attempt ${dateTime(a.attempted_at)}${a.error ? ' · ' + a.error : ''}` : '';
     const r = watchResets(a);
@@ -301,16 +342,16 @@ function renderWatch(data) {
     const remaining = w?.remaining ?? (w?.used == null ? null : Math.max(0, 100 - w.used));
     const stale = state.tone !== 'ok';
     const p = !stale && w?.kind === 'seven_day' ? pace({...w, seconds: w.seconds ?? 604800}, remaining) : null;
-    return `<article class="account-card claude-card${claudeRoutingState(a) === false && !gatewayLoading(data) ? ' is-off' : ''}">
-      <div class="account-top"><div class="account-identity"><div class="account-name"><span title="${esc(name)}">${esc(name)}</span></div></div>${a.plan?`<span class="small-badge">${esc(a.plan)}</span>`:''}</div>
-      <div class="account-body"><div class="quota-label">${esc(w?.label || 'Subscription allowance')}${stale ? ' · last known' : ''}</div>
+    return `<article data-provider="claude" data-account-key="${esc(a.key || a.id)}" class="account-card claude-card${claudeRoutingState(a) === false && !gatewayLoading(data) ? ' is-off' : ''}">
+      <div class="account-top"><div class="account-identity"><div class="account-name"><span title="${esc(name)}">${esc(name)}</span></div></div>${a.plan?`<span class="small-badge">${esc(a.plan)}</span>`:''}${cardMenuButton('claude',a,name)}</div>
+      <div class="account-body"><div class="account-hero"><div class="quota-label">${esc(w?.label || 'Subscription allowance')}${stale ? ' · last known' : ''}</div>
       <div class="quota-value">${remaining == null ? '—' : esc(number(Math.round(remaining)))}${remaining==null?'':'<span class="percent">%</span>'}<span class="remaining-word">remaining</span></div>
       <div class="quota-track${p ? ' has-pace' : ''}" role="progressbar" aria-label="${esc(label)} · ${esc(name)} ${esc(w?.label || '')} allowance remaining" aria-valuemin="0" aria-valuemax="100" ${remaining==null?'':`aria-valuenow="${Math.round(remaining)}"`}${paceValueText(p, remaining)}><span style="width:${Math.min(100,remaining ?? 0)}%"></span>${paceBar(p)}</div>
-      <div class="quota-used">${paceLabel(p)}<span>${w?.used == null ? 'Waiting for usage data' : esc(percent(w.used))+' used'}</span></div>
-      <div class="limit-rows">${limits.join('')}</div>
+      <div class="quota-used">${paceLabel(p)}<span>${w?.used == null ? 'Waiting for usage data' : esc(percent(w.used))+' used'}</span></div></div>
+      <div class="account-side"><div class="limit-rows">${limits.join('')}</div>
       <div class="account-bottom"><div class="account-dates"><div class="reset-block"><span>Allowance resets</span><strong class="countdown" data-reset="${w?.resets_at || ''}" title="${w?.resets_at?esc(dateTime(w.resets_at*1000)):''}">${countdown(w?.resets_at)}</strong></div>${a.extra_usage ? `<div class="reset-block"><span>Extra usage</span><strong>${esc(extraUsageText(a.extra_usage))}</strong></div>` : ''}</div><span class="account-state watch-state-${state.tone}" title="${esc(state.text + (note ? ' · ' + note : ''))}">${icon(state.tone==='ok'?'check':'alert')}<span>${esc(state.text)}</span></span></div>
       ${resets}
-      ${claudeRoutingRow(a)}</div>
+      ${claudeRoutingRow(a)}</div></div>
     </article>`;
   }).join('');
   if (focused) document.getElementById(focused)?.focus();
@@ -356,30 +397,60 @@ function routingState(gateway) {
 function routingValue(value, preference, provider='codex') {
   const prefix=provider==='claude'?'claude-routing':'routing';
   const valid=value=>!!value && Array.from($(prefix+'-mode').options).some(option=>option.value===value);
-  if(valid(value))return value;
+  const key=value=>current?.providers?.find(p=>p.id===provider)?.accounts.find(a=>a.email===value)?.key || value;
+  if(valid(key(value)))return key(value);
   const saved=preference?.saved_mode==='preferred-account' ? preference.saved_preferred_email : preference?.saved_mode;
-  return valid(saved) ? saved : provider==='claude' ? 'account-a@example.com' : 'round-robin';
+  return valid(key(saved)) ? key(saved) : 'earliest-weekly-reset';
+}
+function routingPayload(value, provider) {
+  const p=current?.providers?.find(p=>p.id===(provider==='all'?'codex':provider));
+  const account=p?.accounts.find(a=>a.key===value);
+  if(account && provider==='all') {
+    return {mode:'preferred-account', preferred_keys:Object.fromEntries(current.providers.filter(p=>p.routable).map(p=>[p.id,p.accounts.find(a=>a.email===account.email)?.key]))};
+  }
+  if(account)return {mode:'preferred-account',preferred_key:account.key};
+  return value.includes('@') ? {mode:'preferred-account',preferred_email:value} : {mode:value};
 }
 function routingLocked() { return routingSaving || claudeRoutingSaving || routingAllSaving || routingLinkSaving; }
 // "New conversations only" or "Move all conversations now": one small modal, opened by whichever routing row changed.
 const routingRows = {codex:{row:'codex-routing',prefix:'routing'}, claude:{row:'claude-routing',prefix:'claude-routing'}, all:{row:'routing-all',prefix:'routing-all'}};
 function routingPart(key, part) { return $(routingRows[key].prefix+'-'+part); }
 function routingMoveAvailable() { return current?.gateway?.move_available===true; }
+function routingTarget(key, value) {
+  if(!value || !Array.from(routingPart(key,'mode').options).some(o=>o.value===value && !o.disabled))return null;
+  if(['round-robin','earliest-weekly-reset','highest-remaining-quota'].includes(value))return value;
+  const providers=providerData().filter(p=>key==='all' ? ['codex','claude'].includes(p.id) : p.id===key).sort((a,b)=>a.id.localeCompare(b.id));
+  const account=providers.find(p=>p.id===(key==='all'?'codex':key))?.accounts.find(a=>a.key===value || a.email===value);
+  if(!account)return null;
+  const targets=providers.map(p=>p.id===(key==='all'?'codex':key) ? account : p.accounts.find(a=>a.email===account.email));
+  if(targets.some(a=>!a))return null;
+  return JSON.stringify(targets.map(a=>a.key || a.id || a.email));
+}
+function rejectRoutingChoice(key, value) {
+  const target=routingTarget(key,value);
+  if(target && (routingChoice?.key!==key || routingChoice.value===value && routingChoice.target===target))return false;
+  closeRoutingChoice(true);
+  routingPart(key,'mode').value=routingApplied(key);
+  routingPart(key,'feedback').textContent='Choice unavailable · choose again';
+  return true;
+}
 function routingApplied(key) {
   const gateway=current?.gateway || {};
   return key==='claude' ? routingSelection(gateway.claude_preference,'claude') : routingSelection(gateway.preference,'codex');
 }
 // With one configured Codex account there is nothing to route between, so only Claude keeps a routing choice.
 // The count, not the account list: a retired credential stays listed until its file is removed. Older backends omit it.
-function codexRoutable(gateway) { return typeof gateway?.codex_account_count!=='number' || gateway.codex_account_count>1; }
+function codexRoutable(gateway) { return current?.providers ? current.providers.some(p=>p.id==='codex' && p.routable) : typeof gateway?.codex_account_count!=='number' || gateway.codex_account_count>1; }
+function claudePolicyRoutable() { return current?.providers ? current.providers.some(p=>p.id==='claude' && p.routable) : !$('watch-section').hidden; }
 function routingRowHidden(key, gateway=current?.gateway) {
-  const claude=!$('watch-section').hidden, codex=codexRoutable(gateway), linked=claude && codex && routingLinked(gateway);
+  const claude=claudePolicyRoutable(), codex=codexRoutable(gateway), linked=claude && codex && routingLinked(gateway);
   return key==='all' ? !linked : key==='codex' ? !codex || linked : !claude || linked;
 }
 function routingRowSaving(key) { return key==='all' ? routingAllSaving : key==='claude' ? claudeRoutingSaving : routingSaving; }
 function routingChoiceTitle(key, value) {
   const option=Array.from(routingPart(key,'mode').options).find(option=>option.value===value);
-  return `Switch ${key==='all' ? 'routing' : key==='claude' ? 'Claude routing' : 'Codex routing'} to ${value.includes('@') ? 'prefer '+value : option?.textContent || value}?`;
+  const account=current?.providers?.find(p=>p.id===(key==='all'?'codex':key))?.accounts.find(a=>a.key===value);
+  return `Switch ${key==='all' ? 'routing' : key==='claude' ? 'Claude routing' : 'Codex routing'} to ${account ? 'prefer '+account.label : value.includes('@') ? 'prefer '+value : option?.textContent || value}?`;
 }
 // A move drops every pinned conversation on the gateway, so one gateway's move reaches the other's conversations too.
 function routingMoveNote(key) {
@@ -398,11 +469,13 @@ function closeRoutingChoice(revert=true, focus=false) {
 function openRoutingChoice(key, value) {
   if(routingLocked())return;
   if(routingChoice && routingChoice.key!==key)closeRoutingChoice(true);
+  const target=routingTarget(key,value);
+  if(!target){rejectRoutingChoice(key,value);return;}
   routingRetry.delete(key);
   routingPart(key,'feedback').textContent='';
   if(value===routingApplied(key)){closeRoutingChoice(true);renderRoutingControls();return;}
-  if(routingChoice){routingChoice.value=value;routingChoice.error=false;renderRoutingControls();return;}
-  routingChoice={key,value,applying:null,error:false,focus:'new'};
+  if(routingChoice){routingChoice.value=value;routingChoice.target=target;routingChoice.error=false;renderRoutingControls();return;}
+  routingChoice={key,value,target,applying:null,error:false,focus:'new'};
   renderRoutingControls();
   if(!$('routing-dialog').open)$('routing-dialog').showModal();
   routingChoiceButton('new').focus();
@@ -411,7 +484,8 @@ function routingChoiceButton(kind) { return $('routing-dialog').querySelector(`[
 // A refresh closes an idle choice once it can no longer apply what it shows; an unconfirmed attempt's error moves to the row.
 function expireRoutingChoice(key) {
   if(routingChoice?.key!==key || routingChoice.applying)return;
-  if(failed || current?.read_only || current?.gateway?.online!==true || !routingMoveAvailable() || routingRowHidden(key) || routingApplied(key)===routingChoice.value) {
+  if(failed || current?.read_only || current?.gateway?.online!==true || !routingMoveAvailable() || routingRowHidden(key) || routingApplied(key)===routingChoice.value ||
+      !routingTarget(key,routingChoice.value) || routingTarget(key,routingChoice.value)!==routingChoice.target) {
     const error=routingChoice.error;
     closeRoutingChoice(true);
     if(error)routingPart(key,'feedback').textContent='Not confirmed · refresh and try again';
@@ -522,11 +596,12 @@ function routingRefocus(key) {
 }
 async function saveRouting(value, provider='codex', move=false) {
   if(routingLocked())return;
+  if(rejectRoutingChoice(provider,value))return;
   routingEpoch++;
   const claude=provider==='claude', prefix=claude?'claude-routing':'routing', key=claude?'claude_preference':'preference';
   const select=$(prefix+'-mode'), refocus=routingFocused(provider) ? routingRefocus(provider) : null;
-  value=routingValue(value,current?.gateway[key],provider); select.value=value;
-  const body=value.includes('@') ? {mode:'preferred-account', preferred_email:value} : {mode:value};
+  select.value=value;
+  const body=routingPayload(value,provider);
   if(move)body.move=true;
   routingRetry.delete(provider);
   if(claude)claudeRoutingSaving=true;else routingSaving=true;
@@ -547,16 +622,15 @@ async function saveRouting(value, provider='codex', move=false) {
     refocus?.();
   }
 }
-for(const provider of ['codex','claude']) {
-  const prefix=provider==='claude'?'claude-routing':'routing';
-  $(prefix+'-mode').addEventListener('change', ()=>routingMoveAvailable() ? openRoutingChoice(provider,$(prefix+'-mode').value) : saveRouting($(prefix+'-mode').value,provider));
+for(const [provider,{prefix}] of Object.entries(routingRows).filter(([key])=>key!=='all')) {
+    $(prefix+'-mode').addEventListener('change', ()=>routingMoveAvailable() ? openRoutingChoice(provider,$(prefix+'-mode').value) : saveRouting($(prefix+'-mode').value,provider));
   $(prefix+'-resume').addEventListener('click', ()=>saveRouting($(prefix+'-mode').value,provider));
 }
 // One routing choice covers both gateways unless the user separates them.
 function routingLinked(gateway) { return gateway?.routing_linked!==false; }
 function routingSelection(p, provider) { return routingValue(routingSuspended(p) ? null : p?.policy==='preferred-account' ? p.selected_email : p?.policy,p,provider); }
 function renderRoutingAll(gateway) {
-  const both=!$('watch-section').hidden && codexRoutable(gateway), linked=!routingRowHidden('all',gateway);
+  const both=claudePolicyRoutable() && codexRoutable(gateway), linked=!routingRowHidden('all',gateway);
   syncRoutingLayout();expireRoutingChoice('all');
   for(const key of Object.keys(routingRows))$(routingRows[key].row).hidden=routingRowHidden(key,gateway);
   const split=$('routing-split'), toggle=$('routing-link'), host=linked?$('routing-all'):$('claude-routing');
@@ -585,10 +659,11 @@ function renderRoutingAll(gateway) {
 }
 async function saveRoutingAll(value, relinking=false, move=false) {
   if(routingLocked() && !(relinking && routingLinkSaving && !routingAllSaving))return;
+  if(rejectRoutingChoice('all',value))return;
   routingEpoch++;
   const select=$('routing-all-mode'), refocus=!relinking && routingFocused('all') ? routingRefocus('all') : null;
-  value=routingValue(value,current?.gateway.preference); select.value=value;
-  const body=value.includes('@') ? {mode:'preferred-account', preferred_email:value} : {mode:value};
+  select.value=value;
+  const body=routingPayload(value,'all');
   if(move)body.move=true;
   routingRetry.delete('all');
   routingAllSaving=true; renderRoutingControls(); $('routing-all-feedback').textContent='Applying…';
@@ -617,6 +692,11 @@ async function saveRoutingLink(linked) {
   routingEpoch++;
   const feedback=$(linked?'claude-routing-feedback':'routing-all-feedback');
   const start=$('routing-mode').value, refocus=document.activeElement===$('routing-link');
+  if(linked && !routingTarget('all',start)) {
+    renderRoutingControls();
+    feedback.textContent='Choose a policy or account available to both providers';
+    return;
+  }
   routingLinkSaving=true; renderRoutingControls(); feedback.textContent='Applying…';
   try {
     const result=await request('/api/routing-link',{method:'POST',body:JSON.stringify({linked})});
@@ -941,7 +1021,6 @@ function renderAccounts(gateway) {
   const focus = document.activeElement?.dataset?.fastAccount || (document.activeElement === document.body ? fastFocus : null);
   if(document.activeElement !== document.body && !document.activeElement?.dataset?.fastAccount)fastFocus=null;
   const accounts = gateway.accounts || [];
-  $('account-grid').classList?.toggle('many-accounts',accounts.length>2);
   for(const a of accounts) {
     const session=signinView(a).session;
     if(session && signinPanels.get(a.id)!==session.handle &&
@@ -981,13 +1060,13 @@ function renderAccounts(gateway) {
     const until = a.availability?.retry_at && !failed && gateway.online && ['quota_exhausted','rate_limited','provider_unavailable'].includes(a.availability.state);
     const state = (a.disabled?'Disabled':availabilityLabel(a,gateway)) + (until ? ` · until ${dateTime(a.availability.retry_at*1000)}` : '');
     const verified = a.billing?.verified_at ? `Checked ${dateTime(a.billing.verified_at)} against ${a.billing.source==='user_confirmed'?'your confirmation':'ChatGPT billing'}. Recheck billing if you cancel or change plans.` : 'The account reports access through this date; the next charge has not been confirmed.';
-    return `<article class="account-card codex-card${off?' is-off':''}" data-cardid="${esc(a.id)}" data-access-focus="${esc(a.id+':card')}" tabindex="-1">
-      <div class="account-top"><div class="account-identity"><div class="account-name"><span title="${esc(accountName(a))}">${esc(accountName(a))}</span></div></div><span class="small-badge">${esc(a.plan)}</span></div>
-      <div class="account-body">${session?signinPanel(a,view,gateway):`<div class="quota-label">${esc(w?.label || 'Subscription')} allowance${stale && remaining!=null ? ' · last known' : ''}</div>
+    return `<article data-provider="codex" data-account-key="${esc(a.key || a.id)}" class="account-card codex-card${off?' is-off':''}" data-cardid="${esc(a.id)}" data-access-focus="${esc(a.id+':card')}" tabindex="-1">
+      <div class="account-top"><div class="account-identity"><div class="account-name"><span title="${esc(accountName(a))}">${esc(accountName(a))}</span></div></div><span class="small-badge">${esc(a.plan)}</span>${cardMenuButton('codex',a,accountName(a),`data-access-focus="${esc(a.id+':menu')}"`)}</div>
+      <div class="account-body">${session?signinPanel(a,view,gateway):`<div class="account-hero"><div class="quota-label">${esc(w?.label || 'Subscription')} allowance${stale && remaining!=null ? ' · last known' : ''}</div>
       <div class="quota-value">${remaining == null ? '—' : esc(number(remaining))}${remaining==null?'':'<span class="percent">%</span>'}<span class="remaining-word">remaining</span></div>
       <div class="quota-track${p ? ' has-pace' : ''}" role="progressbar" aria-label="Codex · ${esc(accountName(a))} ${esc(w?.label || '')} allowance remaining" aria-valuemin="0" aria-valuemax="100" ${remaining==null?'':`aria-valuenow="${remaining}"`}${paceValueText(p, remaining)}><span style="width:${remaining ?? 0}%"></span>${paceBar(p)}</div>
-      <div class="quota-used">${paceLabel(p)}<span>${w?.used == null ? a.disabled?'Not available while disabled':'Waiting for quota data' : esc(percent(w.used))+' used'}</span></div>
-      ${other.length?`<div class="limit-rows">${other.map(o=>limitRow(o.label==='5-hour'?'5-hour limit':o.label,o)).join('')}</div>`:''}
+      <div class="quota-used">${paceLabel(p)}<span>${w?.used == null ? a.disabled?'Not available while disabled':'Waiting for quota data' : esc(percent(w.used))+' used'}</span></div></div>`}
+      <div class="account-side">${session?'':`${other.length?`<div class="limit-rows">${other.map(o=>limitRow(o.label==='5-hour'?'5-hour limit':o.label,o)).join('')}</div>`:''}
       ${a.quota_error&&!strip?`<div class="quota-warning">${esc(a.quota_error)}</div>`:''}`}
       ${!session&&outcome?.kind==='signed_in'?`<div class="access-result" role="status">${icon('check')}Signed in just now</div>`:''}
       ${!session&&outcome?.kind==='signed_in'&&outcome.enable_failed===true&&a.disabled===true?`<div class="quota-warning" role="status">Couldn't turn on routing</div>`:''}
@@ -996,19 +1075,23 @@ function renderAccounts(gateway) {
       <div class="account-bottom"><div class="account-dates"><div class="reset-block"><span>Allowance resets</span><strong class="countdown" data-reset="${w?.resets_at || ''}" title="${w?.resets_at?esc(dateTime(w.resets_at*1000)):''}">${countdown(w?.resets_at)}</strong></div><div class="reset-block billing-renewal ${billing.urgent?'renewal-soon':''}" title="${esc(`${billing.badge}. ${billing.note} ${verified}`)}"><span>${esc(billing.ended?billing.label:a.billing?.confirmed?'Renews':billing.label)}</span><strong>${esc(billing.date)}</strong></div></div>${!strip&&!session?`<span class="account-state" title="${esc(state)}">${a.availability?.state==='ready'&&!stale?icon('check'):''}<span>${esc(state)}</span></span>`:''}</div>
       <div class="account-resets"><button type="button" class="resets-button" data-reset-open="${esc(a.id)}" aria-haspopup="dialog">Resets <span>${r.available==null?'—':esc(r.available)}</span></button><span>${r.automatic?'Auto-use before expiry':''}</span></div>
       ${fastRow(a,gateway)}
-      ${routingRow(a,gateway)}</div>
+      ${routingRow(a,gateway)}</div></div>
     </article>`;
   });
   if(!document.querySelector('[data-signin-handle]'))$('account-grid').innerHTML=cards.join('');
   else {
-    for(const card of [...$('account-grid').children])if(!accounts.some(a=>a.id===card.dataset.cardid))card.remove();
+    const grid=$('account-grid'), existing=new Map([...grid.children].map(card=>[card.dataset.accountKey || card.dataset.cardid,card]));
+    const keys=new Set(accounts.map(a=>a.key || a.id));
+    for(const [key,card] of existing)if(!keys.has(key))card.remove();
     cards.forEach((html,index)=>{
     const template=document.createElement('template');template.innerHTML=html;
-    const next=template.content.firstElementChild, old=$('account-grid').children[index];
+    const next=template.content.firstElementChild, old=existing.get(next.dataset.accountKey || next.dataset.cardid);
+    let card=next;
     const panel=old?.querySelector('.signin-panel'), replacement=next.querySelector('.signin-panel');
-    if(old?.dataset.cardid===next.dataset.cardid && panel && replacement &&
+    if(old && panel && replacement &&
         panel.dataset.signinHandle===replacement.dataset.signinHandle &&
         panel.querySelector('code').textContent===replacement.querySelector('code').textContent) {
+      card=old;
       old.className=next.className;panel.className=replacement.className;
       panel.querySelector('.signin-status').replaceWith(replacement.querySelector('.signin-status'));
       const copy=panel.querySelector('[data-signin-copy]'), newCopy=replacement.querySelector('[data-signin-copy]');
@@ -1020,7 +1103,19 @@ function renderAccounts(gateway) {
       old.firstElementChild.replaceWith(next.firstElementChild);
       for(const child of [...panel.parentElement.children])if(child!==panel)child.remove();
       for(const child of [...replacement.parentElement.children].reverse())if(child!==replacement)panel.after(child);
-    } else if(old)old.replaceWith(next);else $('account-grid').append(next);
+    } else if(old)old.replaceWith(next);
+    const before=grid.children[index] || null;
+    if(card!==before) {
+      if(grid.moveBefore && card.parentElement===grid)grid.moveBefore(card,before);
+      else {
+        // Older browsers reset a selection inside a node moved with insertBefore.
+        const selection=typeof window!=='undefined' ? window.getSelection?.() : null;
+        const selected=selection && card.contains(selection.anchorNode) && card.contains(selection.focusNode)
+          ? [selection.anchorNode,selection.anchorOffset,selection.focusNode,selection.focusOffset] : null;
+        grid.insertBefore(card,before);
+        if(selected)selection.setBaseAndExtent(...selected);
+      }
+    }
     });
   }
   if(accessBefore) {
@@ -1032,28 +1127,23 @@ function renderAccounts(gateway) {
   if(focus)document.querySelector(`[data-fast-account="${CSS.escape(focus)}"]`)?.focus();
 
 }
-// Request flow keeps unmapped Claude history separate from the known accounts.
-const SERIES = [['codex','codex-one'],['codex','codex-two'],['claude','claude-one'],['claude','claude-two'],['claude','claude-unknown']];
-// A retired second Codex account (listed after the configured one, or no longer listed) keeps a series only while history shows its requests.
-function codexSecondShown() {
-  return codexRoutable(current?.gateway) && (current?.gateway.accounts || []).length > 1 ||
-    [current?.usage,today?.usage].some(u=>(u?.hours || []).some(r=>r.requests && series('codex',r.auth_index,r.email)==='codex-two'));
+function seriesEntries() {
+  const entries=new Map();
+  for(const p of providerData())for(const a of p.accounts)entries.set(series(p.id,a.auth_index || a.id,a.email,a.key),{provider:p.id,name:accountLabel(a)});
+  for(const u of [current?.usage,today?.usage])for(const [provider, summary] of Object.entries(usageProviders(u)))for(const row of [...(summary.hours || []),...(summary.accounts || [])].filter(r=>r.requests>0)) {
+    const key=series(provider,row.auth_index,row.email,row.key);
+    if(!entries.has(key))entries.set(key,{provider,name:'Removed account'});
+  }
+  return entries;
 }
-function seriesNames() {
-  const accounts = current?.gateway.accounts || [], [first,second] = claudeSeriesEmails();
-  return {'codex-one': accounts[0] && accountName(accounts[0]), 'codex-two': codexSecondShown() && (accounts[1] ? accountName(accounts[1]) : 'Removed account'),
-    'claude-one': first, 'claude-two': second,
-    'claude-unknown': 'Unknown account'};
-}
+function seriesNames() { return Object.fromEntries([...seriesEntries()].map(([key,value])=>[key,value.name])); }
 function renderLegend() {
-  const names = seriesNames();
-  const unknown=[current?.usage,today?.usage].some(u=>[...(u?.claude?.accounts || []),...(u?.claude?.hours || []),
-    ...(u?.recent || []).filter(r=>r.provider==='claude')].some(r=>series('claude',r.auth_index,r.email)==='claude-unknown'));
-  const group = (title, provider) => {
-    const items = SERIES.filter(([p, key]) => p === provider && names[key] && (key!=='claude-unknown' || unknown)).map(([, key]) => `<span><i class="${key}"></i>${esc(names[key])}</span>`);
-    return items.length ? `<div class="legend-group ${provider}"><b>${title}</b>${items.join('')}</div>` : '';
-  };
-  for (const legend of document.querySelectorAll('[data-account-legend]')) legend.innerHTML = group('Codex', 'codex') + group('Claude', 'claude');
+  const groups=new Map();
+  for(const [key,value] of seriesEntries()) {
+    if(!groups.has(value.provider))groups.set(value.provider,[]);
+    groups.get(value.provider).push(`<span>${seriesDot(key)}${esc(value.name)}</span>`);
+  }
+  for(const legend of document.querySelectorAll('[data-account-legend]'))legend.innerHTML=[...groups].map(([provider,items])=>`<span class="legend-group ${accentOf(provider)}" data-provider="${esc(provider)}"><b>${esc(providerName(provider))}</b>${items.join('')}</span>`).join('');
 }
 function renderChart(id, usage, selectedRange) {
   const now = new Date(), start = new Date(startFor(selectedRange));
@@ -1069,29 +1159,30 @@ function renderChart(id, usage, selectedRange) {
   }
   const bins = Array.from({length},(_,i)=>{
     const d = new Date(start); if(daily)d.setDate(d.getDate()+i);else d.setHours(i);
-    return {date:d,'codex-one':0,'codex-two':0,'claude-one':0,'claude-two':0,'claude-unknown':0};
+    return Object.assign({date:d},Object.fromEntries([...seriesEntries().keys()].map(key=>[key,0])));
   });
-  for (const [provider, rows] of [['codex', usage.hours], ['claude', usage.claude?.hours]]) for (const row of rows || []) {
+  for (const [provider, summary] of Object.entries(usageProviders(usage))) for (const row of summary.hours || []) {
     const d = new Date(row.hour);
     const bin = bins.find(b => daily ? b.date.toDateString()===d.toDateString() : b.date.getHours()===d.getHours() && b.date.toDateString()===d.toDateString());
-    if (bin) bin[series(provider, row.auth_index, row.email)] += row.requests;
+    if (bin) { const key=series(provider,row.auth_index,row.email,row.key);bin[key]=(bin[key] || 0)+row.requests; }
   }
-  const sum = b => SERIES.reduce((n, [, key]) => n + b[key], 0);
+  const SERIES=[...seriesEntries()].map(([key,value])=>[value.provider,key]);
+  const sum = b => SERIES.reduce((n, [, key]) => n + (b[key] || 0), 0);
   const max = Math.max(1,...bins.map(sum));
   const label = d => daily ? d.toLocaleDateString(undefined,{month:'short',day:'numeric'}) : d.toLocaleTimeString(undefined,{hour:'2-digit',hour12:false});
   const ticks = [...new Set([0,Math.floor((length-1)/3),Math.floor(2*(length-1)/3),length-1])];
   const names = seriesNames();
-  const title = b => SERIES.filter(([, key]) => names[key]).map(([provider, key]) => `${provider === 'claude' ? 'Claude' : 'Codex'} ${names[key]} ${b[key]}`).join(' · ');
-  $(id).innerHTML = `<div class="bars" role="img" aria-label="Request counts over time. Details are available in the account usage table.">${bins.map(b=>`<div class="bar-slot" title="${esc(label(b.date))} · ${esc(title(b))} requests">${[...SERIES].reverse().map(([, key])=>`<span class="${key}" style="height:${b[key]/max*100}%"></span>`).join('')}</div>`).join('')}</div><div class="chart-labels">${ticks.map(i=>`<span>${esc(label(bins[i].date))}</span>`).join('')}</div>`;
+  const title = b => SERIES.filter(([, key]) => names[key]).map(([provider, key]) => `${providerName(provider)} ${names[key]} ${b[key]}`).join(' · ');
+  $(id).innerHTML = `<div class="bars" role="img" aria-label="Request counts over time. Details are available in the account usage table.">${bins.map(b=>`<div class="bar-slot" title="${esc(label(b.date))} · ${esc(title(b))} requests">${[...SERIES].reverse().map(([, key])=>`<span data-series="${esc(key)}" style="background:${seriesColor(key)};height:${(b[key] || 0)/max*100}%"></span>`).join('')}</div>`).join('')}</div><div class="chart-labels">${ticks.map(i=>`<span>${esc(label(bins[i].date))}</span>`).join('')}</div>`;
 }
 function table(headers, rows, empty='No requests recorded in this period.', classes=[]) {
   if (!rows.length) return `<div class="empty-state">${esc(empty)}</div>`;
   return `<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r,i)=>`<tr${classes[i]?` class="${classes[i]}"`:''}>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
-const gatewayRow = provider => provider === 'claude' ? 'claude-row' : 'codex-row';
+const gatewayRow = provider => (!provider || provider==='codex' ? 'codex' : provider==='claude' ? 'claude' : accentOf(provider))+'-row';
 function renderUsage(data) {
-  const u = data.usage, claude = u.claude || {}, codexRows = u.accounts || [], claudeRows = claude.accounts || [];
-  const t = totals([...codexRows, ...claudeRows]), good = t.requests ? 100*(t.requests-t.failures)/t.requests : null;
+  const u=data.usage, summaries=Object.entries(usageProviders(u)), rows=summaries.flatMap(([provider,s])=>(s.accounts || []).map(r=>({...r,provider})));
+  const t = totals(rows), good = t.requests ? 100*(t.requests-t.failures)/t.requests : null;
   if (!u.available) {
     $('usage-summary').innerHTML = '<div class="metric-card"><span>Usage history</span><strong>—</strong></div>';
     $('usage-chart').innerHTML = '<div class="empty-state">Waiting for usage history</div>';
@@ -1103,14 +1194,14 @@ function renderUsage(data) {
   $('usage-summary').innerHTML = [['Requests',number(t.requests)],['Tokens',compact(t.total_tokens)],['Success rate',percent(good)],['Cached input',t.input_tokens?percent(100*t.cached_tokens/t.input_tokens):'—',split]].map(([label,value,detail=''])=>`<div class="metric-card"><span>${label}</span><strong>${value}</strong>${detail}</div>`).join('');
   renderChart('usage-chart',u,range);
   $('chart-caption').textContent = range==='today'?'By hour · your local time':range==='week'?'By day · your local time':'By day · up to the latest 30 days';
-  const row = provider => r => [`<span class="mono gateway-name">${provider === 'claude' ? 'Claude' : 'Codex'}</span>`,providerChip(provider,r.auth_index,r.email),number(r.requests),number(r.input_tokens),number(r.cached_tokens),cacheAmount(r,'cache_read'),cacheAmount(r,'cache_creation'),number(r.output_tokens),number(r.failures)];
-  $('usage-accounts').innerHTML = table(['Gateway','Account','Requests','Input tokens','Cached input','Cache read','Cache write','Output tokens','Failures'],[...codexRows.map(row('codex')),...claudeRows.map(row('claude'))],undefined,[...codexRows.map(()=>'codex-row'),...claudeRows.map(()=>'claude-row')]);
-  const models = [...(u.models || []).map(r=>({...r,provider:'codex'})), ...(claude.models || []).map(r=>({...r,provider:'claude'}))].sort((a,b)=>(b.requests||0)-(a.requests||0));
+  const row = provider => r => [`<span class="mono gateway-name">${esc(providerName(provider))}</span>`,providerChip(provider,r.auth_index,r.email,r.key),number(r.requests),number(r.input_tokens),number(r.cached_tokens),cacheAmount(r,'cache_read'),cacheAmount(r,'cache_creation'),number(r.output_tokens),number(r.failures)];
+  $('usage-accounts').innerHTML = table(['Gateway','Account','Requests','Input tokens','Cached input','Cache read','Cache write','Output tokens','Failures'],rows.map(r=>row(r.provider)(r)),undefined,rows.map(r=>gatewayRow(r.provider)));
+  const models = summaries.flatMap(([provider,s])=>(s.models || []).map(r=>({...r,provider}))).sort((a,b)=>(b.requests||0)-(a.requests||0));
   $('usage-models').innerHTML = table(['Model','Requests','Tokens','Average duration'],models.map(r=>[esc(r.model),number(r.requests),number(r.total_tokens),r.latency_ms==null?'—':`${(r.latency_ms/1000).toFixed(1)}s`]),undefined,models.map(r=>gatewayRow(r.provider)));
   $('history-note').textContent = `History starts ${dateTime(usageSince(u))}. These are best-effort gateway records, refreshed every 15 seconds. Subscription allowances are reported separately by the provider.`;
 }
 function renderToday(data) {
-  const u = data.usage, t = totals(u.accounts), c = u.claude ? totals(u.claude.accounts) : null;
+  const u=data.usage, summaries=Object.entries(usageProviders(u));
   if (!u.available) {
     for (const id of ['today-requests','today-success','claude-today-requests','claude-today-success','tokens-today','cache-percent','cache-split']) $(id).textContent='—';
     $('token-detail').textContent='Waiting for recorded usage'; $('cache-fill').style.width='0%';
@@ -1118,14 +1209,16 @@ function renderToday(data) {
     $('recent-table').innerHTML='<div class="empty-state">Waiting for recorded requests</div>';
     return;
   }
-  const success = x => x?.requests ? percent((x.requests-x.failures)/x.requests*100) : '—';
-  $('today-requests').textContent = number(t.requests);
-  $('today-success').textContent = success(t);
-  $('claude-today-requests').textContent = c ? number(c.requests) : '—';
-  $('claude-today-success').textContent = success(c);
-  const all = c ? totals([t, c]) : t;
-  $('tokens-today').textContent = compact(all.total_tokens);
-  $('token-detail').innerHTML = `<span><i class="codex-one"></i>Codex ${esc(compact(t.total_tokens))}</span><span><i class="claude-one"></i>Claude ${c ? esc(compact(c.total_tokens)) : '—'}</span>`;
+  const success=x=>x?.requests ? percent((x.requests-x.failures)/x.requests*100) : '—';
+  for(const p of providerData()) {
+    const t=totals(usageProviders(u)[p.id]?.accounts || []);
+    const prefix=p.id==='codex'?'':p.id+'-';
+    const requests=$(prefix+'today-requests'), ok=$(prefix+'today-success');
+    if(requests)requests.textContent=number(t.requests);if(ok)ok.textContent=success(t);
+  }
+  const all=totals(summaries.flatMap(([,s])=>s.accounts || []));
+  $('tokens-today').textContent=compact(all.total_tokens);
+  $('token-detail').innerHTML=summaries.map(([provider,s])=>`<span>${seriesDot(provider+':total')}${esc(providerName(provider))} ${esc(compact(totals(s.accounts || []).total_tokens))}</span>`).join('');
   $('token-detail').title = `${number(all.input_tokens)} input · ${number(all.output_tokens)} output tokens`;
   const cache = all.input_tokens ? Math.min(100,all.cached_tokens/all.input_tokens*100) : 0;
   $('cache-fill').style.width = `${cache}%`;
@@ -1134,10 +1227,11 @@ function renderToday(data) {
   renderChart('overview-chart',u,'today');
   const recent = u.recent.slice(0,6);
   const recentCache = r => `<span class="mono" title="${esc(`Read ${number(r.cache_read_tokens)} · Write ${number(r.cache_creation_tokens)}`)}">${compact(r.cache_read_tokens)} · ${compact(r.cache_creation_tokens)}</span>`;
-  $('recent-table').innerHTML = table(['Account','Model','Reasoning','Mode','Tokens','Cache read · write','Result','Time'],recent.map(r=>[providerChip(r.provider === 'claude' ? 'claude' : 'codex',r.auth_index,r.email),`<span class="mono">${esc(r.model)}</span>`,reasoningCell(r.reasoning_effort),modeCell(r),`<span class="mono" title="${number(r.total_tokens)}">${compact(r.total_tokens)}</span>`,recentCache(r),`<span class="outcome ${r.failed?'failed':''}">${r.failed?'Failed':icon('check')+'Completed'}</span>`,`<span class="mono" title="${esc(dateTime(r.timestamp))}">${esc(new Date(r.timestamp).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}))}</span>`]),undefined,recent.map(r=>gatewayRow(r.provider)));
+  $('recent-table').innerHTML = table(['Account','Model','Reasoning','Mode','Tokens','Cache read · write','Result','Time'],recent.map(r=>[providerChip(r.provider || 'codex',r.auth_index,r.email,r.key),`<span class="mono">${esc(r.model)}</span>`,reasoningCell(r.reasoning_effort),modeCell(r),`<span class="mono" title="${number(r.total_tokens)}">${compact(r.total_tokens)}</span>`,recentCache(r),`<span class="outcome ${r.failed?'failed':''}">${r.failed?'Failed':icon('check')+'Completed'}</span>`,`<span class="mono" title="${esc(dateTime(r.timestamp))}">${esc(new Date(r.timestamp).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}))}</span>`]),undefined,recent.map(r=>gatewayRow(r.provider)));
 }
 function renderSystem(data) {
   const g=data.gateway,r=g.routing, tailscale=data.access_transport==='tailscale';
+  if($('machine-name'))$('machine-name').textContent=data.machine || '';
   $('advanced-link').closest('.advanced').hidden=!!data.read_only;
   $('system-routing-label').textContent = routingLabel(g);
   const ttl=['1h0m0s','1h0m1s'].includes(r['session-affinity-ttl'])?'1h':r['session-affinity-ttl'];
@@ -1160,6 +1254,562 @@ function renderOperations(data) {
   if(failed && backup==='healthy')backup='stale';
   $('health-panel').innerHTML=`<span class="health-item health-${esc(backup)}" title="${esc(`Last successful backup: ${dateTime(h.backup?.last_success_at)} · same disk`)}"><i aria-hidden="true"></i><span>Backup</span><b>${h.backup?.last_success_at ? esc(relative(h.backup.last_success_at).replace('Updated ',''))+' · ' : ''}${esc(labels[backup] || 'Unknown')}</b></span>`;
 }
+// Sections grow in proportion to their account count, so every card on a line gets the same width (see .gateway in style.css).
+function sectionSize(section, count) { section.style.setProperty?.('--n',String(Math.max(1,count))); }
+function providerStatus(p, gateway) {
+  const checked=Date.parse(gateway.checked_at), ready=p.accounts.filter(a=>!a.disabled && a.availability?.state==='ready').length;
+  const [tone,text]=failed || gateway.online!==true || !Number.isFinite(checked) || Date.now()-checked>180000 ? ['warn','Status unavailable · checking']
+    : ready===p.accounts.length ? ['ok','All accounts ready'] : !ready ? ['down','No accounts ready']
+    : ['warn',ready===1 ? 'One account ready' : `${ready} of ${p.accounts.length} ready`];
+  return `<span class="status-item ${tone}">${esc(text)}</span>`;
+}
+function lastRequest(epoch) {
+  if(!Number.isFinite(epoch))return '—';
+  const text=relative(epoch*1000).replace('Updated ','');
+  return text.charAt(0).toUpperCase()+text.slice(1);
+}
+// Today's requests per local hour; hours still to come stay blank.
+function hourChart(hours) {
+  const now=new Date().getHours(), values=Array.from({length:24},(_,h)=>Math.max(0,Number(hours?.[h]) || 0)), peak=Math.max(1,...values);
+  const bars=values.map((v,h)=>!v ? `<span class="${h>now ? 'later' : 'none'}"></span>` :
+    `<span style="height:${Math.max(4,v/peak*100).toFixed(1)}%" title="${String(h).padStart(2,'0')}:00 · ${esc(number(v))} ${v===1 ? 'request' : 'requests'}"></span>`).join('');
+  return `<div class="hour-chart"><div class="hour-bars" role="img" aria-label="Requests by hour today">${bars}</div><div class="hour-axis" aria-hidden="true"><span>00</span><span>12</span><span>23</span></div></div>`;
+}
+// "Use for routing" on other providers turns the gateway's disabled flag off and on; turning off the last ready account asks first.
+const genericRoutePending=new Set(), genericRouteConfirm=new Set(), genericRouteErrors=new Map();
+let genericNextFocus='';
+const accountReady = a => !a.disabled && a.availability?.state==='ready';
+function genericRoutingRow(p, a, gateway) {
+  if(typeof a.routing_enabled!=='boolean')return '';
+  const id=p.id+':'+a.key, input=`generic-route-${p.id}-${a.key}`, pending=genericRoutePending.has(id), required=a.availability?.state==='auth_required';
+  const disabled=required || accessBlocked(gateway) || pending;
+  const title=required?'Sign in to use for routing':current?.read_only?'Change routing from your computer dashboard':failed||gateway.online!==true?'Gateway unreachable':'';
+  return `<div class="account-route"><label for="${esc(input)}">Use for routing</label><input id="${esc(input)}" data-generic-route="${esc(id)}" type="checkbox" role="switch" ${a.routing_enabled && !required?'checked':''} ${disabled?'disabled':''} ${pending?'aria-busy="true"':''} ${title?`title="${title}"`:''}></div>
+    ${genericRouteConfirm.has(id)?`<div class="route-confirm" role="alert"><span>No other ${esc(p.name)} account is ready.</span><div><button type="button" class="reset-primary confirm" id="${esc(input)}-off" data-generic-route-off="${esc(id)}">Turn off</button><button type="button" class="reset-cancel" id="${esc(input)}-keep" data-generic-route-keep="${esc(id)}">Keep on</button></div></div>`:''}
+    ${genericRouteErrors.get(id)>Date.now()?'<div class="fast-usage error" role="status">Change not confirmed. Try again.</div>':''}`;
+}
+// Usage windows a provider reports through the gateway (Grok's billing credits). The first is the headline; a window
+// whose reset has passed reads "—" until the next read. Bare period labels ("Monthly") are credit windows.
+function genericUsage(a, now=Date.now()) {
+  const windows=(Array.isArray(a.windows) ? a.windows : []).filter(w=>Number.isFinite(w?.used_pct ?? w?.used)).map(w=>{
+    const used=Math.min(100,Math.max(0,w.used_pct ?? w.used)), due=Number.isFinite(w.resets_at) && w.resets_at*1000<=now;
+    return {...w,used:due ? null : used,remaining:due ? null : 100-used};
+  });
+  if(!windows.length)return null;
+  const [w,...others]=windows, label=/^(daily|weekly|monthly)$/i.test(w.label || '') ? w.label+' credits' : w.label || 'Usage';
+  const checked=Date.parse(a.usage_checked_at), updated=Number.isFinite(checked) ? relative(checked) : '';
+  const stale=!Number.isFinite(checked) || now-checked>15*60*1000 || a.usage_status==='error';
+  return {w,others,label,credits:/credit/i.test(label),stale,
+    freshness:stale ? 'Stale'+(updated ? ' · '+updated.charAt(0).toLowerCase()+updated.slice(1) : '') : updated};
+}
+// Providers without allowance data: today's requests are the headline. With usage windows, "% remaining" leads instead.
+function genericCard(p, a, gateway) {
+  const t=a.today || {}, requests=t.requests ?? a.requests ?? 0, name=accountLabel(a), u=genericUsage(a);
+  const signin=a.availability?.state==='auth_required' && !a.disabled, reauth=signin && !current?.read_only && !!addProvider(p.id);
+  const until=a.availability?.retry_at && !failed && gateway.online && ['quota_exhausted','rate_limited','provider_unavailable'].includes(a.availability.state);
+  const state=availabilityLabel(a,gateway)+(until ? ` · until ${dateTime(a.availability.retry_at*1000)}` : '');
+  const success=t.success_rate==null ? null : percent(t.success_rate*100), ready=state==='Ready to route';
+  // A ready account with usage shows its freshness in the state spot, as Claude cards do; other states keep priority.
+  const shown=u && ready ? u.freshness : state, tone=u && ready ? u.stale ? 'warn' : 'ok' : '';
+  const remaining=u?.w.remaining;
+  const hero=u ? `<div class="account-hero"><div class="quota-label">${esc(u.label)}${u.stale ? ' · last known' : ''}</div>
+      <div class="quota-value">${remaining==null ? '—' : esc(number(Math.round(remaining)))+'<span class="percent">%</span>'}<span class="remaining-word">remaining</span></div>
+      <div class="quota-track" role="progressbar" aria-label="${esc(name)} ${esc(u.label)} remaining" aria-valuemin="0" aria-valuemax="100" ${remaining==null ? '' : `aria-valuenow="${Math.round(remaining)}"`}><span style="width:${remaining ?? 0}%"></span></div>
+      <div class="quota-used"><span>${esc(number(requests))} ${requests===1 ? 'request' : 'requests'} today</span><span>${u.w.used==null ? 'Waiting for usage data' : esc(percent(u.w.used))+' used'}</span></div></div>`
+    : `<div class="account-hero"><div class="quota-label">Requests today</div>
+      <div class="quota-value">${esc(number(requests))}<span class="remaining-word">${success==null ? '' : esc(success)+' success'}</span></div></div>`;
+  const facts=u ? `<div class="reset-block"><span>${u.credits ? 'Credits reset' : 'Resets'}</span><strong class="countdown" data-reset="${u.w.resets_at || ''}" title="${u.w.resets_at ? esc(dateTime(u.w.resets_at*1000)) : ''}">${countdown(u.w.resets_at)}</strong></div><div class="reset-block"><span>Success today</span><strong>${esc(success ?? '—')}</strong></div>`
+    : `<div class="reset-block"><span>Last request</span><strong>${esc(lastRequest(t.last_request_at))}</strong></div>`;
+  return `<article class="account-card generic-card ${providerAccent(p)}-card${a.disabled || signin ? ' is-off' : ''}" data-provider="${esc(p.id)}" data-account-key="${esc(a.key)}">
+      <div class="account-top"><div class="account-identity"><div class="account-name"><span title="${esc(name)}">${esc(name)}</span></div></div>${a.plan ? `<span class="small-badge">${esc(a.plan)}</span>` : ''}${cardMenuButton(p.id,a,name)}</div>
+      <div class="account-body">${hero}
+      <div class="account-side">${u?.others.length ? `<div class="limit-rows">${u.others.map(w=>limitRow(w.label || 'Usage window',w)).join('')}</div>` : ''}${hourChart(t.hours)}
+      ${signin ? `<div class="account-access critical"><div class="account-access-row"><span>${icon('alert')}Sign in required</span>${reauth ? `<button type="button" class="resets-button" id="${esc(`signin-${p.id}-${a.key}`)}" data-add-provider="${esc(p.id)}" data-add-key="${esc(a.key)}" aria-haspopup="dialog">Sign in</button>` : ''}</div></div>` : ''}
+      <div class="account-bottom"><div class="account-dates">${facts}</div>${signin ? '' : `<span class="account-state${tone ? ' watch-state-'+tone : ''}" title="${esc(u ? state+' · '+u.freshness : state)}">${tone ? icon(tone==='ok' ? 'check' : 'alert') : ready ? icon('check') : ''}<span>${esc(shown)}</span></span>`}</div>
+      ${genericRoutingRow(p,a,gateway)}</div></div>
+    </article>`;
+}
+function renderProviders(data) {
+  if(!data.providers)return;
+  const list=data.providers, count=id=>list.find(p=>p.id===id)?.accounts.length || 0;
+  const active=document.activeElement, focusId=genericNextFocus || (active?.closest?.('[data-generic-provider]') ? active.id : '');
+  for(const id of [...genericRoutePending,...genericRouteConfirm,...genericRouteErrors.keys()]) {
+    const p=list.find(p=>p.id===id.slice(0,id.indexOf(':'))), a=p?.accounts.find(a=>p.id+':'+a.key===id);
+    if(!a)for(const store of [genericRoutePending,genericRouteConfirm,genericRouteErrors])store.delete(id);
+    else if(genericRouteConfirm.has(id) && (!a.routing_enabled || !accountReady(a) || p.accounts.some(b=>b!==a && accountReady(b))))genericRouteConfirm.delete(id);
+  }
+  $('codex-accounts').hidden=!list.some(p=>p.id==='codex');
+  sectionSize($('codex-accounts'),count('codex'));sectionSize($('watch-section'),count('claude'));
+  const known=new Set(list.map(p=>p.id));
+  document.querySelectorAll('[data-generic-provider]').forEach(el=>{if(!known.has(el.dataset.genericProvider))el.remove();});
+  for(const p of list) {
+    if(p.id==='codex' || p.id==='claude')continue;
+    let section=document.querySelector(`[data-generic-provider="${CSS.escape(p.id)}"]`);
+    if(!section){section=document.createElement('section');section.dataset.genericProvider=p.id;}
+    $('gateways').insertBefore(section,$('routing-all'));
+    const accent=providerAccent(p), stats=totals(usageProviders((today || data).usage)[p.id]?.accounts || []);
+    section.className=`gateway generic-gateway ${accent}-gateway`;section.dataset.provider=p.id;section.dataset.accent=accent;
+    section.setAttribute?.('aria-labelledby',p.id+'-heading');
+    sectionSize(section,p.accounts.length);
+    section.innerHTML=`<header class="gateway-head"><div class="pool-name">${providerIcon(p)}<div><div class="gateway-title"><h2 id="${esc(p.id)}-heading">${esc(p.name)}</h2></div><div class="gateway-status">${providerStatus(p,data.gateway)}</div></div></div><div class="gateway-stats"><div class="pool-stat"><span>Accounts</span><strong>${p.accounts.filter(a=>a.active).length} / ${p.accounts.length}</strong></div><div class="pool-stat"><span>Requests today</span><strong id="${esc(p.id)}-today-requests">${number(stats.requests)}</strong></div><div class="pool-stat"><span>Success today</span><strong id="${esc(p.id)}-today-success">${stats.requests?percent(100*(stats.requests-stats.failures)/stats.requests):'—'}</strong></div></div></header><div class="account-grid">${p.accounts.map(a=>genericCard(p,a,data.gateway)).join('')}</div><div class="routing-slot" aria-hidden="true" hidden></div>`;
+  }
+  if(focusId) {
+    const target=document.getElementById(focusId);
+    if(target && !target.disabled){if(target!==document.activeElement)target.focus?.({preventScroll:true});genericNextFocus='';}
+  }
+  const online=data.gateway.online, adding=Array.isArray(data.add_providers);
+  $('inventory-empty').hidden=!!list.length;$('inventory-empty-icons').hidden=online!==true;
+  $('inventory-empty-text').textContent=online===true ? adding ? 'Add your first account' : 'No accounts connected yet' : online===null ? 'Connecting to your gateway…' : 'Gateway inventory is unavailable';
+  $('inventory-empty-add').hidden=online!==true || !adding || !!data.read_only;
+  const modes=[['round-robin','Round-robin'],['earliest-weekly-reset','Earliest reset'],['highest-remaining-quota','Higher remaining quota']];
+  for(const key of Object.keys(routingRows)) {
+    const select=routingPart(key,'mode'), selected=select.value;
+    const accounts=key==='all' ? (list.find(p=>p.id==='codex')?.accounts || []).filter(a=>list.find(p=>p.id==='claude')?.accounts.some(b=>b.email===a.email)) : list.find(p=>p.id===key)?.accounts || [];
+    const options=[...modes,...accounts.filter(a=>a.email).map(a=>[a.key,'Prefer '+a.label])];
+    const markup=options.map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('');
+    if(select.innerHTML!==markup){select.innerHTML=markup;select.value=selected;}
+  }
+}
+// Sections on one line end their cards level: one without its own routing row reserves the height of the tallest beside it.
+function reserveRouting() {
+  const sections=[...document.querySelectorAll('#gateways>.gateway:not([hidden])')], lines=new Map();
+  const row=s=>s.querySelector(':scope>.routing-control:not([hidden])'), slot=s=>s.querySelector(':scope>.routing-slot');
+  for(const s of sections)if(slot(s))slot(s).hidden=true;
+  for(const s of sections)lines.set(s.offsetTop,[...(lines.get(s.offsetTop) || []),s]);
+  for(const line of lines.values()) {
+    const tallest=Math.max(0,...line.map(s=>row(s)?.offsetHeight || 0));
+    for(const s of line)if(slot(s) && !row(s) && tallest){slot(s).hidden=false;slot(s).style.height=tallest+'px';}
+  }
+}
+// Adding and disconnecting accounts. One dialog, shaped like the routing choice, serves both; the gateway owns sign-in sessions.
+const addProviders = () => Array.isArray(current?.add_providers) ? current.add_providers : [];
+const addProvider = id => addProviders().find(p=>p.id===id);
+// Disconnect is refused through the Tailscale address and in read-only views. Adding works over Tailscale too.
+const disconnectBlocked = () => current?.access_transport==='tailscale' || !!current?.read_only;
+let accountFlow=null, accountOpener=null, accountTimers=[];
+async function accountCall(path, body) {
+  const response=await fetch(path,{method:body?'POST':'GET',...(body?{body:JSON.stringify(body)}:{}),headers:{'X-Router-Request':'1',...(body?{'Content-Type':'application/json'}:{})},cache:'no-store',signal:AbortSignal.timeout(ACCOUNT_BROWSER_TIMEOUT_MS)});
+  let data=null;try{data=await response.json();}catch(_){}
+  return {status:response.status,ok:response.ok,data:data && typeof data==='object'?data:{}};
+}
+function accountTimer(fn, ms) { const id=setTimeout(()=>{accountTimers=accountTimers.filter(t=>t!==id);fn();},ms);accountTimers.push(id); }
+function clearAccountTimers() { accountTimers.forEach(clearTimeout);accountTimers=[]; }
+// A session is live from start until the gateway reports a result; only a live one is cancelled on close.
+const addLive = f => f?.kind==='add' && ['signin','finishing'].includes(f.view);
+const addLocked = f => f?.kind==='add' ? f.view==='cancelling' : f?.view==='working';
+const sameAddAttempt = (f, attempt, session) => accountFlow===f && f.attempt===attempt && f.session===session;
+function addStatus(f) {
+  if(f.view==='finishing')return {text:'Finishing sign-in…',tone:''};
+  if(f.offline)return {text:f.offline==='gateway'?'Gateway unreachable · retrying':'Connection lost · retrying',tone:'warn'};
+  const waiting=f.flow==='device' ? 'Waiting for approval' : 'Sign-in open';
+  if(!Number.isFinite(f.expires))return {text:waiting,tone:''};
+  const left=Math.max(0,Math.ceil((f.expires-Date.now())/1000));
+  if(!left)return {text:(f.flow==='device' ? 'Code expired' : 'Sign-in expired')+' · checking',tone:'warn'};
+  return {text:`${waiting} · ${left<120 ? left+' s' : Math.ceil(left/60)+' min'} left`,tone:left<120 ? 'warn' : ''};
+}
+// The dashboard only checks the address's shape; the server checks it belongs to this sign-in.
+function callbackShape(value) {
+  try { const url=new URL(value);return ['http:','https:'].includes(url.protocol) && ['localhost','127.0.0.1'].includes(url.hostname) && url.searchParams.has('code'); }
+  catch (_) { return false; }
+}
+const dialogHead = (p, title) => `<div class="dialog-head">${p ? providerIcon(p,true) : ''}<h2 id="account-dialog-title">${title}</h2></div>`;
+const dialogCancel = (label='Cancel', attrs='') => `<button type="button" class="reset-cancel" data-dialog-cancel ${attrs}>${label}</button>`;
+const codeBox = (f, dead) => `<div class="code-box${dead ? ' dim' : ''}"><code aria-label="Code ${esc(f.code.split('').join(' '))}">${esc(f.code)}</code><button type="button" class="resets-button" data-add-copy ${dead ? 'tabindex="-1" aria-hidden="true"' : ''}>${f.copiedUntil>Date.now() ? icon('check')+'Copied' : 'Copy'}</button></div>`;
+function accountDialogHtml(f) {
+  if(f.kind==='disconnect') {
+    const p=providerData().find(p=>p.id===f.provider) || {id:f.provider,name:providerName(f.provider)}, working=f.view==='working';
+    return `${dialogHead(p,`Disconnect ${esc(f.name)} from the gateway?`)}
+      <p class="dialog-note">Requests stop using it. Your ${esc(p.name)} subscription and other sign-ins stay as they are.</p>
+      ${f.last ? `<p class="dialog-warn">${icon('alert')}<span>It's your only ready ${esc(p.name)} account. ${esc(p.name)} requests will fail until you add another.</span></p>` : ''}
+      ${f.error ? `<p class="dialog-error" role="alert">${esc(f.error)}</p>` : ''}
+      <div class="dialog-actions"><button type="button" class="reset-primary danger" data-disconnect ${working ? 'disabled aria-busy="true"' : f.view==='failed' ? 'data-autofocus' : ''}>${working ? 'Disconnecting…' : f.view==='failed' ? 'Try again' : 'Disconnect'}</button></div>
+      ${dialogCancel('Cancel',working ? 'disabled' : f.view==='failed' ? '' : 'data-autofocus')}`;
+  }
+  if(f.view==='pick') {
+    const list=addProviders();
+    if(!list.length)return `${dialogHead(null,'Add account')}<p class="dialog-error" role="alert">${current?.gateway?.online===true ? "Adding accounts isn't available on this gateway version." : "Couldn't load providers · gateway unreachable"}</p>${dialogCancel('Close','data-autofocus')}`;
+    // Two providers can share a display name (Kimi has two sign-in services); the id tells them apart.
+    const shared=c=>list.filter(o=>o.name===c.name).length>1;
+    return `${dialogHead(null,'Add account')}<div class="provider-list">${list.map((c,i)=>`<button type="button" class="provider-option" data-add-pick="${esc(c.id)}" ${i ? '' : 'data-autofocus'}>${providerIcon(c,true)}<span>${esc(c.name)}</span><small>${c.login==='device' ? 'Code' : 'Browser'}${shared(c) ? ' · '+esc(c.id) : ''}</small></button>`).join('')}</div>${dialogCancel()}`;
+  }
+  if(f.view==='busy')return `${dialogHead(null,'A sign-in is in progress')}<p class="dialog-note">${esc(f.message || 'Finish or cancel the current sign-in first.')}</p><div class="dialog-actions"><button type="button" class="reset-primary confirm" data-add-restart data-autofocus>Try again</button></div>${dialogCancel('Close')}`;
+  const p=addProvider(f.provider) || {id:f.provider,name:providerName(f.provider)}, name=esc(p.name);
+  const title=f.reauth ? `Sign in to ${name} again` : `Add ${name} account`;
+  if(f.view==='cancelling')return `${dialogHead(p,title)}<div class="signin-status" role="status"><i aria-hidden="true"></i><span>Cancelling sign-in…</span></div>${dialogCancel('Cancel','disabled')}`;
+  if(f.view==='cancel-failed')return `${dialogHead(p,title)}<p class="dialog-error" role="alert">${esc(f.message)}</p><div class="dialog-actions"><button type="button" class="reset-primary confirm" data-add-cancel-retry data-autofocus>Retry cancel</button></div>${dialogCancel('Close')}`;
+  if(f.view==='starting')return `${dialogHead(p,title)}<div class="signin-status" role="status"><i aria-hidden="true"></i><span>Starting sign-in…</span></div>${dialogCancel('Cancel','data-autofocus')}`;
+  if(f.view==='failed')return `${dialogHead(p,title)}<p class="dialog-error" role="alert">${esc(f.message)}</p><div class="dialog-actions"><button type="button" class="reset-primary confirm" data-add-restart data-autofocus>Try again</button></div>${dialogCancel()}`;
+  if(f.view==='done') {
+    const a=f.account, found=a?.key ? providerAccount(f.provider,null,null,a.key) : null, replaced=a?.replaced===true;
+    const label=found ? accountLabel(found) : a?.label && a.label!==a.key ? a.label : '';
+    const state=!a ? f.message : replaced ? 'Already connected · sign-in replaced' : !found ? '' : accountReady(found) ? 'Ready to route' : availabilityLabel(found,current.gateway);
+    return `<div class="dialog-result" role="status"><span class="result-icon">${icon('check')}</span><h2 id="account-dialog-title">${a ? `${name} account ${replaced ? 'updated' : 'added'}` : `Signed in to ${name}`}</h2>${label && !label.startsWith(p.name+' account') ? `<p class="result-name">${esc(label)}</p>` : ''}${state ? `<p>${esc(state)}</p>` : ''}</div><div class="dialog-actions"><button type="button" class="reset-primary confirm" data-add-done data-autofocus>Done</button></div>`;
+  }
+  if(f.view==='ended') {
+    const text=f.ended==='expired' ? (f.flow==='device' ? 'Code expired' : 'Sign-in expired') : f.ended==='cancelled' ? 'Sign-in was cancelled' : f.message || "Sign-in didn't finish";
+    const again=f.ended==='expired' ? f.flow==='device' ? 'Get a new code' : 'Start again' : 'Try again';
+    return `${dialogHead(p,title)}${f.code ? codeBox(f,true) : ''}<div class="dialog-actions"><button type="button" class="reset-primary confirm" data-add-restart data-autofocus>${again}</button></div><div class="signin-status bad" role="status"><i aria-hidden="true"></i><span>${esc(text)}</span></div>${dialogCancel('Close')}`;
+  }
+  const status=addStatus(f), line=`<div class="signin-status${status.tone ? ' '+status.tone : ''}" role="status" data-add-status><i aria-hidden="true"></i><span>${esc(status.text)}</span></div>`;
+  if(f.flow==='device')return `${dialogHead(p,title)}${f.code ? codeBox(f,false) : ''}<a class="signin-open" href="${esc(f.url)}" target="_blank" rel="noreferrer" data-add-open data-autofocus>Open sign-in page ${icon('arrow')}</a>${line}${dialogCancel()}`;
+  const finishing=f.view==='finishing', opened=f.opened || !!f.pasted;
+  return `${dialogHead(p,title)}
+    <a class="signin-open${opened ? ' secondary' : ''}" href="${esc(f.url)}" target="_blank" rel="noreferrer" data-add-open ${finishing ? 'aria-disabled="true" tabindex="-1"' : opened ? '' : 'data-autofocus'}>${opened ? 'Open sign-in page again' : 'Open sign-in page'} ${icon('arrow')}</a>
+    <div class="paste-step"><label for="add-callback">After approving, copy the address of the page that can't load and paste it here.</label>
+    <input id="add-callback" class="paste-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="${esc(p.callback_example || 'http://localhost/…')}" value="${esc(f.pasted)}" ${f.error ? 'aria-invalid="true" aria-describedby="add-callback-error"' : ''} ${finishing ? 'readonly' : opened ? 'data-autofocus' : ''}>
+    <p class="paste-error" id="add-callback-error" role="alert"${f.error ? '' : ' hidden'}>${esc(f.error)}</p>
+    <button type="button" class="reset-primary${opened ? ' confirm' : ''}" data-add-continue ${finishing ? 'disabled aria-busy="true"' : f.pasted ? '' : 'disabled'}>${finishing ? 'Finishing sign-in…' : 'Continue'}</button></div>
+    ${line}${dialogCancel()}`;
+}
+function renderAccountDialog() {
+  const dialog=$('account-dialog');if(!accountFlow)return;
+  dialog.innerHTML=accountDialogHtml(accountFlow);
+  if(!dialog.open)dialog.showModal();
+  const target=dialog.querySelector('[data-autofocus]');
+  (target && !target.disabled ? target : dialog).focus();
+}
+function openAccountDialog(f, opener) {
+  if(accountFlow)return false;
+  closeCardMenu();accountFlow=f;accountOpener=opener || null;
+  return true;
+}
+function openAdd(provider=null, reauth=null, opener=null) {
+  if(!accountActions() || current?.read_only || provider && !addProvider(provider))return;
+  // A failed cancellation still owns the gateway session, even after its dialog was hidden.
+  if(accountFlow?.kind==='add' && (accountFlow.view==='cancel-failed' || accountFlow.closeRequested)) {
+    accountOpener=opener || accountOpener;renderAccountDialog();return;
+  }
+  const f={kind:'add',provider,reauth,view:'pick'};
+  if(!openAccountDialog(f,opener))return;
+  if(provider)startAdd(f);else renderAccountDialog();
+}
+async function startAdd(f, provider=f.provider) {
+  if(accountFlow!==f)return;
+  clearAccountTimers();
+  const attempt=(f.attempt || 0)+1;
+  Object.assign(f,{attempt,closeRequested:false,provider,view:'starting',session:null,flow:addProvider(provider)?.login,url:'',code:null,expires:NaN,opened:false,pasted:'',error:'',ended:null,message:'',offline:false,copiedUntil:0,account:null});
+  renderAccountDialog();
+  let result=null;try{result=await accountCall('/api/accounts/add/start',{provider});}catch(_){}
+  const d=result?.data || {};
+  const valid=result?.ok && typeof d.session==='string' && !!d.session && ['device','browser'].includes(d.flow) && /^https:\/\//i.test(d.url || '');
+  if(!sameAddAttempt(f,attempt,null) || f.view!=='starting')return;
+  if(valid) {
+    Object.assign(f,{view:'signin',session:d.session,flow:d.flow,url:d.url,code:typeof d.user_code==='string' && d.user_code ? d.user_code : null,
+      expires:typeof d.expires_at==='number' ? d.expires_at*1000 : Date.parse(d.expires_at)});
+    if(f.closeRequested){cancelAddSession(f);return;}
+    renderAccountDialog();tickAdd(f);pollAdd(f);
+    return;
+  }
+  if(f.closeRequested){finishAccountDialog(f);return;}
+  if(result?.status===409 && d.error==='busy')Object.assign(f,{view:'busy',message:d.message || ''});
+  else Object.assign(f,{view:'failed',message:!result ? "Couldn't start sign-in · gateway unreachable" : d.message || "Couldn't start sign-in"});
+  renderAccountDialog();
+}
+async function cancelAddSession(f) {
+  if(accountFlow!==f || !f.session || f.view==='cancelling')return;
+  clearAccountTimers();
+  // Invalidate callback and status requests that were sent before cancellation.
+  const attempt=(f.attempt || 0)+1, session=f.session;
+  Object.assign(f,{attempt,view:'cancelling'});renderAccountDialog();
+  let result=null;try{result=await accountCall('/api/accounts/add/cancel',{session});}catch(_){}
+  if(!sameAddAttempt(f,attempt,session) || f.view!=='cancelling')return;
+  if(result?.ok && result.data.cancelled===true){finishAccountDialog(f);return;}
+  if(result?.ok && result.data.cancelled===false && result.data.state==='error')return endAdd(f,'error',result.data.message || 'Sign-in failed. Start again.');
+  if(result?.ok && result.data.cancelled===false && ['ok','finishing'].includes(result.data.state)) {
+    // A completed session still needs its status account details before the fresh inventory read.
+    Object.assign(f,{view:'finishing',closeRequested:false});renderAccountDialog();tickAdd(f);pollAdd(f);return;
+  }
+  Object.assign(f,{view:'cancel-failed',message:result?.data.message || "Couldn't cancel sign-in. Try again."});
+  renderAccountDialog();
+}
+function updateAddStatus(f) {
+  const line=$('account-dialog').querySelector('[data-add-status]'), status=addStatus(f);if(!line)return;
+  line.className='signin-status'+(status.tone ? ' '+status.tone : '');
+  if(line.lastElementChild.textContent!==status.text)line.lastElementChild.textContent=status.text;
+}
+function tickAdd(f, attempt=f.attempt, session=f.session) { accountTimer(()=>{if(sameAddAttempt(f,attempt,session) && addLive(f)){updateAddStatus(f);tickAdd(f,attempt,session);}},1000); }
+// The dashboard polls on its own; a code sign-in needs nothing else from the user.
+function pollAdd(f, attempt=f.attempt, session=f.session) {
+  accountTimer(async()=>{
+    if(!sameAddAttempt(f,attempt,session) || !addLive(f))return;
+    let result=null;try{result=await accountCall('/api/accounts/add/status?session='+encodeURIComponent(session));}catch(_){}
+    if(!sameAddAttempt(f,attempt,session) || !addLive(f))return;
+    const d=result?.data || {};
+    if(result?.ok && d.state==='ok')return addSucceeded(f,d,attempt,session);
+    if(result?.ok && ['expired','error','cancelled'].includes(d.state))return endAdd(f,d.state,d.message);
+    if(result?.ok && d.state==='finishing') {
+      const changed=f.view!=='finishing';f.view='finishing';f.offline=false;
+      if(changed)renderAccountDialog();else updateAddStatus(f);
+      pollAdd(f,attempt,session);return;
+    }
+    if(result?.status===409)return endAdd(f,'error',d.message || 'This sign-in is no longer available.');
+    // A waiting reply with a message means the dashboard could not read the gateway this time.
+    const offline=!result ? 'connection' : !result.ok || d.message ? 'gateway' : false;
+    if(offline!==f.offline){f.offline=offline;updateAddStatus(f);}
+    pollAdd(f,attempt,session);
+  },f.flow==='device' ? 3000 : 2000);
+}
+function endAdd(f, state, message) {
+  clearAccountTimers();
+  Object.assign(f,{view:'ended',ended:state,message:message || ''});
+  renderAccountDialog();
+}
+async function addSucceeded(f, d, attempt=f.attempt, session=f.session) {
+  clearAccountTimers();
+  // Read the new inventory first so the result names the account and its real state.
+  try {await load(true);} catch (_) {}
+  if(!sameAddAttempt(f,attempt,session) || !addLive(f))return;
+  Object.assign(f,{view:'done',account:d.account && typeof d.account==='object' && typeof d.account.key==='string' ? d.account : null,message:d.message || ''});
+  renderAccountDialog();
+  accountTimer(()=>{if(sameAddAttempt(f,attempt,session))closeAccountDialog();},3200);
+}
+function addOpened() {
+  const f=accountFlow;if(f?.kind!=='add' || f.view!=='signin' || f.opened)return;
+  const attempt=f.attempt, session=f.session;
+  f.opened=true;
+  // Like the Codex card, opening a code sign-in also copies the code for pasting there.
+  if(f.flow!=='browser'){copyAddCode();return;}
+  // Change the link in place after the click: the browser is still opening its new tab from it.
+  setTimeout(()=>{
+    if(!sameAddAttempt(f,attempt,session) || f.view!=='signin')return;
+    const dialog=$('account-dialog'), link=dialog.querySelector('[data-add-open]');
+    if(link){link.classList.add('secondary');link.innerHTML=`Open sign-in page again ${icon('arrow')}`;}
+    dialog.querySelector('[data-add-continue]')?.classList.add('confirm');
+    dialog.querySelector('#add-callback')?.focus();
+  },0);
+}
+async function copyText(text) {
+  try { if(navigator.clipboard?.writeText) {await navigator.clipboard.writeText(text);return true;} } catch (_) {}
+  const input=document.createElement('textarea');input.value=text;input.setAttribute('readonly','');
+  input.style.cssText='position:fixed;left:-9999px;top:0';document.body.append(input);
+  input.select();let copied=false;try {copied=document.execCommand('copy');} catch (_) {}input.remove();
+  return copied;
+}
+async function copyAddCode() {
+  const f=accountFlow;if(f?.kind!=='add' || f.view!=='signin' || !f.code)return;
+  const attempt=f.attempt, session=f.session, dialog=$('account-dialog'), button=()=>dialog.querySelector('[data-add-copy]');
+  if(!await copyText(f.code)) {
+    if(!sameAddAttempt(f,attempt,session))return;
+    const code=dialog.querySelector('.code-box code');
+    if(code){const range=document.createRange();range.selectNodeContents(code);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}
+    return;
+  }
+  if(!sameAddAttempt(f,attempt,session))return;
+  f.copiedUntil=Date.now()+2000;
+  if(button())button().innerHTML=icon('check')+'Copied';
+  setTimeout(()=>{if(sameAddAttempt(f,attempt,session) && f.copiedUntil<=Date.now() && button())button().textContent='Copy';},2050);
+}
+function showCallbackError(message) {
+  const f=accountFlow, dialog=$('account-dialog'), input=dialog.querySelector('#add-callback'), error=dialog.querySelector('#add-callback-error');
+  f.error=message;
+  if(!input || !error){renderAccountDialog();return;}
+  error.textContent=message;error.hidden=!message;
+  if(message){input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby','add-callback-error');input.focus();}
+  else {input.removeAttribute('aria-invalid');input.removeAttribute('aria-describedby');}
+}
+async function submitAddCallback() {
+  const f=accountFlow;if(f?.kind!=='add' || f.view!=='signin' || f.flow!=='browser')return;
+  const value=($('account-dialog').querySelector('#add-callback')?.value ?? f.pasted).trim();
+  f.pasted=value;if(!value)return;
+  if(!callbackShape(value)){showCallbackError("That isn't the sign-in address. It starts with http://localhost.");return;}
+  const attempt=f.attempt, session=f.session;
+  Object.assign(f,{view:'finishing',error:''});renderAccountDialog();
+  let result=null;try{result=await accountCall('/api/accounts/add/callback',{session,redirect_url:value});}catch(_){}
+  if(!sameAddAttempt(f,attempt,session) || f.view!=='finishing')return;
+  // Accepted: the status poll reports the result.
+  if(result?.ok && result.data.accepted===true)return;
+  if(result?.status===409)return endAdd(f,'error',result.data.message || 'This sign-in is no longer available.');
+  Object.assign(f,{view:'signin',error:!result ? "Couldn't reach your desktop. Try again." : result.data.message ||
+    (result.status===400 ? "That isn't the sign-in address. It starts with http://localhost." : "Couldn't finish sign-in. Try again.")});
+  renderAccountDialog();
+}
+function closeAccountDialog(force=false) {
+  const f=accountFlow;if(!f || !force && addLocked(f))return;
+  if(f.kind==='add' && f.view==='starting') {
+    // Keep ownership until start returns, then cancel the returned session.
+    f.closeRequested=true;hideAccountDialog();return;
+  }
+  if(addLive(f)){cancelAddSession(f);return;}
+  if(f.kind==='add' && f.view==='cancel-failed'){hideAccountDialog();return;}
+  finishAccountDialog(f);
+}
+function restoreAccountFocus(added=false) {
+  // Cards are periodically replaced, so the original node may already be detached.
+  const opener=accountOpener, target=opener?.isConnected ? opener : opener?.id ? document.getElementById(opener.id) : null;
+  const focus=target?.isConnected && !target.disabled ? target : $('add-account');
+  focus?.focus({preventScroll:!!added});
+}
+function hideAccountDialog() {
+  if($('account-dialog').open)$('account-dialog').close();
+  restoreAccountFocus();
+}
+function finishAccountDialog(f) {
+  if(accountFlow!==f)return;
+  const added=f.kind==='add' && f.view==='done' && f.account && !f.account.replaced ? f.account.key : null;
+  accountFlow=null;clearAccountTimers();
+  if($('account-dialog').open)$('account-dialog').close();
+  restoreAccountFocus(added);accountOpener=null;
+  if(added)highlightCard(f.provider,added);
+}
+// Native Escape/close also retains ownership until the gateway acknowledges cancellation.
+function accountDialogClosed() {
+  if($('account-dialog').open || !accountFlow)return;
+  closeAccountDialog();
+}
+function accountCard(provider, key) { return document.querySelector(`.account-card[data-provider="${CSS.escape(provider)}"][data-account-key="${CSS.escape(key)}"]`); }
+function highlightCard(provider, key) {
+  const card=accountCard(provider,key);if(!card)return;
+  card.classList.add('card-new');card.scrollIntoView({block:'nearest',behavior:'smooth'});
+  setTimeout(()=>card.classList.remove('card-new'),2600);
+}
+function openDisconnect(provider, key, opener) {
+  const p=providerData().find(p=>p.id===provider), a=p?.accounts.find(a=>a.key===key);
+  if(!a || disconnectBlocked())return;
+  // Warn, but allow: the owner may be replacing the account or retiring the provider.
+  const last=accountReady(a) && !p.accounts.some(b=>b!==a && accountReady(b));
+  if(openAccountDialog({kind:'disconnect',provider,key,auth_index:a.auth_index,name:accountLabel(a),last,view:'confirm',error:''},opener))renderAccountDialog();
+}
+async function confirmDisconnect() {
+  const f=accountFlow;if(f?.kind!=='disconnect' || f.view==='working')return;
+  Object.assign(f,{view:'working',error:''});renderAccountDialog();
+  let result=null;try{result=await accountCall('/api/accounts/disconnect',{key:f.key,auth_index:f.auth_index,confirmed:true});}catch(_){}
+  if(result?.ok && result.data.disconnected===true) {
+    // Focus moves to a neighbouring card's menu, or Add account, before this card goes.
+    const card=accountCard(f.provider,f.key), next=[...(card?.parentElement?.querySelectorAll('.card-menu') || [])].find(b=>!card.contains(b));
+    if(accountFlow===f){accountOpener=next || $('add-account');closeAccountDialog(true);}
+    $('account-announce').textContent=`${f.name} disconnected`;
+    card?.classList.add('card-leaving');
+    setTimeout(()=>load(true),360);
+    return;
+  }
+  if(accountFlow!==f){load(true);return;}
+  Object.assign(f,{view:'failed',error:!result ? "Couldn't disconnect · gateway unreachable" : result.status===403 ? 'Disconnect works from the desktop or over SSH only.' :
+    result.data.message || "Couldn't disconnect · gateway unreachable"});
+  renderAccountDialog();
+}
+function cardMenuOutside(event) {
+  if(!event.target.closest?.('#card-menu,.card-menu[aria-expanded="true"]'))closeCardMenu();
+}
+// Phones resize while scrolling (the address bar); only a width change moves the cards.
+let cardMenuWidth=0;
+function cardMenuResized() { if(innerWidth!==cardMenuWidth)closeCardMenu(); }
+function closeCardMenu(focus=false) {
+  const menu=cardMenu, pop=$('card-menu');if(!menu)return;
+  cardMenu=null;
+  try {pop.hidePopover?.();} catch (_) {}
+  pop.hidden=true;
+  document.removeEventListener('pointerdown',cardMenuOutside,true);window.removeEventListener('resize',cardMenuResized);
+  const button=document.getElementById(menuId(menu.provider,menu.key));
+  button?.setAttribute('aria-expanded','false');
+  if(focus)button?.focus();
+}
+function openCardMenu(button) {
+  const {menuProvider:provider,menuKey:key}=button.dataset, a=providerAccount(provider,null,null,key), pop=$('card-menu');
+  if(cardMenu?.provider===provider && cardMenu.key===key){closeCardMenu(true);return;}
+  closeCardMenu();if(!a)return;
+  const signin=!current?.read_only && !!addProvider(provider), remote=disconnectBlocked();
+  pop.innerHTML=`<button type="button" role="menuitem" data-menu-signin${signin ? '' : ' aria-disabled="true"'}>Sign in again${signin ? '' : `<small>${current?.read_only ? 'Desktop or SSH only' : 'Not available for this provider'}</small>`}</button><hr><button type="button" role="menuitem" class="danger" data-menu-disconnect${remote ? ' aria-disabled="true"' : ''}>Disconnect…${remote ? '<small>Desktop or SSH only</small>' : ''}</button>`;
+  pop.setAttribute('aria-label',`Account actions · ${accountLabel(a)}`);
+  cardMenu={provider,key};button.setAttribute('aria-expanded','true');
+  pop.hidden=false;try {pop.showPopover?.();} catch (_) {}
+  // The popover sits in the top layer at page coordinates, so it scrolls with the card.
+  const r=button.getBoundingClientRect(), w=pop.offsetWidth, h=pop.offsetHeight, below=r.bottom+6+h<=innerHeight-8 || r.top-6-h<8;
+  pop.style.left=Math.max(8,Math.min(innerWidth-w-8,r.right-w))+scrollX+'px';
+  pop.style.top=(below ? r.bottom+6 : r.top-6-h)+scrollY+'px';
+  pop.querySelector('[role=menuitem]').focus();
+  cardMenuWidth=innerWidth;document.addEventListener('pointerdown',cardMenuOutside,true);window.addEventListener('resize',cardMenuResized);
+}
+async function saveGenericRouting(id, enabled, confirmed=false) {
+  const p=providerData().find(p=>p.id===id.slice(0,id.indexOf(':'))), a=p?.accounts.find(a=>p.id+':'+a.key===id);
+  if(!a || typeof a.routing_enabled!=='boolean' || accessBlocked(current.gateway) || genericRoutePending.has(id))return;
+  const input=`generic-route-${p.id}-${a.key}`, focused=document.activeElement?.closest?.('[data-generic-provider]');
+  if(!enabled && !confirmed && accountReady(a) && !p.accounts.some(b=>b!==a && accountReady(b))) {
+    genericRouteConfirm.add(id);if(focused)genericNextFocus=input+'-keep';render();return;
+  }
+  genericRouteConfirm.delete(id);genericRouteErrors.delete(id);genericRoutePending.add(id);
+  if(focused)genericNextFocus=input;
+  render();
+  try {
+    const result=await accountCall('/api/accounts/routing',{key:a.key,auth_index:a.auth_index,enabled});
+    if(!result.ok || result.data.enabled!==enabled)throw new Error('Not confirmed');
+    a.routing_enabled=enabled;
+  } catch (_) { genericRouteErrors.set(id,Date.now()+10000); }
+  genericRoutePending.delete(id);render();await load(true);
+}
+// Add account shows once the backend offers a sign-in catalog; read-only views can't change accounts.
+function renderAccountEntry(data) {
+  const add=$('add-account');add.hidden=!Array.isArray(data.add_providers);add.disabled=!!data.read_only;
+  add.title=data.read_only ? 'Add accounts from your computer dashboard' : '';
+  if(cardMenu && !providerAccount(cardMenu.provider,null,null,cardMenu.key))closeCardMenu();
+}
+$('add-account').addEventListener('click',()=>openAdd(null,null,$('add-account')));
+$('gateways').addEventListener('click',event=>{
+  const target=event.target.closest('[data-menu-key],[data-add-provider],[data-generic-route-off],[data-generic-route-keep],#inventory-empty-add');
+  if(!target || target.disabled)return;
+  const {menuKey,addProvider:provider,addKey,genericRouteOff:off,genericRouteKeep:keep}=target.dataset;
+  if(menuKey)openCardMenu(target);
+  else if(provider)openAdd(provider,addKey,target);
+  else if(off)saveGenericRouting(off,false,true);
+  else if(keep){genericRouteConfirm.delete(keep);genericNextFocus=target.id.replace(/-keep$/,'');render();}
+  else openAdd(null,null,target);
+});
+$('gateways').addEventListener('change',event=>{
+  const input=event.target.closest('[data-generic-route]');
+  if(input && !input.disabled)saveGenericRouting(input.dataset.genericRoute,input.checked);
+});
+$('card-menu').addEventListener('click',event=>{
+  const item=event.target.closest('[role=menuitem]');if(!item || !cardMenu || item.getAttribute('aria-disabled')==='true')return;
+  const {provider,key}=cardMenu, opener=document.getElementById(menuId(provider,key));
+  closeCardMenu();
+  if(item.hasAttribute('data-menu-signin'))openAdd(provider,key,opener);else openDisconnect(provider,key,opener);
+});
+$('card-menu').addEventListener('keydown',event=>{
+  const items=[...$('card-menu').querySelectorAll('[role=menuitem]')], at=items.indexOf(document.activeElement);
+  if(event.key==='Escape'){event.preventDefault();closeCardMenu(true);}
+  // Tab leaves from the ⋯ button, as if the menu had not been open.
+  else if(event.key==='Tab')closeCardMenu(true);
+  else if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
+    event.preventDefault();
+    items[event.key==='Home' ? 0 : event.key==='End' ? items.length-1 : (at+(event.key==='ArrowDown' ? 1 : -1)+items.length)%items.length]?.focus();
+  }
+});
+$('account-dialog').addEventListener('click',event=>{
+  const dialog=$('account-dialog'), f=accountFlow, target=event.target.closest('button,a');if(!f)return;
+  if(!target) {
+    const r=dialog.getBoundingClientRect();
+    if(event.target===dialog && (event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom))closeAccountDialog();
+    return;
+  }
+  if(target.disabled)return;
+  if(target.matches('[data-dialog-cancel],[data-add-done]'))closeAccountDialog();
+  else if(target.dataset.addPick)startAdd(f,target.dataset.addPick);
+  else if(target.matches('[data-add-restart]'))startAdd(f);
+  else if(target.matches('[data-add-cancel-retry]'))cancelAddSession(f);
+  else if(target.matches('[data-add-copy]'))copyAddCode();
+  else if(target.matches('[data-add-open]')){if(target.getAttribute('aria-disabled')==='true')event.preventDefault();else addOpened();}
+  else if(target.matches('[data-add-continue]'))submitAddCallback();
+  else if(target.matches('[data-disconnect]'))confirmDisconnect();
+});
+$('account-dialog').addEventListener('input',event=>{
+  const f=accountFlow;if(event.target.id!=='add-callback' || f?.kind!=='add')return;
+  f.pasted=event.target.value.trim();
+  const next=$('account-dialog').querySelector('[data-add-continue]');if(next)next.disabled=!f.pasted;
+  if(f.error)showCallbackError('');
+});
+// Pasting a complete address moves focus to Continue; Enter submits.
+$('account-dialog').addEventListener('paste',event=>{
+  if(event.target.id==='add-callback')setTimeout(()=>{if(accountFlow?.kind==='add' && callbackShape(event.target.value.trim()))$('account-dialog').querySelector('[data-add-continue]:not(:disabled)')?.focus();},0);
+});
+$('account-dialog').addEventListener('keydown',event=>{
+  if(event.key==='Enter' && event.target.id==='add-callback'){event.preventDefault();submitAddCallback();return;}
+  if(event.key!=='Tab')return;
+  const items=[...$('account-dialog').querySelectorAll('button,a[href],input')].filter(el=>!el.disabled && el.tabIndex>=0 && el.getAttribute('aria-hidden')!=='true');
+  const edge=event.shiftKey ? items[0] : items.at(-1);
+  if(edge && document.activeElement===edge){event.preventDefault();(event.shiftKey ? items.at(-1) : items[0]).focus();}
+});
+// Disconnect and an in-flight cancellation must finish before another close action.
+$('account-dialog').addEventListener('cancel',event=>{if(addLocked(accountFlow))event.preventDefault();});
+$('account-dialog').addEventListener('close',accountDialogClosed);
 function render() {
   const data=current;if(!data)return;
   const g=data.gateway;
@@ -1172,7 +1822,7 @@ function render() {
   $('refresh').disabled=!!g.refreshing;
   const warning = failed ? 'Cannot reach your desktop. Check Tailscale; the dashboard will reconnect automatically. The values below were last saved in this tab.' : g.error || data.usage.error;
   $('notice').hidden=!warning;$('notice').textContent=warning || '';
-  renderOperations(data);renderWatch(data);renderAccounts(g);renderRoutingAll(g);renderLegend();renderResetModal();renderToday(today || data);renderUsage(data);renderSystem(data);
+  renderAccountEntry(data);renderProviders(data);renderOperations(data);renderWatch(data);renderAccounts(g);renderRoutingAll(g);reserveRouting();renderLegend();renderResetModal();renderToday(today || data);renderUsage(data);renderSystem(data);
   const since=usageSince(data.usage);
   $('footer-note').textContent=`Codex quotas refresh every minute · history since ${since?new Date(since).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'setup'}`;
 }
@@ -1251,7 +1901,7 @@ function renderWatchResetModal() {
   const rows=entries.map(g=>g.placeholder?`<div class="reset-row reset-row-none"><div><strong>${esc(grantLabel(g))}</strong><p>None right now</p></div></div>`:row(g));
   const status=surface || (readOnly?'Manage resets on your computer.':resetModalMessage || (serviceDown?(grants.length?'Reset service unavailable.':''):!a?'Account unavailable.':pending?(pending.state==='uncertain'?'The earlier reset was not confirmed. Other resets wait until it is settled.':'A reset is in progress. Other resets wait until it finishes.'):r.eligible===false?'This account is not eligible for resets.':cooldown?`Cooldown until ${dateTime(r.cooldown_until*1000)}.`:resetConfirmCredit?'Confirm uses this reset now.':''));
   const locked=r.automatic_locked===true;
-  $('reset-dialog-account').textContent=a?`${a.id === 'claude' ? 'Claude A' : a.label || 'Claude'}${a.email?' · '+a.email:''}`:'Account unavailable';
+  $('reset-dialog-account').textContent=a?(a.email || a.label || 'Claude'):'Account unavailable';
   $('reset-dialog-content').innerHTML=`
     <div class="reset-list-heading">Available <span>${r.available==null?'—':esc(r.available)}</span></div>
     <div class="reset-list">${serviceDown && !grants.length?'<p class="reset-empty">Reset service unavailable.</p>':rows.join('')}</div>
@@ -1423,10 +2073,14 @@ async function load(fresh=false) {
 function showView() {
   const view=['overview','usage','system'].includes(location.hash.slice(1))?location.hash.slice(1):'overview';
   if(view!=='overview' && routingChoice && !routingChoice.applying){closeRoutingChoice(true);renderRoutingControls();}
+  if(view!=='overview')closeCardMenu();
   document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==`${view}-view`);
   document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view===view);if(el.dataset.view===view)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
 }
 window.addEventListener('hashchange',showView);
+window.addEventListener('pagehide',()=>{
+  if(accountFlow?.kind==='add' && accountFlow.session && (addLive(accountFlow) || ['cancelling','cancel-failed'].includes(accountFlow.view)))fetch('/api/accounts/add/cancel',{method:'POST',keepalive:true,body:JSON.stringify({session:accountFlow.session}),headers:{'X-Router-Request':'1','Content-Type':'application/json'}}).catch(()=>{});
+});
 document.querySelectorAll('[data-range]').forEach(button=>button.addEventListener('click',()=>{
   range=button.dataset.range;document.querySelectorAll('[data-range]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});load();
 }));
@@ -1437,5 +2091,7 @@ $('refresh').addEventListener('click',async()=>{
 });
 if(location.port==='8320' || navigator.platform.toLowerCase().includes('linux'))$('advanced-link').href='http://127.0.0.1:8317/management.html#/quota';
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
+window.addEventListener('resize',reserveRouting);document.fonts?.ready.then(reserveRouting);
+if(window.ResizeObserver){const rows=new ResizeObserver(reserveRouting);for(const id of ['codex-routing','claude-routing'])rows.observe($(id));}
 showView();load();setInterval(()=>{if(!document.hidden && current?.gateway.accounts.some(a=>signinView(a).session))load();},3000);setInterval(load,15000);setInterval(()=>{if(current){$('updated').textContent=relative(current.gateway.checked_at);renderWatch(current);renderResetModal();}document.querySelectorAll('[data-reset]').forEach(el=>el.textContent=countdown(Number(el.dataset.reset)));},30000);
 setInterval(()=>{if(current && !document.hidden && (routeConfirm.size || current.gateway.accounts.some(a=>signinView(a).session)))renderAccounts(current.gateway);},1000);

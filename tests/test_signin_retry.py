@@ -729,13 +729,13 @@ class ManagementVersionTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile('w') as key:
             key.write('synthetic-key\n')
             key.flush()
-            for version in ('8.0.30', '8.0.43', '8.0.43-dirty', None):
+            for version in ('8.0.30', '8.0.43', '8.0.47', '8.0.43-dirty', '8.0.47-dirty', None):
                 with self.subTest(version=version), patch.object(app, 'KEY', Path(key.name)), \
                         patch.object(app, 'urlopen', return_value=Response(b'{"proxy-url":""}', version)) as urlopen:
                     result = app.api('/config')
                 self.assertEqual(result, {'proxy-url': ''})
                 self.assertEqual(result.version, version)
-                self.assertEqual(signin.SigninManager.tested(result), version in ('8.0.30', '8.0.43'))
+                self.assertEqual(signin.SigninManager.tested(result), version in ('8.0.30', '8.0.43', '8.0.47'))
                 self.assertEqual(urlopen.call_args.kwargs, {'timeout': 18})
 
 class FixtureIsolationTests(unittest.TestCase):

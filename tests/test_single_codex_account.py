@@ -1,289 +1,259 @@
-"""Single Codex account behavior with synthetic gateway/state only."""
+"""Inventory membership, provider isolation and legacy email-keyed routing state."""
 import copy
-import importlib.util
-import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'dashboard'))
-import operations
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
+import providers
 import routing_policy as policy
 import server
 from codex_fixture import CODEX_PAIR
 
 A, B = CODEX_PAIR
+C = 'third@example.test'
 NOW = 1700000000
+
+
+def inventory(codex=1, claude=2, xai=False):
+    rows = [dict(type=p, name=f'{p}-{i}.json', auth_index=f'{p}-{i}', email=email,
+                 priority=0, disabled=False, status='active')
+            for p, emails in (('codex', (A, B)[:codex]), ('claude', (A, B, C)[:claude]))
+            for i, email in enumerate(emails)]
+    if xai:
+        rows.append(dict(type='xai', name='xai-service.json', auth_index='xai-0', status='active', disabled=False))
+    return rows
+
+
+def observed(rows, watches=2):
+    stamp = policy.stamp(NOW)
+    codex = [dict(id=r['auth_index'], key=r['name'], email=r['email'], active=True,
+                  quota_checked_at=stamp, windows=[dict(seconds=604800, remaining=50, resets_at=NOW+100000)])
+             for r in rows if r['type']=='codex']
+    watched = [dict(id='watch-'+str(i), email=r['email'], status='ok', checked_at=stamp,
+                    windows=[dict(kind=kind, remaining=60-i*10, resets_at=NOW+offset+i*10000)
+                             for kind, offset in (('five_hour', 10000), ('seven_day', 100000))])
+               for i, r in enumerate(r for r in rows if r['type']=='claude') if i<watches]
+    return dict(gateway=dict(online=True, checked_at=stamp, inventory=providers.inventory_view(rows),
+                             accounts=codex, claude_accounts=server.claude_routing_projection(rows, stamp)),
+                watch_accounts=watched)
 
 
 class SingleCodexTests(unittest.TestCase):
     def setUp(self):
-        scratch = Path.home() / '.cache/agent-scratch/personal-codex-router/single-codex'
-        scratch.mkdir(parents=True, exist_ok=True)
-        directory = tempfile.TemporaryDirectory(dir=scratch)
-        self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
-        for module in (policy, operations):
-            manager = patch.object(module, 'EMAILS', (A,))
-            manager.start()
-            self.addCleanup(manager.stop)
-        self.rows = [dict(type='codex', email=A, name='codex-a.json', auth_index='codex-a',
-                          priority=100, disabled=False),
-                     dict(type='codex', email=B, name='retired.json', auth_index='retired',
-                          priority=100, disabled=True),
-                     *[dict(type='claude', email=email, name=f'claude-{i}.json',
-                            auth_index=f'claude-{i}', priority=100 if i == 0 else 0,
-                            disabled=False) for i, email in enumerate(CODEX_PAIR)]]
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.rows = inventory()
         self.writes = []
 
     def call(self, path, body=None, method=None):
-        if path == '/config':
-            return {'routing': {'strategy': 'round-robin'}}
-        if path == '/auth-files':
-            return {'files': copy.deepcopy(self.rows)}
-        self.assertEqual((path, method), ('/auth-files/fields', 'PATCH'))
+        if path=='/auth-files':
+            return {'files':copy.deepcopy(self.rows)}
+        if path=='/config':
+            return {'routing':{'strategy':'round-robin'}}
+        self.assertEqual((path,method),('/auth-files/fields','PATCH'))
         self.writes.append(copy.deepcopy(body))
-        next(row for row in self.rows if row['name'] == body['name']).update(priority=body['priority'])
-        return {'status': 'ok'}
+        next(r for r in self.rows if r['name']==body['name']).update(priority=body['priority'])
+        return {'status':'ok'}
 
-    def exhausted_gateway(self):
-        stamp = policy.stamp(NOW)
-        return dict(online=True, checked_at=stamp, accounts=[dict(
-            id='codex-a', email=A, active=True, disabled=False, auth_state='authenticated',
-            quota_attempted_at=stamp, quota_checked_at=stamp,
-            availability={'state': 'quota_exhausted', 'scope': 'account'},
-            windows=[dict(seconds=604800, remaining=0, resets_at=NOW + 3600)],
-            resets=dict(available=1, eligible=True, credits=[dict(expires_at=NOW + 300)]))])
+    def reconcile(self, selected=None, provider='codex', data=None):
+        with patch.object(policy.time,'time',return_value=NOW):
+            return policy.reconcile(observed(self.rows) if data is None else data, selected,
+                                    self.call, self.root/provider, provider)
 
-    def test_all_modes_are_neutral_without_usage_and_do_not_touch_other_credentials(self):
-        untouched = copy.deepcopy(self.rows[1:])
+    def test_single_account_all_modes_neutral_and_other_providers_untouched(self):
+        self.rows[0]['priority']=100
+        original=copy.deepcopy(self.rows[1:])
         for mode in policy.MODES:
-            with self.subTest(mode=mode):
-                choice = dict(mode=mode, preferred_email=A)
-                plan = policy.selected_plan(choice, {}, NOW)
-                self.assertEqual(plan['priorities'], {A: 0})
-                self.assertIsNone(plan['preferred_email'])
-                result = policy.reconcile({}, choice, self.call, self.root)
-                self.assertEqual(result['status'], 'active')
-                self.assertIsNone(result['hold_reason'])
-                self.assertEqual(result['intended_priorities'], {A: 0})
-                self.assertEqual(policy.reconcile({}, call=self.call, state_dir=self.root)['status'], 'active')
-        self.assertEqual(self.writes, [dict(name='codex-a.json', priority=0)])
-        self.assertEqual(self.rows[1:], untouched)
-        self.assertEqual(policy.identities('claude'), CODEX_PAIR)
+            result=self.reconcile(dict(mode=mode,preferred_email=A),data={})
+            self.assertEqual(result['status'],'active')
+            self.assertEqual(result['intended_priorities'],{A:0})
+            self.assertIsNone(result['preferred_email'])
+        self.assertEqual(self.writes,[dict(name='codex-0.json',priority=0)])
+        self.assertEqual(self.rows[1:],original)
 
-    def test_disabled_remaining_account_is_not_enabled_or_held_for_quota(self):
-        self.rows[0]['disabled'] = True
-        result = policy.reconcile({}, {'mode': 'highest-remaining-quota'}, self.call, self.root)
-        self.assertEqual(result['status'], 'active')
+    def test_disabled_single_account_needs_no_quota_and_is_never_enabled(self):
+        self.rows[0].update(disabled=True,priority=100)
+        self.assertEqual(self.reconcile({'mode':'highest-remaining-quota'},data={})['status'],'active')
         self.assertTrue(self.rows[0]['disabled'])
 
-    def test_records_ignore_retired_codex_files_present_or_removed(self):
-        for extra in (self.rows[1], dict(self.rows[1], disabled=False), None):
-            with self.subTest(extra=extra):
-                rows = self.rows[:1] + self.rows[2:] + ([extra] if extra else [])
-                result = policy.records(lambda _: {'files': rows})
-                self.assertEqual(set(result), {A})
-                self.assertEqual(set(policy.records(lambda _: {'files': rows}, 'claude')), set(CODEX_PAIR))
+    def test_zero_inventory_is_idle_and_renders_no_providers(self):
+        self.rows=[]
+        for provider in policy.PROVIDERS:
+            result=self.reconcile(provider=provider)
+            self.assertEqual(result['status'],'idle')
+            self.assertEqual(result['intended_priorities'],{})
+        self.assertEqual(providers.groups(observed([])['gateway'],[]),[])
+        self.assertFalse(self.writes)
 
-    def test_records_still_reject_missing_or_duplicate_configured_identity(self):
-        for rows in (self.rows[1:], self.rows + [dict(self.rows[0], name='duplicate.json', disabled=True)]):
-            with self.subTest(rows=rows), self.assertRaisesRegex(policy.Hold, 'accounts are incomplete or ambiguous'):
-                policy.records(lambda _: {'files': rows})
+    def test_unavailable_inventory_is_never_treated_as_empty(self):
+        for value in ({}, {'files':None}):
+            with self.subTest(value=value), self.assertRaises(policy.Hold):
+                policy.reconcile({},call=lambda *args:value,state_dir=self.root)
+        with self.assertRaises(OSError):
+            policy.reconcile({},call=lambda *args:(_ for _ in ()).throw(OSError()),state_dir=self.root)
+        self.assertFalse((self.root/'status.json').exists())
 
-    def test_saved_removed_preference_and_pending_pair_plan_converge(self):
-        policy.write_json(self.root / 'selection.json', dict(mode='preferred-account', preferred_email=B))
-        policy.write_json(self.root / 'status.json', dict(
-            policy='preferred-account', selected_email=B, preferred_email=B, pending_plan=True,
-            intended_priorities={A: 0, B: 100}, plan_status='active'))
-        policy.write_json(self.root / 'baseline.json', {
-            A: dict(name='codex-a.json', priority=100), B: dict(name='retired.json', priority=0)})
-        self.rows.pop(1)
-        result = policy.reconcile({}, call=self.call, state_dir=self.root)
-        self.assertEqual(result['status'], 'active')
-        self.assertEqual(result['selected_email'], A)
-        self.assertEqual(result['intended_priorities'], {A: 0})
-        self.assertFalse(policy.read_status(self.root)['pending_plan'])
-        self.assertEqual(self.writes, [dict(name='codex-a.json', priority=0)])
+    def test_inventory_is_sorted_by_filename_and_includes_disabled_accounts(self):
+        self.rows=inventory(codex=2)
+        self.rows[1]['disabled']=True
+        self.assertEqual(policy.identities('codex',list(reversed(self.rows))),(A,B))
+        self.assertEqual(list(policy.records(inventory=self.rows)),[A,B])
+
+    def test_replaced_codex_auth_index_discards_cached_quota(self):
+        self.rows=inventory(codex=2)
+        data=observed(self.rows)
+        data['gateway']['accounts'][0]['windows'][0]['remaining']=90
+        self.assertEqual(self.reconcile({'mode':'highest-remaining-quota'},data=data)['preferred_email'],A)
+        self.rows[0]['auth_index']='replacement-codex-0'
+        candidates,excluded=policy.eligible_accounts(data,NOW,inventory=self.rows)
+        self.assertEqual(set(candidates),{B})
+        self.assertEqual(excluded,{A:'no_data'})
+        for mode in ('earliest-weekly-reset','highest-remaining-quota','preferred-account'):
+            with self.subTest(mode=mode):
+                result=self.reconcile(dict(mode=mode,preferred_email=A),data=data)
+                self.assertEqual(result['preferred_email'],B)
+                self.assertEqual(result['intended_priorities'],{A:0,B:100})
+        fresh=observed(self.rows)
+        fresh['gateway']['accounts'][0]['windows'][0]['remaining']=90
+        self.assertEqual(self.reconcile({'mode':'highest-remaining-quota'},data=fresh)['preferred_email'],A)
+
+    def test_duplicate_email_across_providers_has_distinct_filename_keys(self):
+        data=observed(self.rows)
+        groups=providers.groups(data['gateway'],data['watch_accounts'])
+        self.assertEqual([p['id'] for p in groups],['codex','claude'])
+        self.assertEqual(groups[0]['accounts'][0]['email'],groups[1]['accounts'][0]['email'])
+        self.assertNotEqual(groups[0]['accounts'][0]['key'],groups[1]['accounts'][0]['key'])
+        self.assertFalse(groups[0]['routable'])
+        self.assertTrue(groups[1]['routable'])
+
+    def test_email_less_xai_and_unknown_providers_have_no_controls(self):
+        self.rows=inventory(xai=True)
+        self.rows += [dict(type='kimi',name='kimi.json',status='error'),dict(type='antigravity',name='anti.json',disabled=True),
+                      dict(type='mystery',name='mystery.json')]
+        data=observed(self.rows)
+        groups=providers.groups(data['gateway'],data['watch_accounts'])
+        self.assertEqual([g['id'] for g in groups],['codex','claude','antigravity','kimi','mystery','xai'])
+        for p in groups[2:]:
+            self.assertEqual(p['features'],[])
+            self.assertFalse(p['routable'])
+            self.assertEqual(p['accent'],'xai' if p['id']=='xai' else 'neutral')
+        self.assertEqual((groups[-1]['name'],groups[-2]['name']),('Grok','mystery'))
+        xai=groups[-1]['accounts'][0]
+        self.assertEqual((xai['key'],xai['label']),('xai-service.json','xai-service.json'))
+        self.assertNotIn('email',xai)
+        self.assertEqual(xai['availability']['state'],'ready')
+
+    def test_three_claude_two_watches_rank_unobserved_last(self):
+        self.rows=inventory(claude=3)
+        data=observed(self.rows)
+        candidates,excluded=policy.eligible_accounts(data,NOW,'claude',self.rows)
+        self.assertEqual(set(candidates),{A,B})
+        self.assertIn(C,excluded)
+        for mode in ('earliest-weekly-reset','highest-remaining-quota','preferred-account'):
+            result=self.reconcile(dict(mode=mode,preferred_email=C),provider='claude')
+            self.assertEqual(result['status'],'active')
+            self.assertIn(result['preferred_email'],(A,B))
+            self.assertEqual(result['intended_priorities'][C],0)
+        public=providers.groups(data['gateway'],data['watch_accounts'])[1]['accounts']
+        self.assertEqual(len(public),3)
+        self.assertEqual(public[2]['key'],'claude-2.json')
+        self.assertNotIn('windows',public[2])
+        self.assertFalse(public[2]['watch_observed'])
+        self.assertEqual(public[2]['status'],'active')
+
+    def test_tied_leaders_keep_other_accounts_demoted(self):
+        for mode in ('earliest-weekly-reset', 'highest-remaining-quota'):
+            for third in ('absent', 'lower-ranked', 'unobserved', 'disabled'):
+                with self.subTest(mode=mode, third=third):
+                    rows=inventory(claude=2 if third=='absent' else 3)
+                    if third=='disabled':
+                        rows[-1]['disabled']=True
+                    data=observed(rows, watches=2 if third=='unobserved' else 3)
+                    for watch in data['watch_accounts'][:2]:
+                        for window in watch['windows']:
+                            window.update(remaining=60, resets_at=NOW+100000)
+                    plan=policy.choose(data,NOW,mode,provider='claude',inventory=rows)
+                    self.assertIsNone(plan['preferred_email'])
+                    self.assertEqual(plan['priorities'], {A:0,B:0} if third=='absent' else {A:100,B:100,C:0})
+
+    def test_watch_matching_is_by_unique_email_and_not_watch_id(self):
+        self.rows=inventory(claude=3)
+        data=observed(self.rows)
+        data['watch_accounts'].reverse()
+        for w in data['watch_accounts']:w['id']='arbitrary-'+w['email']
+        candidates,_=policy.eligible_accounts(data,NOW,'claude',self.rows)
+        self.assertEqual(set(candidates),{A,B})
+        data['watch_accounts'].append(copy.deepcopy(data['watch_accounts'][0]))
+        candidates,excluded=policy.eligible_accounts(data,NOW,'claude',self.rows)
+        self.assertEqual(set(candidates),{A})
+        self.assertEqual(set(excluded),{B,C})
+
+    def test_claude_inventory_accepts_new_members_removed_members_and_arbitrary_notes(self):
+        self.rows=inventory(claude=3)
+        for row in self.rows:
+            row['note']='A label is not an identity'
+        result=self.reconcile(dict(mode='round-robin'),provider='claude')
+        self.assertEqual(result['intended_priorities'],{A:0,B:0,C:0})
+        self.rows=[r for r in self.rows if r.get('email')!=B]
+        self.assertEqual(self.reconcile(provider='claude')['intended_priorities'],{A:0,C:0})
+
+    def test_no_email_or_duplicate_email_provider_cannot_route(self):
+        for change in ('missing','duplicate'):
+            rows=inventory(claude=3)
+            rows[-1]['email']=None if change=='missing' else A
+            with self.assertRaises(policy.Hold):policy.records(provider='claude',inventory=rows)
+            data=observed(rows)
+            self.assertFalse(providers.groups(data['gateway'],data['watch_accounts'])[1]['routable'])
+
+    def test_retired_preference_defaults_for_each_provider(self):
+        for provider in policy.PROVIDERS:
+            directory=self.root/provider
+            directory.mkdir()
+            policy.write_json(directory/'selection.json',dict(mode='preferred-account',preferred_email='removed@example.test'))
+            result=self.reconcile(provider=provider)
+            self.assertEqual(result['policy'],policy.PROVIDERS[provider]['default'])
+            self.assertEqual(result['status'],'active')
+            with self.assertRaises(ValueError):
+                policy.validate_selection(dict(mode='preferred-account',preferred_email='removed@example.test'),provider,self.rows)
+
+    def test_filename_preference_api_preserves_email_keyed_state(self):
+        result=self.reconcile(dict(mode='preferred-account',preferred_key='claude-1.json'),provider='claude')
+        self.assertEqual(result['selected_email'],B)
+        saved=json.loads((self.root/'claude/selection.json').read_text())
+        self.assertEqual(saved,dict(mode='preferred-account',preferred_email=B))
         with self.assertRaises(ValueError):
-            policy.validate_selection(dict(mode='preferred-account', preferred_email=B))
+            policy.validate_selection(dict(mode='preferred-account',preferred_key='codex-0.json'),'claude',self.rows)
 
-    def test_rollback_with_old_pair_baseline_or_without_baseline(self):
-        untouched = copy.deepcopy(self.rows[1:])
-        for recorded in (False, True):
-            with self.subTest(recorded=recorded):
-                state = self.root / str(recorded)
-                state.mkdir()
-                if recorded:
-                    policy.write_json(state / 'baseline.json', {
-                        A: dict(name='codex-a.json', priority=100), B: dict(name='gone.json', priority=0)})
-                policy.reconcile({}, {'mode': 'earliest-weekly-reset'}, self.call, state)
-                # Without an old baseline, reconcile captures the current priority.
-                result = policy.rollback(self.call, state)
-                self.assertEqual(result, dict(status='restored', policy='baseline'))
-                self.assertEqual(self.rows[0]['priority'], 100)
-                self.assertEqual(policy.read_status(state)['intended_priorities'], {A: 100})
-                self.assertTrue(policy.suspended(state))
-        self.assertEqual(self.rows[1:], untouched)
+    def test_membership_change_invalidates_pending_plan(self):
+        self.rows=inventory(codex=2)
+        self.reconcile(dict(mode='round-robin'))
+        state=policy.read_status(self.root/'codex')
+        state.update(pending_plan=True,intended_priorities={A:0,B:100},preferred_email=B,plan_status='active')
+        policy.write_json(self.root/'codex/status.json',state)
+        self.rows=[r for r in self.rows if r['type']!='codex' or r['email']!=B]
+        self.writes.clear()
+        result=self.reconcile(data={})
+        self.assertEqual(result['intended_priorities'],{A:0})
+        self.assertFalse(policy.read_status(self.root/'codex')['pending_plan'])
+        self.assertFalse(self.writes)
 
-    def test_adding_a_second_identity_after_single_account_baseline(self):
-        policy.reconcile({}, {'mode': 'earliest-weekly-reset'}, self.call, self.root)
-        self.assertEqual(set(json.loads((self.root / 'baseline.json').read_text())), {A})
-        self.rows[1].update(disabled=False, priority=0)
-        with patch.object(policy, 'EMAILS', (A, B)):
-            policy.apply_plan(policy.priority_plan(B), self.call, self.root)
-            self.assertEqual((self.rows[0]['priority'], self.rows[1]['priority']), (0, 100))
-            baseline = json.loads((self.root / 'baseline.json').read_text())
-            self.assertEqual(baseline[A], dict(name='codex-a.json', priority=100))
-            self.assertEqual(baseline[B], dict(name='retired.json', priority=0))
-            self.assertEqual(policy.rollback(self.call, self.root)['status'], 'restored')
-            self.assertEqual((self.rows[0]['priority'], self.rows[1]['priority']), (100, 0))
-
-    def test_rollback_without_any_previous_policy(self):
-        self.assertEqual(policy.rollback(self.call, self.root), dict(status='restored', policy='round-robin'))
-        self.assertEqual(self.rows[0]['priority'], 0)
-        self.assertEqual(self.writes, [dict(name='codex-a.json', priority=0)])
-
-    def test_exhaustion_is_critical_no_fallback_with_reset_action_and_recovery(self):
-        gateway = self.exhausted_gateway()
-        # A retired account, even if apparently ready, is not a fallback.
-        gateway['accounts'].append(dict(copy.deepcopy(gateway['accounts'][0]), id='retired', email=B))
-        gateway['accounts'][1]['windows'][0]['remaining'] = 50
-        store = operations.NoticeStore(self.root / 'notices.json', self.root)
-        store.update(gateway, NOW)
-        item, = store.view()['items']
-        self.assertEqual(item['email'], A)
-        self.assertEqual(item['kind'], 'weekly_exhausted')
-        self.assertEqual(item['urgency'], 'critical')
-        self.assertEqual(item['message'], 'Weekly limit reached · no account can serve · resets in 1h 0m')
-        self.assertEqual(item['action'], dict(type='redeem_reset', account_id='codex-a', label=A))
-        self.assertEqual(item['accounts'][0]['reset_credits_available'], 1)
-        reloaded = operations.NoticeStore(store.path, self.root)
-        reloaded.update(gateway, NOW + 10)
-        self.assertEqual(reloaded.view()['items'][0]['id'], item['id'])
-        gateway['accounts'][0]['windows'][0]['remaining'] = 50
-        reloaded.update(gateway, NOW + 20)
-        self.assertEqual(reloaded.view()['items'], [])
-
-    def test_retired_notices_and_pair_episode_are_closed(self):
-        store = operations.NoticeStore(self.root / 'notices.json', self.root)
-        for key, email in (('exhausted:pool', 'Both Codex accounts'), ('exhausted:' + B, B),
-                           ('signin:' + B, B), ('free:retired', B)):
-            store.rows[key] = dict(id=key, email=email, kind='legacy', message='legacy', active=True,
-                                   dismissed=False, created_at=NOW)
-        store.update(self.exhausted_gateway(), NOW)
-        item, = store.view()['items']
-        self.assertEqual(item['email'], A)
-        self.assertFalse(item.get('hidden'))
-        self.assertTrue(all(not row['active'] for key, row in store.rows.items() if row['kind'] == 'legacy'))
-
-    def test_retained_notice_does_not_claim_a_retired_fallback_during_outage(self):
-        store = operations.NoticeStore(self.root / 'notices.json', self.root)
-        store.rows['exhausted:' + A] = dict(
-            id='existing', email=A, kind='weekly_exhausted', message='using the other account',
-            urgency='normal', active=True, dismissed=False, created_at=NOW,
-            accounts=[dict(account_id='codex-a', label=A, weekly_resets_at=NOW + 3600)])
-        store.update(dict(online=False, accounts=[]), NOW)
-        item, = store.view()['items']
-        self.assertEqual(item['id'], 'existing')
-        self.assertEqual(item['urgency'], 'critical')
-        self.assertEqual(item['message'], 'Weekly limit reached · no account can serve · resets in 1h 0m')
-
-    def test_overview_count_and_remaining_account_controls(self):
-        resets, fast = Mock(), Mock()
-        resets.view.return_value = {'available': 2}
-        fast.views.return_value = {'codex-a': {'allowed': False}}
-        state = server.GatewayState(resets, Mock(), fast)
-        self.addCleanup(state.signins.close)
-        state.data = self.exhausted_gateway()
-        state.data['accounts'][0].update(_fast_file='codex-a.json', access_identity='synthetic')
-        with patch.object(policy, 'STATE', self.root), patch.object(server, 'billing_records', return_value={}), \
-                patch.object(server, 'preference_status', return_value=None):
-            result = state.snapshot()
-        self.assertEqual(result['codex_account_count'], 1)
-        self.assertIs(type(result['codex_account_count']), int)
-        self.assertEqual(result['accounts'][0]['fast_mode'], {'allowed': False})
-        self.assertEqual(result['accounts'][0]['resets'], {'available': 2})
-        resets.view.assert_called_once_with(A)
-        self.assertEqual(fast.views.call_args.args[0][0]['email'], A)
-
-    def test_single_account_poll_reset_refresh_fast_mode_and_t3_projection(self):
-        self.rows.pop(1)  # Credential deletion leaves one Codex and both Claude accounts.
-        self.rows[0]['id_token'] = {'plan_type': 'pro', 'chatgpt_account_id': 'synthetic-workspace'}
-        resets, fast = Mock(), Mock()
-        state = server.GatewayState(resets, Mock(), fast)
-        self.addCleanup(state.signins.close)
-
-        def call(path, body=None, method=None, **kwargs):
-            if path == '/api-call':
-                self.assertEqual(body['auth_index'], 'codex-a')
-                return dict(status_code=200, body=dict(plan_type='pro', rate_limit=dict(
-                    primary_window=dict(used_percent=12, reset_at=NOW + 86400, limit_window_seconds=604800))))
-            return self.call(path, body, method)
-
-        reconcile = policy.reconcile
-        def reconcile_locally(overview):
-            return reconcile(overview, call=call, state_dir=self.root)
-
-        with patch.object(server, 'api', side_effect=call), patch.object(policy, 'STATE', self.root), \
-                patch.object(policy, 'reconcile', side_effect=reconcile_locally), \
-                patch.object(policy, 'urlopen', side_effect=AssertionError('Unmocked transport')), \
-                patch.object(server, 'PREFERENCE', self.root / 'status.json'), \
-                patch.object(server, 'utcnow', return_value=policy.stamp(NOW)), \
-                patch.object(policy.time, 'time', return_value=NOW), \
-                patch.object(server, 'billing_records', return_value={}), patch.object(server, 'move_available', return_value=False):
-            state._fetch()
-            self.assertTrue(state.data['online'])
-            self.assertEqual([a['email'] for a in state.data['accounts']], [A])
-            self.assertEqual([a['email'] for a in state.data['claude_accounts']], list(CODEX_PAIR))
-            self.assertEqual(state.after_reset('codex-a'), dict(quota_refresh='ok', routing_reconcile='ok'))
-            state.set_fast_mode('codex-a', False)
-            cache = state.t3_usage_cache()
-            projected = server.t3_usage.accounts(cache, NOW)
-        codex, = [(public, body) for public, body in projected if public['provider'] == 'codex']
-        self.assertEqual(codex[0]['email'], A)
-        self.assertEqual(codex[1]['rate_limit']['primary_window']['used_percent'], 12)
-        self.assertEqual({call.args[0]['type'] for call in resets.fetch.call_args_list}, {'codex'})
-        self.assertEqual(fast.set_allowed.call_args.args, (
-            'codex-a', False, [dict(id='codex-a', email=A, name='codex-a.json', supports_ultrafast=False)]))
-
-    def test_single_account_cli_dry_run_needs_no_dashboard_or_management_requests(self):
-        with patch.object(policy, 'STATE', self.root), patch.object(policy, 'urlopen') as transport, \
-                patch.object(sys, 'argv', ['routing_policy.py']), \
-                patch('sys.stdout', new_callable=io.StringIO) as output:
-            self.assertEqual(policy.main(), 0)
-        transport.assert_not_called()
-        self.assertEqual(json.loads(output.getvalue())['priorities'], {A: 0})
-
-    def test_legacy_status_drift_accepts_single_neutral_priority(self):
-        policy.write_json(self.root / 'status.json', dict(policy='round-robin', status='active',
-                                                        checked_at=policy.stamp(NOW)))
-        rows = [dict(email=A, priority=0, priority_checked_at=policy.stamp(NOW + 1))]
-        with patch.object(server, 'PREFERENCE', self.root / 'status.json'), \
-                patch.object(policy.time, 'time', return_value=NOW + 2):
-            self.assertFalse(server.preference_status(rows)['drift'])
-            rows[0]['priority'] = 100
-            self.assertTrue(server.preference_status(rows)['drift'])
-
-    def test_verification_scripts_skip_before_binary_credentials_or_launch(self):
-        for name in ('verify-account-failover', 'verify-reset-routing'):
-            spec = importlib.util.spec_from_file_location(name, ROOT / 'scripts' / (name + '.py'))
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            with self.subTest(name=name), patch.object(module.gateway_config, 'resolve_gateway_binary') as resolve, \
-                    patch.object(module.Path, 'read_text', side_effect=AssertionError('Credential read')), \
-                    patch.object(module.subprocess, 'Popen') as launch, \
-                    patch('sys.stdout', new_callable=io.StringIO) as output:
-                self.assertEqual(module.main([]), 0)
-                self.assertIn('Skipped:', output.getvalue())
-                self.assertIn('1 configured', output.getvalue())
-                resolve.assert_not_called()
-                launch.assert_not_called()
+    def test_rollback_restores_only_current_snapshot_and_email_state(self):
+        self.rows[0]['priority']=100
+        self.reconcile({'mode':'round-robin'})
+        baseline=json.loads((self.root/'codex/baseline.json').read_text())
+        self.assertEqual(baseline,{A:dict(name='codex-0.json',priority=100)})
+        baseline[B]=dict(name='removed.json',priority=0)
+        policy.write_json(self.root/'codex/baseline.json',baseline)
+        untouched=copy.deepcopy(self.rows[1:])
+        result=policy.rollback(self.call,self.root/'codex')
+        self.assertEqual(result,dict(status='restored',policy='baseline'))
+        self.assertEqual(self.rows[0]['priority'],100)
+        self.assertEqual(self.rows[1:],untouched)
 
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__=='__main__':unittest.main()

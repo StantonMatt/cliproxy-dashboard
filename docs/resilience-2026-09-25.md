@@ -1,6 +1,6 @@
 # Gateway resilience work — 2026-09-25
 
-**Current status (2026-10-27):** 8.0.30 is live and 8.0.43 is staged ([runbook](gateway-upgrade-8.0.43-2026-10-26.md)); the 7.3.x versions and account availability below are September 25 observations. Current retry policy is `request-retry: 5`, `max-retry-interval: 45` seconds and `max-retry-credentials: 2`.
+**Current status (2026-10-29):** 8.0.30 is live and 8.0.47 is staged ([runbook](gateway-upgrade-8.0.47-2026-10-29.md)); the 7.3.x versions and account availability below are September 25 observations. Current retry policy is `request-retry: 5`, `max-retry-interval: 45` seconds and `max-retry-credentials: 2`.
 
 The dashboard now reports safe account availability states without exposing provider error text:
 

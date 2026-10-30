@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'dashboard'))
 import server as dashboard
+from codex_fixture import CODEX_INVENTORY
 
 START_INTERVAL = dashboard.MOVE_START_INTERVAL
 TESTED = dashboard.MOVE_TESTED_GATEWAYS[0]
@@ -458,7 +459,7 @@ class MoveProtocolTests(MoveFixture):
                 self.assertEqual(list(self.request_dir.iterdir()), [])
 
     def test_untested_gateway_is_unavailable_and_writes_nothing(self):
-        for version in ('8.0.7', None, '8.0.30-dirty', '8.0.43-dirty', ''):
+        for version in ('8.0.7', None, '8.0.30-dirty', '8.0.43-dirty', '8.0.47-dirty', ''):
             with self.subTest(version=version):
                 self.gateway_version = version
                 self.assertEqual(self.move(), {'outcome': 'not_moved', 'code': 'unavailable'})
@@ -468,7 +469,7 @@ class MoveProtocolTests(MoveFixture):
         self.assertEqual((self.seen_requests, list(self.request_dir.iterdir())), ([], []))
         self.assertEqual(self.gateway_ttl, '1h')
         # Moves have their own list: sign-in's, verified without touching affinity, never enables or disables them.
-        self.assertEqual(dashboard.MOVE_TESTED_GATEWAYS, ('8.0.30', '8.0.43'))
+        self.assertEqual(dashboard.MOVE_TESTED_GATEWAYS, ('8.0.30', '8.0.43', '8.0.47'))
         self.gateway_version = '9.9.9'
         with patch.object(dashboard.signin, 'TESTED_GATEWAYS', ('9.9.9',)):
             self.assertEqual(self.move()['code'], 'unavailable')
@@ -480,7 +481,7 @@ class MoveProtocolTests(MoveFixture):
         self.assertEqual(self.move()['outcome'], 'moved')
 
     def test_each_validated_build_can_move(self):
-        for version in ('8.0.30', '8.0.43'):
+        for version in ('8.0.30', '8.0.43', '8.0.47'):
             with self.subTest(version=version):
                 self.gateway_version = version
                 self.assertEqual(self.move()['outcome'], 'moved')
@@ -567,6 +568,9 @@ class RoutingMoveHandlerTests(MoveFixture):
                  '/api/routing-all': ('codex', 'claude')}
 
     def handler(self, path, data):
+        inventory_patch = patch.object(dashboard.routing_policy, 'inventory_snapshot', return_value=CODEX_INVENTORY)
+        inventory_patch.start()
+        self.addCleanup(inventory_patch.stop)
         body = json.dumps(data).encode() if not isinstance(data, bytes) else data
         handler = object.__new__(dashboard.Handler)
         handler.path = path
@@ -581,7 +585,7 @@ class RoutingMoveHandlerTests(MoveFixture):
 
     def post(self, path, data, results=None, move=None):
         results = results or {}
-        def reconcile(overview, value, call=None, provider='codex'):
+        def reconcile(overview, value, call=None, provider='codex', inventory=None):
             result = results.get(provider, {'status': 'active', 'policy': value['mode']})
             if isinstance(result, Exception):
                 raise result
@@ -758,7 +762,7 @@ with patch.object(app, 'ThreadingHTTPServer', Server):
 
 
 class MoveFixtureIsolationTests(unittest.TestCase):
-    PREVIEWS = ['fast_mode_fixture.py', 'signin_preview.py']
+    PREVIEWS = ['fast_mode_fixture.py', 'inventory_fixture.py', 'signin_preview.py']
 
     def test_every_dashboard_preview_entry_point_is_isolated(self):
         # A preview that serves a real dashboard snapshot must go through isolate().

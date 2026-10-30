@@ -2,6 +2,43 @@
 
 Setting this up on Windows? See [the Windows setup guide](docs/windows-setup.md).
 
+## Set up on your own machine
+
+Prerequisites: Linux with systemd, Python 3.11+ with `PyYAML` and `bcrypt`, Node.js 18+, and an [official CLIProxyAPI release](https://github.com/router-for-me/CLIProxyAPI/releases). Tailscale and Claude Code are optional.
+
+1. Install CLIProxyAPI from its official Linux release and configure `cliproxyapi.service` with a `cliproxyapi` user/group, `/etc/cliproxyapi/config.yaml`, and `/var/lib/cliproxyapi/auth`. Keep management loopback-only (`allow-remote: false`), initially with an empty secret. Bind inference to loopback unless you have a private firewall. Use a gateway build supported by dashboard sign-in (version notes below).
+2. Clone this repo, install the Python dependencies, and create your root-owned site config:
+
+   ```sh
+   sudo install -d -m 755 /etc/personal-codex-router
+   sudo install -o root -g root -m 644 config/site.example.json /etc/personal-codex-router/site.json
+   sudoedit /etc/personal-codex-router/site.json
+   ```
+
+   The example is loopback-only. `desktop_user` defaults to `SUDO_USER`, then the checkout owner; set it explicitly for automation. Optional `devices` entries have `name` and `tailscale_ip` (IPv4); `tailscale_hostname` sets the private DNS name. Optional `claude_b` has `email` and `plan`, such as `{"email":"account-b@example.com","plan":"Max (20x)"}`. Omitted devices disable the proxy; omitted `claude_b` disables its watch timer. Store no credentials here.
+
+   Devices require signed-in Tailscale, peers owned by the same Tailscale user, and an active `tailscale-host-guard.service` with `/etc/tailscale/host-guard.nft` in the [private-preview layout](docs/private-previews.md). The installer checks these before writing files; it does not provision a firewall from scratch.
+3. Download the pinned [Management Center v1.24.2 asset](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/download/v1.24.2/management.html) to `references/management.html` (ignored by Git). Run `sudo python3 scripts/enable-dashboard.py`; it checks the digest, creates the key and updates the gateway config. Verify hot reload. Activation is one-time and refuses to replace existing keys.
+4. Inspect `python3 scripts/install-operations.py`, then run `sudo python3 scripts/install-operations.py --apply`. Use `--site-config /path/to/site.json` for a scratch dry run; full apply saves its resolved settings to the canonical site file. Use a full install for host-setting changes. Run from your desktop session; enable user lingering if Claude watchers should continue after logout.
+5. Open **http://127.0.0.1:8320/** and add accounts through the dashboard's account sign-in (delivered by the companion onboarding change). Configured devices use `http://<your-tailscale-hostname-or-IP>:8409/`. Management stays on loopback; other computers can use SSH forwarding.
+
+Installation files and private state:
+
+| Files | Purpose |
+| --- | --- |
+| `/etc/personal-codex-router/site.json`, `previews.json` | Host settings and generated preview registrations; root-owned, no secrets. |
+| `/etc/cliproxyapi/config.yaml`, `dashboard-management-key`, `static/management.html` | Existing gateway config gains the hashed management secret; activation creates the private key (0640) and pinned panel. |
+| `~/.config/personal-codex-router/management-key` | Desktop user's private management-key copy (0600). |
+| `/var/lib/cliproxyapi/auth/` | Provider credentials created by account sign-in; never commit or share them. |
+| `/opt/personal-codex-router/`, `/etc/systemd/system/personal-codex-router-*`, `~/.config/systemd/user/personal-codex-router-*`, `/usr/local/bin/router-preview` | Installed helpers, dashboard and units. |
+| `/var/lib/personal-codex-router/`, `/var/lib/personal-codex-router-routing/`, `/var/lib/personal-codex-router-ops/`, `/var/lib/personal-codex-router-watch/` | Usage SQLite/spool, controls, routing choices, health and watch snapshots created as services run. |
+| `~/.local/state/personal-codex-router/`, `/run/personal-codex-router-move-request/` | Private Claude operation state/socket and temporary conversation-move requests. |
+| `/var/lib/cliproxyapi-dashboard-backups/`, `/var/lib/personal-codex-router-backups/`, `docs/activation.json` | Activation/deployment backups and activation manifest. Backups contain secrets; keep them private and off the repo. |
+
+Claude usage reads existing `~/.claude/.credentials.json`; the optional second watch reads `~/.config/personal-codex-router/claude-b.token` (0600), provisioned separately through Claude Code's setup-token flow. Installers create neither token; these differ from gateway sign-in credentials.
+
+Existing deployment without `site.json`: **do not copy the empty example over it**. The first full install imports devices/DNS from `previews.json`, Claude B email/plan from its installed user unit, and the invoking/checkout user. It saves these to `site.json` and retains preview registrations and friendly aliases. Run this full migration before scoped installs. The remaining notes describe the original deployment, not new-machine defaults.
+
 Shared dashboard: **[http://router:8409/](http://router:8409/)** over Tailscale. MagicDNS is enabled. The name is verified in Linux Chrome, and the user confirmed it works on the phone and Mac. The existing computer-only address `http://router.localhost/` retains full management controls through loopback/SSH.
 
 September 24 operations: [daily backups and recovery](docs/backups-and-recovery.md), [compact health and account notifications](docs/health-and-notifications.md), and [private phone previews](docs/private-previews.md) run on Linux independently of the Mac. **Shared dashboard: http://router:8409/**. Project previews: **http://router:8400/**. Accepted limitation: backups in `/var/lib/personal-codex-router-backups/` contain credentials on the same disk as the originals, so disk loss or compromise affects both. Linux desktop notifications continue; the dashboard no longer shows notice tiles.
@@ -12,7 +49,7 @@ Personal Router shows the configured Codex Pro account (`account-a@example.com`)
 
 [Codex account access](docs/account-access.md) lets you route Free and paid accounts with a per-account preference, excludes signed-out credentials from routing, offers device-code sign-in on desktop, Mac and phone, and documents scoped deployment.
 
-[Claude subscription usage](docs/claude-usage.md) shows both Claude subscriptions with independent gateway routing. The allowance collectors use Claude Code's current token for A (Max 20x, with confirmed limit resets) and a long-lived setup-token for B (Max 5x). Inference uses separate gateway-owned Claude credentials.
+[Claude subscription usage](docs/claude-usage.md) shows both Claude subscriptions with independent gateway routing. The allowance collectors use Claude Code's current token for A (Max 20x, with confirmed limit resets) and a long-lived setup-token for B, on Max (20x). Inference uses separate gateway-owned Claude credentials.
 
 ## Earned reset credits
 
@@ -65,7 +102,7 @@ The upstream usage queue removes records when read. Records already collected pe
 
 | Component | Location / service |
 | --- | --- |
-| Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.30 live; 8.0.43 installed and staged ([preparation](docs/gateway-upgrade-8.0.43-2026-10-26.md)), `*:8317` behind the host firewall |
+| Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.30 live; 8.0.47 installed and staged ([preparation](docs/gateway-upgrade-8.0.47-2026-10-29.md)), `*:8317` behind the host firewall |
 | Overview backend + static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, Linux loopback 8320 |
 | Linux friendly address | `personal-codex-router-url.socket` and `.service`, loopback port 80 |
 | Claude gateway routing | Active for both subscriptions; T3 `claudeAgent_gateway` on Linux and Mac, Linux shell `claude` via `scripts/claude-gateway.py` ([routing](docs/claude-routing.md), [activation and acceptance](docs/claude-gateway-2026-10-15.md)) |
@@ -78,11 +115,11 @@ The upstream usage queue removes records when read. Records already collected pe
 
 Per-account fast mode: [plugin policy, deployment and websocket limits](docs/fast-mode-policy.md).
 
-Codex WebSockets: [rollout with response steering kept off](docs/codex-websockets.md); planned after the 8.0.43 cutover.
+Codex WebSockets: [rollout with response steering kept off](docs/codex-websockets.md); planned after the 8.0.47 cutover.
 
 T3 usage hub: [read-only, separately keyed limits for T3 Code](docs/t3-usage-hub.md).
 
-Gateway upgrade, verification and rollback: [October 26 preparation for 8.0.43](docs/gateway-upgrade-8.0.43-2026-10-26.md). 8.0.43 is installed with an ignored staged drop-in; 8.0.30 remains live until the user chooses a restart window. The checkout validates sign-in and conversation moves on both versions; its dashboard changes are not deployed by this preparation. Dashboard Codex sign-in writes the new tokens under the gateway's own credential lock and verifies the runtime token ([details](docs/gateway-upgrade-8.0.30-2026-10-15.md#codex-sign-in-replacement)). It is allowed only on validated gateway builds: after an upgrade, re-run `tests/gateway_replace_integration.py` before extending the allowlist. Legacy 8.0.7 fails that harness and is excluded on purpose; dashboard sign-in would be unavailable on that build. 8.0.30 is the rollback target for the staged upgrade; see the [October 1 upgrade record](docs/gateway-upgrade-8.0.7-2026-10-01.md) for 8.0.7 history. The live config uses the nested v8 layout; see the [completed October 1 migration and repeat procedure](docs/gateway-config-v8-migration.md).
+Gateway upgrade, verification and rollback: [October 29 preparation for 8.0.47](docs/gateway-upgrade-8.0.47-2026-10-29.md). 8.0.47 is installed with an ignored staged drop-in; 8.0.30 remains live until the user chooses a restart window. The checkout validates sign-in and conversation moves on 8.0.30, 8.0.43 and 8.0.47; its dashboard changes are not deployed by this preparation. Dashboard Codex sign-in writes the new tokens under the gateway's own credential lock and verifies the runtime token ([details](docs/gateway-upgrade-8.0.30-2026-10-15.md#codex-sign-in-replacement)). It is allowed only on validated gateway builds: after an upgrade, re-run `tests/gateway_replace_integration.py` before extending the allowlist. Legacy 8.0.7 fails that harness and is excluded on purpose; dashboard sign-in would be unavailable on that build. 8.0.30 is the rollback target for the staged upgrade; see the [October 1 upgrade record](docs/gateway-upgrade-8.0.7-2026-10-01.md) for 8.0.7 history. The live config uses the nested v8 layout; see the [completed October 1 migration and repeat procedure](docs/gateway-config-v8-migration.md).
 
 Verified 2026-10-27: `zz-gateway-8.0.30.conf` selects the live executable. `server.host` is empty, so inference listens on `*:8317`; nftables admits loopback and only the Mac over Tailscale. Management remains loopback-only (`management.allow-remote: false`). Mac inference connects directly to `http://100.64.0.10:8317`; management and the computer-only dashboard address use SSH forwards. Gateway retry policy is `request-retry: 5`, `max-retry-interval: 45` seconds and `max-retry-credentials: 2`. The Free Codex account's model listing excludes `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` and `gpt-5.6-sol`; see [model routes](docs/standard-management-setup.md#model-routes).
 
@@ -123,7 +160,7 @@ For account-access changes, preview `python3 scripts/install-operations.py --acc
 
 The tests cover device sign-in, identity validation, the locked credential writer, immediate disk/listing/runtime-token verification, post-import refresh preservation, serialized mutation races, routing switches, proxy and installer scope, unknown quota handling, timezone-aware usage boundaries, credential filtering, host/origin restrictions, and denial of management/traversal paths. The overview never forwards arbitrary management routes. All its SQL connections use read-only mode; the service has write access to SQLite’s directory only because SQLite needs its WAL shared-memory sidecar.
 
-The initial setup record is in `docs/standard-management-setup.md`. Dated evidence is in `docs/`. Model streaming was verified for both accounts during the management setup. On September 22, automatic account failover passed in both directions in an isolated instance of then-installed 7.3.11 using that date's production routing/retry policy. Each test invalidated a copied credential after establishing session affinity; the same request recovered through the other account and the following request stayed there. That test did not cover real quota exhaustion or mid-stream failures; see `docs/failover-verification.json`. The [8.0.43 preparation](docs/gateway-upgrade-8.0.43-2026-10-26.md) separately records synthetic 429/503 failover checks. Phone pairing requirements are in `docs/mobile-remote.md`.
+The initial setup record is in `docs/standard-management-setup.md`. Dated evidence is in `docs/`. Model streaming was verified for both accounts during the management setup. On September 22, automatic account failover passed in both directions in an isolated instance of then-installed 7.3.11 using that date's production routing/retry policy. Each test invalidated a copied credential after establishing session affinity; the same request recovered through the other account and the following request stayed there. That test did not cover real quota exhaustion or mid-stream failures; see `docs/failover-verification.json`. The [8.0.47 preparation](docs/gateway-upgrade-8.0.47-2026-10-29.md) separately records synthetic 429/503 failover checks. Phone pairing requirements are in `docs/mobile-remote.md`.
 
 ## Stop or roll back the overview
 

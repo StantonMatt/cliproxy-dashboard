@@ -15,8 +15,8 @@ Build on Linux amd64 with a C compiler and Go >= 1.26 (tested with 1.26.4):
 plugins/fast-mode-policy/build.sh /tmp/fast-mode-build
 ```
 
-`GO=/absolute/path/to/go` selects a toolchain. The script invokes
-`/home/user/.local/bin/heavy` for the build and prints the resulting
+`GO=/absolute/path/to/go` selects a toolchain. The script uses `heavy` from `PATH` when available, otherwise builds directly,
+and prints the resulting
 `fast-mode-policy-v0.1.2.so` path. Its default output is
 `$XDG_CACHE_HOME/personal-codex-router/fast-mode-policy`, or the same directory
 under `/tmp` when XDG_CACHE_HOME is unset. Output inside this repository is

@@ -25,7 +25,7 @@ On the Mac, open Settings → Connections, find the connected `user-desktop` SSH
 ## What is installed
 
 - Gateway: stock CLIProxyAPI 8.0.30, selected by `zz-gateway-8.0.30.conf`, with `/etc/cliproxyapi/config.yaml` in the nested v8 layout since 2026-10-01. See the [October 15 activation and sign-in repair](gateway-upgrade-8.0.30-2026-10-15.md) and [config migration](gateway-config-v8-migration.md).
-- Upgrade prepared October 26: 8.0.43 is installed at `/opt/cliproxyapi/8.0.43`; `zz-gateway-8.0.43.conf.staged` is ignored by systemd. Cutover is pending, with 8.0.30 retained for rollback. 8.0.7 is legacy history. See the [preparation, checks and rollback](gateway-upgrade-8.0.43-2026-10-26.md).
+- Upgrade prepared October 29: 8.0.47 is installed at `/opt/cliproxyapi/8.0.47`; `zz-gateway-8.0.47.conf.staged` is ignored by systemd. Cutover is pending, with 8.0.30 retained for rollback. 8.0.7 is legacy history. See the [preparation, checks and rollback](gateway-upgrade-8.0.47-2026-10-29.md).
 - Official Management Center: pinned v1.24.2 at `/etc/cliproxyapi/static/management.html`, SHA-256 checked against the upstream release asset. Automatic panel updates are disabled so changes can be validated deliberately.
 - Management: enabled with a separate bcrypt-hashed key and `allow-remote: false`.
 - Network: empty `server.host` gives a `*:8317` listener. The nftables `tailscale_host_guard` admits loopback and the Mac over Tailscale only; management still rejects remote requests. Mac inference connects directly to `http://100.64.0.10:8317`; management and the computer-only dashboard use SSH forwards.
@@ -39,7 +39,7 @@ The service's existing filesystem restrictions remain in force: `/etc/cliproxyap
 
 ## Model routes
 
-October 29, 2026: Codex now has one configured identity, `account-a@example.com` (Pro). The Free Codex account is disabled and scheduled for credential deletion when this code ships. Both Claude accounts, including Claude B at the retired Codex email, remain unchanged. Codex routing modes converge to neutral priority; there is no account failover. The two-account verification scripts skip with a clear message until two Codex identities are configured again.
+October 29, 2026: Codex now has one configured identity, `account-a@example.com` (Pro). The Free Codex account was removed on October 29 at the user's request. Both Claude accounts, including Claude B at the retired Codex email, remain unchanged. Codex routing modes converge to neutral priority; there is no account failover. The two-account verification scripts skip with a clear message until two Codex identities are configured again.
 
 Verified 2026-10-27 through the management auth-file and per-account model listings: `account-a@example.com` is Pro and `account-b@example.com` is Free. The Free listing excludes `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` and `gpt-5.6-sol`; the Pro listing includes all four.
 

@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Token-only fields PATCH regressions against the pinned, synthetic gateway."""
 import copy
 import datetime as dt
@@ -184,11 +185,11 @@ class FieldsImportTests(unittest.TestCase):
 
     def test_overlapping_controller_cannot_replace_token_patch_clone(self):
         self.gateway.row['priority'] = self.gateway.runtime['priority'] = 100
-        self.gateway.row['email'] = self.gateway.runtime['email'] = self.gateway.saved['email'] = routing.EMAILS[0]
-        self.gateway.saved['id_token'] = jwt(email=routing.EMAILS[0])
-        self.gateway.tokens['id_token'] = jwt(email=routing.EMAILS[0])
+        self.gateway.row['email'] = self.gateway.runtime['email'] = self.gateway.saved['email'] = CODEX_PAIR[0]
+        self.gateway.saved['id_token'] = jwt(email=CODEX_PAIR[0])
+        self.gateway.tokens['id_token'] = jwt(email=CODEX_PAIR[0])
         self.gateway.other_rows = [dict(copy.deepcopy(self.gateway.row), name='second.json',
-                                       auth_index='account-b', email=routing.EMAILS[1])]
+                                       auth_index='account-b', email=CODEX_PAIR[1])]
         def controller(path, body=None, method=None, timeout=None):
             if path == '/config':
                 return {'routing': {'strategy': 'round-robin'}}

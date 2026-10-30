@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 from html.parser import HTMLParser
 import importlib.util
 import contextlib
@@ -37,6 +38,9 @@ class DashboardTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         base = Path(directory.name)
+        transport = patch.object(app.routing_policy, 'request', side_effect=lambda path, *args, **kwargs: {'files': copy.deepcopy(CODEX_INVENTORY)} if path == '/auth-files' else {})
+        transport.start()
+        self.addCleanup(transport.stop)
         original = app.FastModeManager
         manager = patch.object(app, 'FastModeManager', side_effect=lambda: original(
             base / 'fast-controls.json', base / 'fast-policy.json', base / 'fast-status.json'))
@@ -357,7 +361,7 @@ class DashboardTests(unittest.TestCase):
                 path.write_text(json.dumps(raw))
                 result = app.watch_accounts(now)[0]
                 self.assertEqual(set(result), {'id', 'provider', 'label', 'email', 'plan', 'status', 'error',
-                                              'checked_at', 'attempted_at', 'windows', 'extra_usage', 'resets'})
+                                              'checked_at', 'attempted_at', 'windows', 'extra_usage', 'resets', 'independent_windows'})
                 self.assertEqual((result['id'], result['provider'], result['label'], result['plan']),
                                  ('claude', 'claude', 'Claude A', 'Max'))
                 self.assertEqual(result['windows'][0]['remaining'], 18)
@@ -483,7 +487,7 @@ class DashboardTests(unittest.TestCase):
                                         'active': True, 'disabled': False, 'auth_state': 'authenticated',
                                         'quota_error': None, 'quota_checked_at': stamp,
                                         'availability': {'state': 'ready'}, 'windows': []}
-                                       for i, email in enumerate(app.routing_policy.EMAILS)]}
+                                       for i, email in enumerate(CODEX_PAIR)]}
             handler = object.__new__(app.Handler)
             handler.allowed = Mock(return_value=True)
             handler.send = Mock()
@@ -508,7 +512,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertNotIn('claude', json.dumps(result['gateway']['accounts']))
                 self.assertNotIn('claude', json.dumps(app.routing_policy.observations(result['gateway'])))
                 self.assertNotIn('claude', json.dumps(result['health']))
-                self.assertEqual({call.args[0] for call in resets.view.call_args_list}, set(app.routing_policy.EMAILS))
+                self.assertEqual({call.args[0] for call in resets.view.call_args_list}, set(CODEX_PAIR))
                 notices.update(state.snapshot(), now)
                 self.assertEqual(notices.rows, {})
                 self.assertNotIn('claude', json.dumps(result['notifications']))
@@ -520,7 +524,7 @@ class DashboardTests(unittest.TestCase):
     def test_timer_save_and_reset_agree_on_exhausted_preferred_account_and_patch(self):
         policy = app.routing_policy
         now = 1700000000
-        first, preferred = policy.EMAILS
+        first, preferred = CODEX_PAIR
         selected = {'mode':'preferred-account', 'preferred_email':preferred}
         wrapper = Path(__file__).resolve().parents[1] / 'scripts/prefer-earliest-reset.py'
         reconcile = policy.reconcile
@@ -530,7 +534,7 @@ class DashboardTests(unittest.TestCase):
                 root = Path(directory)
                 rows = [{'type':'codex', 'email':email, 'auth_index':str(i),
                          'name':f'acct-{i+1}.json', 'priority':100 if email == preferred else 0}
-                        for i, email in enumerate(policy.EMAILS)]
+                        for i, email in enumerate(CODEX_PAIR)]
                 writes, inputs = [], []
                 def api(path, body=None, method=None, timeout=None):
                     if path == '/config':return {'routing':{'strategy':'round-robin'}}
@@ -540,7 +544,7 @@ class DashboardTests(unittest.TestCase):
                     writes.append(body.copy())
                     next(row for row in rows if row['name'] == body['name'])['priority'] = body['priority']
                     return {'status':'ok'}
-                def run_controller(overview, value=None, call=None):
+                def run_controller(overview, value=None, call=None, inventory=None):
                     inputs.append(copy.deepcopy(overview))
                     return reconcile(overview, value, call or api, root)
                 resets, notices = Mock(), Mock()
@@ -556,7 +560,7 @@ class DashboardTests(unittest.TestCase):
                                      'scope':'account', 'retry_at':None if email == first else now+10000},
                      'windows':[{'seconds':604800, 'remaining':1 if email == first else 0,
                                  'resets_at':now+10000}]}
-                    for i, email in enumerate(policy.EMAILS)]}
+                    for i, email in enumerate(CODEX_PAIR)]}
                 def handler(path, body=b''):
                     result = object.__new__(app.Handler)
                     result.connection = Mock()
@@ -605,7 +609,7 @@ class DashboardTests(unittest.TestCase):
                                                  {'quota_refresh':'ok', 'routing_reconcile':'ok'})
                             result = json.loads((root / 'status.json').read_text())
                         self.assertEqual(result['intended_priorities'], {first:100, preferred:0})
-                        self.assertEqual(result['reason'], 'Preferred account account-b@example.com: quota_exhausted')
+                        self.assertEqual(result['reason'], 'Preferred account alternate@example.test: quota_exhausted')
                         self.assertEqual(result['selected_email'], preferred)
                         self.assertEqual(result['status'], 'active')
                         self.assertEqual(writes, [{'name':'acct-1.json', 'priority':100},
@@ -626,7 +630,7 @@ class DashboardTests(unittest.TestCase):
             with patch.object(app, 'PREFERENCE', path):
                 self.assertIsNone(app.preference_status()['saved_mode'])
                 for mode in app.routing_policy.MODES:
-                    selected = {'mode':mode, 'preferred_email':app.routing_policy.EMAILS[0]}
+                    selected = {'mode':mode, 'preferred_email':CODEX_PAIR[0]}
                     app.routing_policy.write_json(root / 'selection.json', selected)
                     result = app.preference_status()
                     self.assertEqual(result['policy'], 'baseline')
@@ -677,13 +681,13 @@ const done=vm.runInContext(`(async()=>{
   click(event('original'));click(event('original'));
   while(resetBusy.size)await new Promise(resolve=>queueMicrotask(resolve));
   assert.equal(posts[2].credit_id,'original');
-  await saveRouting('');assert.equal(posts[3].mode,'highest-remaining-quota');
+  await saveRouting(document.getElementById('routing-mode').value);assert.equal(posts[3].mode,'highest-remaining-quota');
   current.gateway.preference.saved_mode='preferred-account';current.gateway.preference.saved_preferred_email='first@example.test';
   renderRouting(current.gateway);assert.equal(document.getElementById('routing-mode').value,'first@example.test');
-  await saveRouting('');assert.equal(posts[4].mode,'preferred-account');assert.equal(posts[4].preferred_email,'first@example.test');
+  await saveRouting(document.getElementById('routing-mode').value);assert.equal(posts[4].mode,'preferred-account');assert.equal(posts[4].preferred_email,'first@example.test');
   delete current.gateway.preference.saved_mode;
-  renderRouting(current.gateway);assert.equal(document.getElementById('routing-mode').value,'round-robin');
-  await saveRouting('');assert.equal(posts[5].mode,'round-robin');
+  renderRouting(current.gateway);assert.equal(document.getElementById('routing-mode').value,'earliest-weekly-reset');
+  await saveRouting(document.getElementById('routing-mode').value);assert.equal(posts[5].mode,'earliest-weekly-reset');
 })()`,Object.assign(context,{queueMicrotask}));
 done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
 '''
@@ -714,7 +718,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             root = Path(directory)
             rows = [{'type':'codex', 'email':email, 'name':email, 'priority':0}
-                    for email in app.routing_policy.EMAILS]
+                    for email in CODEX_PAIR]
             def api(path, body=None, method=None, timeout=None):
                 if path == '/config':return {'routing':{'strategy':'round-robin'}}
                 if path == '/auth-files':return {'files':[dict(row) for row in rows]}
@@ -737,7 +741,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                 handler.server = Mock()
                 handler.server.state.snapshot.return_value = {}
                 with patch.object(app.routing_policy, 'request', side_effect=api), \
-                        patch.object(app.routing_policy, 'reconcile', side_effect=lambda overview, value, call=None:
+                        patch.object(app.routing_policy, 'reconcile', side_effect=lambda overview, value, call=None, inventory=None:
                                   reconcile(overview, value, call or api, root)):
                     handler.do_POST()
                 code, response = handler.send.call_args.args
@@ -746,7 +750,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                 self.assertEqual(result['status'], expected)
                 self.assertFalse(result['suspended'])
                 self.assertFalse(app.routing_policy.suspended(root))
-                self.assertEqual(app.routing_policy.selection(root)['mode'], mode)
+                self.assertEqual(app.routing_policy.selection(root, inventory=CODEX_INVENTORY)['mode'], mode)
                 if expected == 'held':
                     self.assertEqual(result['message'], 'Selection saved; applying pending because ' + result['hold_reason'])
                     self.assertEqual(result['hold_reason'], 'Gateway observations are unavailable')
@@ -799,7 +803,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
     def test_preference_hold_fields_and_priority_drift(self):
         with tempfile.TemporaryDirectory() as directory:
             status_path = Path(directory) / 'status.json'
-            emails = app.routing_policy.EMAILS
+            emails = CODEX_PAIR
             status = {'status':'active', 'checked_at':app.utcnow(), 'hold_reason':'Allowance stale',
                       'held_since':'2026-09-30T00:00:00Z', 'intended_priorities':{emails[0]:100, emails[1]:0}}
             observed = app.utcnow()
@@ -830,7 +834,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                 self.assertEqual(result['actual_priorities'], {e:0 for e in emails})
                 self.assertIsNone(result['hold_reason'])
                 self.assertIsNone(result['held_since'])
-                self.assertIsNone(app.preference_status(rows[:1])['drift'])
+                self.assertFalse(app.preference_status(rows[:1])['drift'])
                 rows[0]['priority'] = 100
                 self.assertFalse(app.preference_status(rows)['drift'])
                 status['status'] = 'held'
@@ -841,7 +845,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
             path = Path(directory) / 'status.json'
             now = 1700000000
-            emails = app.routing_policy.EMAILS
+            emails = CODEX_PAIR
             path.write_text(json.dumps({'status':'active', 'checked_at':app.routing_policy.stamp(now),
                                         'intended_priorities':{emails[0]:100, emails[1]:0}}))
             state = app.GatewayState(Mock(), Mock())
@@ -872,7 +876,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
         state = app.GatewayState(Mock(), Mock())
         before = '2026-09-30T13:33:07+00:00'
         after = '2026-09-30T13:33:52+00:00'
-        file = {'type':'codex', 'auth_index':'a', 'email':app.routing_policy.EMAILS[0]}
+        file = {'type':'codex', 'auth_index':'a', 'email':CODEX_PAIR[0]}
         account = {'id':'a', 'label':file['email'], 'email':file['email'], 'priority':0, 'quota_error':None}
         def api(path, body=None):
             return {'files':[file]} if path == '/auth-files' else {'routing':{}}
@@ -890,8 +894,8 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
 
     def test_gateway_retains_claude_auth_indexes_for_recent_request_identity(self):
         state = app.GatewayState(Mock(), Mock())
-        rows = [{'type': 'claude', 'auth_index': 'a', 'email': 'account-a@example.com'},
-                {'type': 'claude', 'auth_index': 'b', 'email': 'account-b@example.com'}]
+        rows = [{'type': 'claude', 'auth_index': 'a', 'email': 'owner@example.test'},
+                {'type': 'claude', 'auth_index': 'b', 'email': 'alternate@example.test'}]
         with patch.object(app, 'api', side_effect=lambda path: {'files': rows} if path == '/auth-files' else {}), \
                 patch.object(app.routing_policy, 'reconcile'), \
                 patch.object(app, 'billing_records', return_value={}), \
@@ -922,7 +926,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
 
     def test_redemption_immediately_refreshes_account_and_reconciles_without_throttle(self):
         with tempfile.TemporaryDirectory() as directory:
-            file = {'type':'codex','auth_index':'a','email':app.routing_policy.EMAILS[0],
+            file = {'type':'codex','auth_index':'a','email':CODEX_PAIR[0],
                     'id_token':{'chatgpt_account_id':'test-account'},'priority':100}
             calls = []
             def api(path, body=None):
@@ -1017,7 +1021,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
             root = Path(directory)
             for recorded in (False, True):
                 rows = [{'type':'codex', 'email':email, 'name':email, 'priority':100}
-                        for email in app.routing_policy.EMAILS]
+                        for email in CODEX_PAIR]
                 def api(path, body=None, method=None):
                     if path == '/config':return {'routing':{'strategy':'round-robin'}}
                     if path == '/auth-files':return {'files':[dict(row) for row in rows]}
@@ -1031,7 +1035,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                 status_path = root / 'status.json'
                 app.routing_policy.write_json(status_path, {
                     'status':'active', 'policy':'preferred-account',
-                    'preferred_email':app.routing_policy.EMAILS[0],
+                    'preferred_email':CODEX_PAIR[0],
                     'checked_at':app.routing_policy.stamp(1700000000)})
                 with self.subTest(recorded=recorded), patch.object(app, 'PREFERENCE', status_path), \
                         patch.object(app.time, 'time', return_value=1700000000):
@@ -1048,7 +1052,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                     self.assertTrue(app.preference_status()['suspended'])
 
     def test_billing_confirmation_is_separate_from_entitlement_and_new_periods(self):
-        email = 'account-a@example.com'
+        email = 'owner@example.test'
         end = '2026-10-14T23:29:17+00:00'
         records = {email: {'renewal_date':'2026-10-14', 'source':'chatgpt_billing',
                            'verified_at':'2026-09-23T12:00:00Z', 'private_note':'SENSITIVE'}}
@@ -1106,11 +1110,11 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
             self.assertEqual(app.account_metadata({'id_token':value}), {})
 
     def test_codex_account_emails_and_order_survive_polling_and_account_refresh(self):
-        for identities in (app.routing_policy.identities('codex'),
+        for identities in (app.routing_policy.identities('codex', inventory=CODEX_INVENTORY),
                            ('z-first@example.test', 'a-second@example.test')):
             with self.subTest(identities=identities):
-                expected = [*identities, '0-extra@example.test', 'zz-extra@example.test']
-                files = [{'type': 'codex', 'auth_index': str(i), 'email': email}
+                expected = ['zz-extra@example.test', '0-extra@example.test', identities[1], identities[0]]
+                files = [{'type': 'codex', 'auth_index': str(i), 'email': email, 'name': f'account-{len(expected)-i}.json'}
                          for i, email in enumerate(reversed(expected))]
                 def api(path, body=None):
                     if path == '/auth-files':
@@ -1125,7 +1129,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                 state = app.GatewayState(resets, Mock())
                 state.access = Mock()
                 state.access.reconcile.side_effect = lambda rows, *args, **kwargs: rows
-                with patch.object(app.routing_policy, 'EMAILS', identities), \
+                with contextlib.nullcontext(), \
                         patch.object(app, 'api', side_effect=api), \
                         patch.object(app.routing_policy, 'reconcile', return_value={'status': 'active'}), \
                         patch.object(app, 'billing_records', return_value={}), \
@@ -1140,7 +1144,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                         self.assertEqual([a['label'] for a in accounts], expected)
 
     def test_account_payload_never_includes_authentication_material(self):
-        file = {'type':'codex','auth_index':'account','email':'account-a@example.com',
+        file = {'type':'codex','auth_index':'account','email':'owner@example.test',
                 'id_token':{},'access_token':'SENSITIVE_ACCESS_TOKEN','refresh_token':'SENSITIVE_REFRESH_TOKEN'}
         response = {'status_code':200,'body':json.dumps({'plan_type':'pro','rate_limit':{'primary_window':{'used_percent':56,'limit_window_seconds':604800}}})}
         with patch.object(app,'api',return_value=response):
@@ -1321,7 +1325,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                         'cache_read_requests', 'cache_creation_requests')) for row in block[group]}
                     self.assertEqual(actual, expected)
             for row in report['recent']:
-                self.assertIn(row['provider'], ('codex', 'claude'))
+                self.assertIn(row['provider'], ('codex', 'claude', 'other'))
                 self.assertNotEqual(row['model'], 'excluded')
                 if row['model'] != 'mixed':
                     self.assertEqual((row['cache_read_tokens'], row['cache_creation_tokens']),
@@ -1448,18 +1452,18 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
             fast_modes.request_view.return_value = {'fast_mode_allowed': False, 'forwarded_service_tier': 'normal'}
             baseline = app.usage_summary('2026-10-03T03:00:00Z', db)
             report = app.usage_summary('2026-10-03T03:00:00Z', db, fast_modes, gateway)
-            self.assertEqual({k: v for k, v in report.items() if k not in ('recent', 'claude')},
-                             {k: v for k, v in baseline.items() if k not in ('recent', 'claude')})
+            self.assertEqual({k: v for k, v in report.items() if k not in ('recent', 'claude', 'providers')},
+                             {k: v for k, v in baseline.items() if k not in ('recent', 'claude', 'providers')})
             self.assertTrue(all(row['email'] is None for row in baseline['claude']['accounts']))
             self.assertEqual(sum(a['requests'] for a in report['accounts']), 9)
-            self.assertEqual(report['last_collected_at'], '2026-10-03T03:00:15Z')
-            expected = [n for n in reversed(range(18)) if n % 6 != 5][:12]
+            self.assertEqual(report['last_collected_at'], '2026-10-03T03:00:17Z')
+            expected = list(reversed(range(18)))[:12]
             self.assertEqual([r['model'] for r in report['recent']], list(map(str, expected)))
             for row in report['recent']:
-                provider = 'claude' if int(row['model']) % 6 in (1, 4) else 'codex'
+                provider = 'claude' if int(row['model']) % 6 in (1, 4) else 'other' if int(row['model']) % 6 == 5 else 'codex'
                 self.assertEqual(row['provider'], provider)
-                self.assertEqual(row['email'], None if row['auth_index'] == 'unknown' else provider + '@example.test')
-                if provider == 'claude':
+                self.assertEqual(row['email'], None if row['auth_index'] == 'unknown' or provider == 'other' else provider + '@example.test')
+                if provider != 'codex':
                     self.assertIsNone(row['fast_mode_allowed'])
                     self.assertIsNone(row['forwarded_service_tier'])
                 else:

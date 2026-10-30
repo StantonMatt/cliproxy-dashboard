@@ -27,7 +27,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gateway_config
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
-from routing_policy import EMAILS
+from routing_policy import identities, inventory_snapshot
 CONFIG = Path('/etc/cliproxyapi/config.yaml')
 AUTH = Path('/var/lib/cliproxyapi/auth')
 MARKER = 'ROUTER_FAILOVER_OK'
@@ -107,9 +107,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, help='Gateway executable (default: effective cliproxyapi ExecStart)')
     args = parser.parse_args(argv)
-    if len(EMAILS) != 2:
+    emails = identities('codex', inventory_snapshot())
+    if len(emails) != 2:
         print('Skipped: Codex account failover requires exactly two configured accounts; '
-              f'{len(EMAILS)} configured. No credentials read or gateway started.')
+              f'{len(emails)} configured. No credentials read or gateway started.')
         return 0
     binary = (args.binary or gateway_config.resolve_gateway_binary()).resolve()
     assert os.geteuid() == 0, 'Run through sudo on Linux.'
@@ -120,19 +121,19 @@ def main(argv=None):
     originals = {}
     for path in AUTH.glob('*.json'):
         value = json.loads(path.read_text())
-        if value.get('type') == 'codex' and value.get('email') in EMAILS:
+        if value.get('type') == 'codex' and value.get('email') in emails:
             if value['email'] in originals:
                 raise RuntimeError('Configured Codex credentials are ambiguous')
             originals[value['email']] = value
-    assert set(originals) == set(EMAILS)
+    assert set(originals) == set(emails)
     report = {'tested_at': dt.datetime.now(dt.timezone.utc).isoformat(),
               'binary': str(binary), 'scope': 'isolated instance, copied OAuth access tokens',
               'fault': 'HTTP 401 from deliberately invalid copied access token',
               'production_retry_policy': {k: normalized.get(k) for k in gateway_config.RETRY},
               'routing': normalized.get('routing'), 'tests': []}
     try:
-        for first in EMAILS:
-            second = next(x for x in EMAILS if x != first)
+        for first in emails:
+            second = next(x for x in emails if x != first)
             with tempfile.TemporaryDirectory(prefix='personal-router-failover-', dir='/run') as temp:
                 root = Path(temp)
                 os.chown(root, owner.pw_uid, owner.pw_gid)

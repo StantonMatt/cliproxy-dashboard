@@ -82,6 +82,7 @@ const recentContext = vm.createContext({
     if (!elements.has(id)) elements.set(id,{style:{}});
     return elements.get(id);
   }},providerChip:(provider,id)=>id,renderChart(){},
+  usageProviders:u=>({codex:u}),providerData:()=>[],providerName:p=>p,seriesDot:()=>'',today:null,
 });
 vm.runInContext(source.slice(0,source.indexOf('let range ='))+
   source.slice(source.indexOf('function totals('),source.indexOf('function accountFor('))+

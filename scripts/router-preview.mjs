@@ -6,7 +6,7 @@ import fs from 'node:fs';
 
 const ACCOUNT_MUTATION_DEADLINE_MS = 45000;
 const ACCOUNT_PROXY_TIMEOUT_MS = ACCOUNT_MUTATION_DEADLINE_MS + 5000;
-const ACCOUNT_MUTATION_PATHS = ['/api/accounts/signin/start','/api/accounts/signin/cancel','/api/accounts/routing','/api/routing','/api/claude-routing','/api/routing-link','/api/routing-all','/api/claude/accounts/routing'];
+const ACCOUNT_MUTATION_PATHS = ['/api/accounts/signin/start','/api/accounts/signin/cancel','/api/accounts/add/start','/api/accounts/add/callback','/api/accounts/add/cancel','/api/accounts/routing','/api/routing','/api/claude-routing','/api/routing-link','/api/routing-all','/api/claude/accounts/routing'];
 
 const configPath = process.env.ROUTER_PREVIEW_CONFIG || '/etc/personal-codex-router/previews.json';
 const config = () => JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -48,8 +48,8 @@ const route = (port,c) => port===c.base_port+9 ?
 function dashboardRequestAllowed(req) {
   const path=req.url.split('?')[0];
   if(req.method==='GET')return ['/', '/index.html', '/app.js', '/billing.js', '/style.css', '/fonts.css',
-    '/favicon.svg', '/api/overview', '/api/health', '/ibm-plex-serif-0.ttf'].includes(path) || /^\/(manrope-[0-4]|ibm-plex-mono-[01])\.ttf$/.test(path);
-  return req.method==='POST' && ['/api/refresh','/api/routing','/api/claude-routing','/api/routing-link','/api/routing-all','/api/claude/accounts/routing','/api/resets/policy','/api/resets/consume','/api/claude/resets/consume','/api/claude/resets/policy','/api/fast-mode','/api/accounts/signin/start','/api/accounts/signin/cancel','/api/accounts/routing'].includes(path);
+    '/favicon.svg', '/api/overview', '/api/accounts/add/status', '/api/health', '/ibm-plex-serif-0.ttf'].includes(path) || /^\/(manrope-[0-4]|ibm-plex-mono-[01])\.ttf$/.test(path);
+  return req.method==='POST' && ['/api/refresh','/api/routing','/api/claude-routing','/api/routing-link','/api/routing-all','/api/claude/accounts/routing','/api/resets/policy','/api/resets/consume','/api/claude/resets/consume','/api/claude/resets/policy','/api/fast-mode','/api/accounts/signin/start','/api/accounts/signin/cancel','/api/accounts/add/start','/api/accounts/add/callback','/api/accounts/add/cancel','/api/accounts/routing'].includes(path);
 }
 function upstreamTimeout(req, p) {
   if(p.dashboard && ACCOUNT_MUTATION_PATHS.includes(req.url.split('?')[0]))return ACCOUNT_PROXY_TIMEOUT_MS;

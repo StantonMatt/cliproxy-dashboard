@@ -15,7 +15,9 @@ export CGO_ENABLED=1 GOOS=linux GOARCH=amd64
 stage=$(mktemp -d "$out_dir/.build-XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
 cd -- "$source_dir"
-/home/user/.local/bin/heavy "$go_bin" build -mod=readonly -trimpath -buildvcs=false -buildmode=c-shared -o "$stage/fast-mode-policy-v0.1.2.so" .
+runner=()
+if command -v heavy >/dev/null 2>&1; then runner=(heavy); fi
+"${runner[@]}" "$go_bin" build -mod=readonly -trimpath -buildvcs=false -buildmode=c-shared -o "$stage/fast-mode-policy-v0.1.2.so" .
 target="$out_dir/fast-mode-policy-v0.1.2.so"
 # Never overwrite a potentially loaded library, even in the build cache.
 if [[ -e "$target" ]]; then

@@ -5,7 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const css=fs.readFileSync(path.join(__dirname,'../dashboard/static/style.css'),'utf8');
 const source=fs.readFileSync(path.join(__dirname,'../dashboard/static/app.js'),'utf8');
-const A='account-a@example.com',B='account-b@example.com';
+const A='owner@example.test',B='alternate@example.test';
 
 // Each gateway has its own colour in both themes; status colours are not reused for accounts.
 assert.match(css,/:root\{[^}]*--codex:#[0-9a-f]{6};--codex-2:#[0-9a-f]{6};--claude:#[0-9a-f]{6};--claude-2:#[0-9a-f]{6}/);
@@ -40,34 +40,28 @@ function snapshot(){
     watch_accounts:[
       {id:'claude',email:A,status:'ok',checked_at:new Date().toISOString(),routing_id:'c'.repeat(64),routing_enabled:true,runtime_available:true,
         windows:[window('five_hour','5-hour limit',20,9000),window('seven_day','Weekly · all models',97,200000)]},
-      {id:'claude-b',email:B,status:'ok',checked_at:new Date().toISOString(),routing_id:'d'.repeat(64),routing_enabled:true,runtime_available:true,
+      {id:'claude-b',independent_windows:true,email:B,status:'ok',checked_at:new Date().toISOString(),routing_id:'d'.repeat(64),routing_enabled:true,runtime_available:true,
         windows:[window('five_hour','5-hour limit',12,14000),window('seven_day','Weekly · all models',2,480000)]}]};
 }
 // Values from the page's realm compare by content.
 const set=data=>{context.fixture=data;vm.runInContext('current=fixture;failed=false',context);};
 
-// Two shades per gateway: the second account of each gateway gets the second shade.
+// Series and palette are tied to account identity and survive reordered inventories.
 set(snapshot());
-assert.equal(context.series('codex','a1'),'codex-one');
-assert.equal(context.series('codex','a2'),'codex-two');
-assert.equal(context.series('claude','c0'),'claude-one');
-assert.equal(context.series('claude','c1'),'claude-two');
-assert.equal(context.series('codex','missing',B),'codex-two');
-assert.equal(context.seriesNames()['codex-one'],A);
-assert.equal(context.seriesNames()['codex-two'],B);
-// Position determines the series even without a label or a configured email.
-context.fixture.gateway.accounts=[{id:'custom-a',email:'z@example.test'},{id:'custom-b',email:'a@example.test'}];
-assert.equal(context.series('codex','custom-a'),'codex-one');
-assert.equal(context.series('codex','custom-b'),'codex-two');
-assert.equal(context.seriesNames()['codex-one'],'z@example.test');
-assert.equal(context.seriesNames()['codex-two'],'a@example.test');
+assert.equal(context.series('codex','a1'),'codex:a1');
+assert.equal(context.series('codex','a2'),'codex:a2');
+assert.equal(context.series('claude','c0'),'claude:claude');
+assert.equal(context.series('claude','c1'),'claude:claude-b');
+assert.equal(context.seriesNames()['codex:a1'],A);
+assert.equal(context.seriesNames()['codex:a2'],B);
+context.fixture.gateway.accounts=[{id:'custom-a',key:'z.json',email:'z@example.test'},{id:'custom-b',key:'a.json',email:'a@example.test'}];
+const key=context.series('codex','custom-a'),color=context.seriesColor(key);
 context.fixture.gateway.accounts.reverse();
-assert.equal(context.series('codex','custom-a'),'codex-two');
-assert.equal(context.series('codex','custom-b'),'codex-one');
-assert.equal(context.seriesNames()['codex-one'],'a@example.test');
-assert.equal(context.seriesNames()['codex-two'],'z@example.test');
+assert.equal(context.series('codex','custom-a'),key);
+assert.equal(context.seriesColor(key),color);
+assert.equal(context.seriesNames()['codex:z.json'],'z@example.test');
+assert.equal(context.series('codex','missing'),'codex:removed:missing');
 set(snapshot());
-
 // Before the gateway's first snapshot, routing is unknown: nothing is "off" and no header claims appear.
 const loading=snapshot();
 loading.gateway={online:null,accounts:[],claude_accounts:[]};
@@ -79,7 +73,7 @@ assert.doesNotMatch($('watch-grid').innerHTML,/is-off/);
 assert.equal(($('watch-grid').innerHTML.match(/class="unknown" aria-checked="mixed"/g)||[]).length,2);
 assert.match(context.providerChip('claude','c1',null),/<\/i>—<\/span>$/);
 set(snapshot());
-assert.match(context.providerChip('claude','missing',null),/Unknown account/);
+assert.match(context.providerChip('claude','missing',null),/Removed account/);
 context.fixture.watch_accounts[1].routing_enabled=false;
 context.renderWatch(context.fixture);
 assert.match($('watch-grid').innerHTML,/claude-card is-off/);

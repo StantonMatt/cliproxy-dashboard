@@ -1,6 +1,6 @@
 # Gateway upgrade to 8.0.7 — 2026-10-01
 
-**Current status (2026-10-27):** 8.0.30 is live; 8.0.43 is installed and staged, with 8.0.30 retained for rollback ([current runbook](gateway-upgrade-8.0.43-2026-10-26.md)). This page preserves the October 1 history and its 7.3.11 rollback; 8.0.7 is not the current rollback target.
+**Current status (2026-10-29):** 8.0.30 is live; 8.0.47 is installed and staged, with 8.0.30 retained for rollback ([current runbook](gateway-upgrade-8.0.47-2026-10-29.md)). This page preserves the October 1 history and its 7.3.11 rollback; 8.0.7 is not the current rollback target.
 
 Production CLIProxyAPI was upgraded from 7.3.11 to 8.0.7 at approximately 00:57 UTC. The config was subsequently migrated to the nested v8 layout at approximately 01:27 UTC; see the [migration record](gateway-config-v8-migration.md#performed-2026-10-01).
 

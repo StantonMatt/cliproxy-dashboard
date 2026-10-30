@@ -1,6 +1,6 @@
 # Gateway 8.0.30 upgrade preparation — 2026-10-15
 
-**Current status (2026-10-27):** 8.0.30 remains live via `zz-gateway-8.0.30.conf`; 8.0.43 is installed with an ignored staged drop-in, and cutover is pending with 8.0.30 retained for rollback ([current runbook](gateway-upgrade-8.0.43-2026-10-26.md)). The preparation blockers and rollback to 8.0.7 below are historical.
+**Current status (2026-10-29):** 8.0.30 remains live via `zz-gateway-8.0.30.conf`; 8.0.47 is installed with an ignored staged drop-in, and cutover is pending with 8.0.30 retained for rollback ([current runbook](gateway-upgrade-8.0.47-2026-10-29.md)). The preparation blockers and rollback to 8.0.7 below are historical.
 
 **Activated 2026-10-15 19:09:48 UTC (16:09:48 -03:00) by user decision, with the
 sign-in blocker accepted.** Production has run 8.0.30 since then. The blocker

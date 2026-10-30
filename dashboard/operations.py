@@ -10,7 +10,6 @@ import threading
 import time
 from zoneinfo import ZoneInfo
 
-from routing_policy import EMAILS
 
 OPS = Path('/var/lib/personal-codex-router-ops')
 NOTICES = Path('/var/lib/personal-codex-router/notifications.json')
@@ -133,7 +132,7 @@ def exhaustion_message(details, both, fallback, now):
 
 
 def exhaustion_candidates(accounts, gateway, now):
-    windows = {email: weekly_allowance(accounts.get(email), gateway, now) for email in EMAILS}
+    windows = {email: weekly_allowance(accounts.get(email), gateway, now) for email in accounts}
     # Auth failures can explain an unavailable fallback without a quota response.
     # Unknown/stale observations alone do not invent an exhaustion episode.
     if any(w is None and not (accounts.get(email) and gateway.get('online') is True
@@ -142,13 +141,12 @@ def exhaustion_candidates(accounts, gateway, now):
                              and not can_resume(accounts[email]))
            for email, w in windows.items()):
         return {}
-    exhausted = [accounts[email] for email in EMAILS
+    exhausted = [accounts[email] for email in accounts
                  if windows[email] is not None and windows[email]['remaining'] == 0]
     if not exhausted:
         return {}
-    both = len(EMAILS) > 1 and len(exhausted) == len(EMAILS)
-    other = next((accounts[email] for email in EMAILS if accounts[email] not in exhausted), None)
-    fallback = not both and can_serve(other, gateway, now)
+    both = len(accounts) > 1 and len(exhausted) == len(accounts)
+    fallback = not both and any(can_serve(a, gateway, now) for a in accounts.values() if a not in exhausted)
     details, choices = [], []
     for account in exhausted:
         resets = account.get('resets') or {}
@@ -164,7 +162,7 @@ def exhaustion_candidates(accounts, gateway, now):
                 expiry = credit.get('expires_at')
                 if expiry is None or (type(expiry) in (int, float) and math.isfinite(expiry) and expiry > now):
                     choices.append((float('inf') if expiry is None else expiry, account['id'], account))
-    values = {'email': 'Both Codex accounts' if both else exhausted[0]['email'],
+    values = {'email': 'All Codex accounts' if both else exhausted[0]['email'],
               'kind': 'pool_exhausted' if both else 'weekly_exhausted',
               'urgency': 'normal' if fallback else 'critical',
               'message': exhaustion_message(details, both, fallback, now),
@@ -232,12 +230,23 @@ def health(gateway, now=None, directory=OPS):
     backup_state = ('failed' if backup.get('ok') is False else
                     'healthy' if fresh(successful, now, 36 * 3600) else
                     'stale' if successful else 'unknown')
+    account_rows = [dict(provider='codex', key=a.get('key'), email=a.get('email'),
+                         status=account_health(a, gateway, now),
+                         reason=a.get('access_reason') or a.get('access_error'))
+                    for a in gateway.get('accounts', [])]
+    for file in gateway.get('inventory', []):
+        if file.get('type') == 'codex':
+            continue
+        status = ('stale' if gateway_state != 'healthy' else
+                  'intentionally_disabled' if file.get('disabled') or file.get('status') == 'disabled' else
+                  'unavailable' if file.get('unavailable') or file.get('status') == 'error' else
+                  'healthy' if file.get('status') == 'active' else 'unknown')
+        account_rows.append(dict(provider=file.get('type'), key=file.get('name'), email=file.get('email'),
+                                 status=status, reason=None))
     return {'codex': {'status': daemon, 'checked_at': probe.get('checked_at')},
             'usage_collection': usage_health(probe, now),
             'gateway': {'status': gateway_state, 'checked_at': gateway.get('checked_at')},
-            'accounts': [{'email': email, 'status': account_health(accounts.get(email), gateway, now),
-                          'reason': (accounts.get(email) or {}).get('access_reason') or
-                                    (accounts.get(email) or {}).get('access_error')} for email in EMAILS],
+            'accounts': account_rows,
             'backup': {'status': backup_state, 'last_success_at': successful, 'storage': 'same_disk'}}
 
 
@@ -249,7 +258,7 @@ def candidates(gateway, now, usage=None):
     accounts = {a.get('email'): a for a in gateway.get('accounts', [])}
     result.update(exhaustion_candidates(accounts, gateway, now))
     today = dt.datetime.fromtimestamp(now, ZoneInfo('America/Santiago')).date()
-    for email in EMAILS:
+    for email in accounts:
         a = accounts.get(email)
         if not a:
             continue
@@ -351,9 +360,9 @@ class NoticeStore:
             wanted = candidates(gateway, now, observed_usage)
             accounts = {a.get('email'): a for a in gateway.get('accounts', [])}
             for key, row in self.rows.items():
-                if (key.startswith(('free:', 'signin:', 'exhausted:'))
-                        and ((key == 'exhausted:pool' and len(EMAILS) == 1)
-                             or (key != 'exhausted:pool' and row['email'] not in EMAILS))):
+                if (gateway.get('online') is True and key.startswith(('free:', 'signin:', 'exhausted:'))
+                        and ((key == 'exhausted:pool' and len(accounts) <= 1)
+                             or (key != 'exhausted:pool' and row['email'] not in accounts))):
                     row['active'] = False
                     row.pop('action', None)
                     continue
@@ -369,9 +378,9 @@ class NoticeStore:
                     if authenticated(account, gateway, now):
                         row['active'] = False
                 elif key.startswith('exhausted:'):
-                    if len(EMAILS) == 1:
+                    if len(accounts) <= 1:
                         row['urgency'] = 'critical'
-                    emails = EMAILS if key == 'exhausted:pool' else (row['email'],)
+                    emails = tuple(accounts) if key == 'exhausted:pool' else (row['email'],)
                     if any((w := weekly_allowance(accounts.get(email), gateway, now)) is not None
                            and w['remaining'] > 0 for email in emails) or (
                             gateway.get('online') is True and fresh(gateway.get('checked_at'), now)
@@ -382,7 +391,7 @@ class NoticeStore:
                         # Retained episodes may predate the compact copy. Use their
                         # structured data, and keep countdowns current during outages.
                         row['message'] = exhaustion_message(row.get('accounts') or [], key == 'exhausted:pool',
-                                                            len(EMAILS) > 1 and row.get('urgency') != 'critical', now)
+                                                            len(accounts) > 1 and row.get('urgency') != 'critical', now)
                 elif key.startswith('usage:'):
                     if usage['status'] == 'healthy':
                         row['active'] = False

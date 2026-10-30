@@ -15,7 +15,7 @@ const context = vm.createContext({document, Date, localStorage: {getItem: () => 
   BillingDates: {describe: () => ({date: '14 Oct 2026'})}});
 const source = fs.readFileSync(path.join(__dirname, '../dashboard/static/app.js'), 'utf8');
 vm.runInContext(source.slice(0, source.indexOf("window.addEventListener('hashchange'")), context);
-const email = 'account-b@example.com';
+const email = 'alternate@example.test';
 const account = {id: 'b', label: email, email, plan: 'Pro (10x)', windows: [], resets: {}};
 const gateway = {accounts: [account], online: true, checked_at: new Date().toISOString(),
   pool: {state: 'unavailable'}, preference: {policy: 'round-robin', status: 'active'}};
@@ -24,8 +24,8 @@ assert.equal(elements.get('pool-availability').textContent, 'No accounts ready')
 // Cards carry no subtitle: the gateway column names the provider.
 assert.doesNotMatch(elements.get('account-grid').innerHTML, /ChatGPT subscription|account-email/);
 // Card names keep one line and truncate, with the full email in the tooltip.
-assert.match(elements.get('account-grid').innerHTML, /<span title="account-b@example\.com">account-b@example\.com<\/span>/);
-assert.match(elements.get('account-grid').innerHTML, /aria-label="Codex · account-b@example\.com /);
+assert.match(elements.get('account-grid').innerHTML, /<span title="alternate@example\.test">alternate@example\.test<\/span>/);
+assert.match(elements.get('account-grid').innerHTML, /aria-label="Codex · alternate@example\.test /);
 // Help text appears only when routing can't be changed here.
 assert.equal(elements.get('routing-help').hidden, true);
 gateway.preference.policy = 'highest-remaining-quota';
@@ -42,5 +42,5 @@ context.fixture = {gateway, watch_accounts: [{id: 'claude', label: 'Claude A', e
 vm.runInContext("current=fixture;resetModalAccount='b';renderResetModal()", context);
 assert.equal(elements.get('reset-dialog-account').textContent, `Codex · ${email}`);
 vm.runInContext("resetModalAccount='claude';renderWatchResetModal()", context);
-assert.equal(elements.get('reset-dialog-account').textContent, `Claude A · ${email}`);
+assert.equal(elements.get('reset-dialog-account').textContent, email);
 console.log('Codex scope UI: routing wording, email drift, card headers and reset subtitles passed.');

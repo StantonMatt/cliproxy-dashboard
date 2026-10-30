@@ -207,6 +207,11 @@ if __name__=='__main__':
                 if time.monotonic()>deadline: raise
                 time.sleep(.1)
         run_case('plugin-disabled-baseline','A','fast','priority')
+        with HTTP.open(urllib.request.Request(f'http://127.0.0.1:{port}/v0/management/config',
+                headers={'Authorization':'Bearer spike-management-dummy'}),timeout=5) as response:
+            version=response.headers['X-CPA-VERSION']
+        assert version in ('8.0.30','8.0.43','8.0.47'), 'Reassess duplex policy expectations for this version'
+        summary['gateway_version']=version
         # Enabling through config hot reload, same PID, from initially disabled plugin host.
         # Keep the gateway's startup bcrypt normalization rather than rewriting its secret.
         cfg=yaml.safe_load(config_path.read_bytes())
@@ -270,19 +275,19 @@ if __name__=='__main__':
         assert json.loads(status.read_text())['pid']==proc.pid
         summary['library_path_update_same_pid']=proc.poll() is None
         # Establish a real downstream and upstream websocket, then send a follow-up
-        # with fast disabled. Duplex mode bypasses the after-auth hook on that follow-up.
+        # with fast disabled. v8.0.47 adds per-frame duplex hooks (0fe38224);
+        # older validated builds bypass the after-auth hook on that follow-up.
         cfg['plugins']['configs']['fast-mode-policy']['map_unsupported_ultrafast']=False
         hot_reload()
         save_json(policy,{'files':{'account-B.json':{'allow_fast':False}}})
         observed=websocket_turns(); summary['websocket']=observed
-        if args.response_steering=='true':
-            # EXPECTED POLICY FAILURE, pinned on 8.0.30 and 8.0.43. Fail if
-            # behavior changes so an upstream fix gets a deliberate reassessment.
+        if args.response_steering=='true' and version in ('8.0.30','8.0.43'):
+            # Keep the old-build limitation pinned while requiring the fix on 8.0.47.
             assert [r['tier'] for r in observed]==['<absent>','priority'],observed
             summary['duplex_expected_policy_failure']=True
         else:
             assert [r['tier'] for r in observed]==['<absent>','<absent>'],observed
-            summary['serial_policy_enforced']=True
+            summary['duplex_policy_enforced' if args.response_steering=='true' else 'serial_policy_enforced']=True
         gateway_log.flush(); logs=(EVIDENCE/'gateway.log').read_text()
         summary['websocket_warning_count']=logs.count('follow-up websocket turns bypass the fast-mode policy')
         assert summary['websocket_warning_count']==1,summary

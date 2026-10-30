@@ -12,7 +12,7 @@ can normalize `fast` to `priority` and remove `default` later.
 Verified 2026-10-27: the plugin status reports version 0.1.2 with the live gateway
 PID. The [8.0.30 upgrade record](gateway-upgrade-8.0.30-2026-10-15.md) documents
 the installer's fix to match host event text without pinning source line numbers.
-The [8.0.43 preparation](gateway-upgrade-8.0.43-2026-10-26.md) passed isolated
+The [8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md) passed isolated
 plugin and sandbox checks; that binary is staged, with cutover pending and
 8.0.30 retained for rollback.
 
@@ -228,9 +228,12 @@ is covered. WebSocket transport is distinct from experimental native duplex
 steering: with canonical `upstream.codex.response-steering: false`, ordinary serial
 WebSocket turns re-enter account policy enforcement and still reuse the upstream
 connection. With steering true, follow-up creates bypass the interceptor and can
-retain a fast tier despite the account policy on both 8.0.30 and 8.0.43. Codex's
+retain a fast tier despite the account policy on 8.0.30 and 8.0.43. Codex's
 warmup can make its first actual user inference such a follow-up. Existing sockets
-must reconnect after changing steering or credential transport flags. The warning
+must reconnect after changing steering or credential transport flags. Upstream
+8.0.47 adds per-frame interception; its isolated follow-up/native-warmup tests
+require enforcement rather than the old bypass. Keep steering false for this
+rollout and rollback; full-duplex/error interactions are separate acceptance. The warning
 above is emitted for downstream WebSockets even with steering false; it does not
 prove duplex is active. HTTP and serial WebSockets are covered, but later gateway
 payload rules can reintroduce a tier removed by the plugin on either path. Keep

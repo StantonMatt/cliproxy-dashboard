@@ -1,0 +1,34 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const source=fs.readFileSync(path.join(__dirname,'../dashboard/static/app.js'),'utf8'),nodes=new Map();
+const document={documentElement:{dataset:{}},body:{},querySelectorAll:()=>[],querySelector:()=>null,
+  getElementById(id){if(!nodes.has(id))nodes.set(id,{options:[],classList:{toggle(){}},addEventListener(){},style:{}});return nodes.get(id);}};
+const c=vm.createContext({document,Date,JSON,Math,localStorage:{getItem:()=>null}});
+vm.runInContext(source.slice(0,source.indexOf("window.addEventListener('hashchange'")),c);
+const a={key:'a.json',provider:'claude',id:null,auth_index:null,email:'a@example.test'},b={...a,key:'b.json',email:'b@example.test'};
+const row={key:b.key,auth_index:null,requests:7,hour:new Date().toISOString()};
+c.fixture={providers:[{id:'claude',name:'Claude',accounts:[a,b]}],gateway:{online:true,claude_accounts:[a,b]},
+  usage:{available:true,providers:{claude:{accounts:[row],hours:[row,{...row,key:'removed.json',requests:3}]}}}};
+vm.runInContext('current=fixture;today=fixture',c);
+assert.equal(c.providerAccount('claude',null,undefined,b.key),b);
+assert.equal(c.providerAccount('claude',null),undefined,'missing runtime IDs must not resolve to the first account');
+for(const id of [undefined,'','   '])assert.equal(c.providerAccount('claude',id),undefined);
+assert.equal(c.providerAccount('claude',null,b.email),b,'explicit email remains a valid fallback');
+assert.equal(c.providerAccount('claude','runtime',a.email,b.key),b,'filename wins over conflicting identifiers');
+a.id=b.key;assert.equal(c.providerAccount('claude',b.key),b,'filename wins over another account runtime ID');
+assert.equal(c.providerAccount('claude',null,a.email,'removed.json'),undefined,'removed filename stays removed');
+assert.equal(c.series('claude',null,undefined,b.key),'claude:b.json');
+assert.equal(c.series('claude',null),'claude:removed:unknown');
+const names=c.seriesNames();assert.equal(names['claude:b.json'],b.email);assert.equal(names['claude:removed:removed.json'],'Removed account');
+c.renderChart('usage-chart',c.fixture.usage,'today');
+assert.match(nodes.get('usage-chart').innerHTML,/b@example.test 7/);
+assert.match(nodes.get('usage-chart').innerHTML,/Removed account 3/);
+assert.doesNotMatch(nodes.get('usage-chart').innerHTML,/a@example.test 7/);
+c.renderUsage(c.fixture);
+assert.match(nodes.get('usage-accounts').innerHTML,/data-series="claude:b.json"[^]*b@example.test/);
+assert.doesNotMatch(nodes.get('usage-accounts').innerHTML,/a@example.test/);
+c.fixture.usage.recent=[{...row,provider:'claude',timestamp:new Date().toISOString()}];
+c.renderToday(c.fixture);
+assert.match(nodes.get('recent-table').innerHTML,/data-series="claude:b.json"[^]*b@example.test/);
+assert.doesNotMatch(nodes.get('recent-table').innerHTML,/a@example.test/);
+console.log('History account identity: filename-first lookup, non-empty runtime IDs, removed series and chart/table attribution passed');

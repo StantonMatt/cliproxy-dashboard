@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Mixed gateway providers must never enter Codex controls or activity."""
 import contextlib
 import copy
@@ -37,10 +38,10 @@ class ClaudeGatewayCompatibilityTests(unittest.TestCase):
         self.codex = [dict(type='codex', name=f'codex-{i}.json', auth_index=f'codex-{i}',
                            email=email, priority=0, disabled=False,
                            id_token={'plan_type': 'pro', 'chatgpt_account_id': f'workspace-{i}'})
-                      for i, email in enumerate(routing_policy.EMAILS)]
+                      for i, email in enumerate(CODEX_PAIR)]
         # Reusing an email must not make Claude part of a Codex identity or policy.
         self.claude = dict(type='claude', name='claude-a.json', auth_index='claude-a',
-                           email=routing_policy.EMAILS[0], priority=100, disabled=False,
+                           email=CODEX_PAIR[0], priority=100, disabled=False,
                            id_token={'plan_type': 'free'})
         self.rows = self.codex + [self.claude]
         self.calls = []
@@ -72,7 +73,8 @@ class ClaudeGatewayCompatibilityTests(unittest.TestCase):
         self.assertEqual({c.args[0]['type'] for c in state.resets.fetch.call_args_list}, {'codex'})
         self.assertFalse(any(method == 'PATCH' for _, _, method in self.calls))
         health = server.health(state.data, directory=self.root)
-        self.assertEqual(len(health['accounts']), 2)
+        self.assertEqual(len(health['accounts']), 3)
+        self.assertEqual({r['provider'] for r in health['accounts']}, {'codex', 'claude'})
         self.assertEqual(self.claude['priority'], 100)
 
     def test_timer_and_ui_routing_leave_claude_priority_untouched(self):
@@ -86,7 +88,7 @@ class ClaudeGatewayCompatibilityTests(unittest.TestCase):
 
     def test_claude_timer_and_ui_routing_leave_codex_priorities_untouched(self):
         self.rows.append(dict(self.claude, name='claude-b.json', auth_index='claude-b',
-                              email=routing_policy.CLAUDE_EMAILS[1], priority=0))
+                              email=CODEX_PAIR[1], priority=0))
         original = copy.deepcopy(self.codex)
         def call(path, body=None, method=None):
             if method == 'PATCH':
@@ -142,12 +144,12 @@ class ClaudeGatewayCompatibilityTests(unittest.TestCase):
         report = server.usage_summary('1970-01-01T00:00:00Z', db)
         self.assertTrue(report['available'])
         self.assertEqual(report['since'], '2026-10-15T13:00:00Z')
-        self.assertNotEqual(report['last_collected_at'], '2099-01-01')
+        self.assertEqual(report['last_collected_at'], '2099-01-01')
         self.assertEqual([r['auth_index'] for r in report['accounts']], ['codex-0'])
         self.assertEqual([r['model'] for r in report['models']], ['gpt-6'])
-        # Recent requests show both gateways, newest first; other providers stay out.
+        # Recent requests include every recorded provider, newest first.
         self.assertEqual([(r['provider'], r['auth_index']) for r in report['recent']],
-                         [('claude', 'claude-a'), ('codex', 'codex-0')])
+                         [('claude', 'claude-a'), ('codex', 'codex-0'), ('gemini', 'other')])
         self.assertEqual([r['auth_index'] for r in report['hours']], ['codex-0'])
         self.assertEqual(report['accounts'][0]['total_tokens'], 10)
 

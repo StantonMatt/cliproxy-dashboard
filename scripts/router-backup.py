@@ -16,11 +16,15 @@ import re
 import shutil
 import sqlite3
 import stat
+import sys
 import time
 import tomllib
 
-HOME = Path('/home/user')
-PROJECT = HOME / 'Projects/personal-codex-router'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import site_config
+
+HOME = Path(site_config.desktop().pw_dir)
+PROJECT = Path(site_config.load().get('source_checkout', site_config.REPO))
 BACKUPS = Path('/var/lib/personal-codex-router-backups')
 STATUS = Path('/var/lib/personal-codex-router-ops/backup.json')
 USAGE_SPOOL = Path('/var/lib/personal-codex-router/usage.sqlite3.spool')
@@ -104,15 +108,15 @@ def sqlite_copy(source, target):
 
 
 def sources():
-    required = [Path('/etc/cliproxyapi'), Path('/var/lib/cliproxyapi/auth'),
-                Path('/opt/personal-codex-router'), PROJECT,
-                Path('/var/lib/personal-codex-router/reset-controls.json'),
-                Path('/var/lib/personal-codex-router/usage.sqlite3'),
-                HOME / '.codex/config.toml', HOME / '.codex/auth.json',
-                HOME / '.codex/app-server-daemon/settings.json',
-                HOME / '.config/systemd/user/codex-shared-server-start.service']
+    required = [Path('/etc/cliproxyapi'), Path('/opt/personal-codex-router')]
+    desktop_sources = [PROJECT, Path('/var/lib/cliproxyapi/auth'),
+                       Path('/var/lib/personal-codex-router/reset-controls.json'),
+                       Path('/var/lib/personal-codex-router/usage.sqlite3'),
+                       HOME / '.codex/config.toml', HOME / '.codex/auth.json',
+                       HOME / '.codex/app-server-daemon/settings.json',
+                       HOME / '.config/systemd/user/codex-shared-server-start.service']
     # The policy is regenerated from controls; plugin status is process liveness.
-    optional = [Path('/var/lib/personal-codex-router/fast-mode-controls.json'), USAGE_SPOOL, Path('/var/lib/personal-codex-router/billing.json'),
+    optional = desktop_sources + [Path('/var/lib/personal-codex-router/fast-mode-controls.json'), USAGE_SPOOL, Path('/var/lib/personal-codex-router/billing.json'),
                 Path('/var/lib/personal-codex-router/notifications.json'),
                 Path('/var/lib/personal-codex-router-ops/desktop-delivery.json'),
                 Path('/var/lib/personal-codex-router-routing/baseline.json'),

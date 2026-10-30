@@ -22,7 +22,11 @@ from reset_credits import ResetManager
 from operations import NoticeStore, health
 from availability import classify, pool_status
 import routing_policy
+import providers
+import usage_adapters
 import account_access
+import account_add
+import account_mutations
 import signin
 import t3_usage
 from fast_mode import FastModeManager, forwarded_tier
@@ -48,7 +52,7 @@ DB = Path('/var/lib/personal-codex-router/usage.sqlite3')
 PREFERENCE = Path('/var/lib/personal-codex-router-routing/status.json')
 # Builds where a TTL change was verified to replace the selector and release every pin; separate from
 # sign-in's TESTED_GATEWAYS, whose check never touches affinity. See docs/move-conversations-2026-10-17.md.
-MOVE_TESTED_GATEWAYS = ('8.0.30', '8.0.43')
+MOVE_TESTED_GATEWAYS = ('8.0.30', '8.0.43', '8.0.47')
 MOVE_REQUEST_DIR = Path('/run/personal-codex-router-move-request')
 MOVE_RESULT = Path('/run/personal-codex-router-move/result.json')
 MOVE_HELPER = Path('/opt/personal-codex-router/move-conversations.py')
@@ -257,7 +261,7 @@ def watch_account(path, account_id, account_label, resets_enabled, now=None, *, 
     error = error if isinstance(error, str) and re.fullmatch(
         r'http_[1-5][0-9]{2}|network|parse|credentials|expired_token|missing_token|cli_timeout|cli_unavailable|collection_deadline|no_usage_data|api_(?:rate_limit_)?error|unexpected_response',
         error) else None
-    return {'id': account_id, 'provider': 'claude', 'label': account_label,
+    return {'independent_windows': not resets_enabled, 'id': account_id, 'provider': 'claude', 'label': account_label,
              'email': email_address(raw.get('email')),
              'plan': raw.get('plan') if raw.get('plan') in ('Pro', 'Max', 'Max (5x)', 'Max (20x)') else None,
              'status': status, 'error': error, 'checked_at': checked,
@@ -302,17 +306,18 @@ def billing_status(email, period_end, records):
 
 def preference_status(accounts=None, provider='codex'):
     path = PREFERENCE if provider == 'codex' else PREFERENCE.parent / provider / 'status.json'
-    emails = routing_policy.identities(provider)
+    inventory = ([dict(a, type=provider, name=a.get('key', a.get('name', ''))) for a in accounts] if accounts is not None else None)
+    emails = routing_policy.identities(provider, inventory or [])
     try:
         if provider == 'claude' and not path.exists():
-            saved = routing_policy.selection(path.parent, provider)
+            saved = routing_policy.selection(path.parent, provider, inventory)
             return {'policy': saved['mode'], 'selected_email': saved['preferred_email'],
                     'saved_mode': saved['mode'], 'saved_preferred_email': saved['preferred_email'],
                     'status': 'checking', 'drift': None}
         value = json.loads(path.read_text())
         public = {k: value.get(k) for k in ('policy', 'status', 'checked_at', 'preferred_email', 'weekly_resets_at', 'selected_email')}
         try:
-            saved = (routing_policy.selection(path.parent, provider) if (path.parent / 'selection.json').exists()
+            saved = (routing_policy.selection(path.parent, provider, inventory) if (path.parent / 'selection.json').exists()
                      else {'mode': None, 'preferred_email': None})
             public['saved_mode'] = saved['mode']
             public['saved_preferred_email'] = saved['preferred_email']
@@ -336,7 +341,7 @@ def preference_status(accounts=None, provider='codex'):
             if isinstance(intended, dict) and all(e in intended for e in emails):
                 public['drift'] = any(actual[e] != intended[e] for e in emails)
             elif value.get('status') == 'active':
-                expected = [0] if provider == 'codex' and len(emails) == 1 else [0, 100]
+                expected = [0] if len(emails) == 1 else [0] * (len(emails)-1) + [100]
                 public['drift'] = sorted(actual.values()) != expected
         if public['status'] not in ('held', 'fallback', 'disabled'):
             age = time.time() - dt.datetime.fromisoformat(public['checked_at']).timestamp()
@@ -550,8 +555,8 @@ def claude_routing_projection(files, checked_at):
         verified = claude_routing_records(lambda _: {'files': files})
     except routing_policy.Hold:
         verified = {}
-    return [dict({k: f.get(k) for k in ('auth_index', 'email', 'priority', 'disabled', 'status')},
-                 priority_checked_at=checked_at,
+    return [dict({k: f.get(k) for k in ('name', 'auth_index', 'email', 'priority', 'disabled', 'status')},
+                 key=f.get('name'), provider='claude', priority_checked_at=checked_at,
                  routing_id=account_access.claude_routing_id(f) if f.get('email') in verified else None,
                  routing_enabled=(f.get('disabled') is not True and f.get('status') != 'disabled')
                                  if f.get('email') in verified else None,
@@ -580,7 +585,8 @@ def quota_windows(payload):
 
 
 def api(path, body=None, method=None, timeout=18):
-    request = Request('http://127.0.0.1:8317/v0/management' + path,
+    target = path if path.startswith('/v8/management/') else '/v0/management' + path
+    request = Request('http://127.0.0.1:8317' + target,
                       data=json.dumps(body).encode() if body is not None else None,
                       method=method,
                       headers={'Authorization': 'Bearer ' + KEY.read_text().strip(),
@@ -591,14 +597,12 @@ def api(path, body=None, method=None, timeout=18):
 
 
 def codex_account_order(account):
-    emails = routing_policy.identities('codex')
-    email = account['email']
-    return (emails.index(email) if email in emails else len(emails), email)
+    return account.get('key') or account.get('name') or account.get('id') or ''
 
 
 def fetch_account(file, resets=None, call=None):
     email = str(file.get('email', 'Connected account'))[:160]
-    public = {'id': str(file.get('auth_index', ''))[:80], 'label': email,
+    public = {'key': file.get('name'), 'provider': 'codex', 'status': file.get('status'), 'id': str(file.get('auth_index', ''))[:80], 'label': email,
               'email': email, 'active': not file.get('disabled') and not file.get('unavailable'),
               'disabled': bool(file.get('disabled')),
               '_fast_file': file.get('name'),
@@ -656,13 +660,40 @@ class GatewayState:
         self.lock = threading.Lock()
         self.lifecycle_lock = threading.RLock()
         self.access = account_access.AccountAccess()
+        self.usage_cache = usage_adapters.UsageCache()
         self.signins = signin.SigninManager(lambda *a, **kw: api(*a, **kw), self.lifecycle_lock, self.signin_changed)
+        self.adds = account_add.AddManager(lambda *a, **kw: api(*a, **kw), self.lifecycle_lock, self.accounts_changed)
+        self.account_mutations = account_mutations.AccountMutations(
+            lambda *a, **kw: api(*a, **kw), self.lifecycle_lock, self.accounts_changed, self.other_ready_accounts)
         self.running = False
         self.last_attempt = 0
         self.account_updates = {}
         self.data = {'online': None, 'checked_at': None, 'accounts': [], 'routing': {}, 'error': None,
                      'move_available': False}
         self.resets.after_reset = self.after_reset
+
+    def accounts_changed(self):
+        # Invalidate the normal refresh throttle; the existing fetch owns publication.
+        with self.lock:
+            self.last_attempt = 0
+        self.refresh()
+
+    @staticmethod
+    def other_ready_accounts(rows, provider, removed_key, call):
+        others = [r for r in rows if r.get('type') == provider and r.get('name') != removed_key]
+        if provider == 'codex':
+            return any(fetch_account(r, call=call).get('availability', {}).get('state') == 'ready' for r in others)
+        if provider == 'claude':
+            observed = {'gateway': {'online': True, 'checked_at': utcnow(),
+                                   'claude_accounts': claude_routing_projection(others, utcnow())},
+                        'watch_accounts': watch_accounts()}
+            try:
+                ready, _ = routing_policy.eligible_accounts(observed, time.time(), 'claude')
+                return bool(ready)
+            except routing_policy.Hold:
+                return False
+        return any(not r.get('disabled') and not r.get('unavailable') and r.get('status') == 'active'
+                   for r in others)
 
     def after_reset(self, account_id):
         with self.lifecycle_lock:
@@ -758,11 +789,14 @@ class GatewayState:
                     raise signin.AccessError('account_changed')
                 if not enabled and current.get('disabled') is not True and not confirmed:
                     now = time.time()
+                    with deadline.lock(self.lock):
+                        cached_usage = copy.deepcopy(self.data.get('usage_accounts', []))
                     observed = {'gateway': {'online': True, 'checked_at': routing_policy.stamp(now),
                                             # The target's quota does not establish whether
                                             # the other credential remains routable.
-                                            'claude_accounts': [dict(r, disabled=True) if r is current else r
-                                                                for r in rows.values()]},
+                                            'claude_accounts': usage_adapters.bind_claude_usage(
+                                                [dict(r, disabled=True) if r is current else r for r in rows.values()],
+                                                cached_usage)},
                                 'watch_accounts': watched if watched is not None else watch_accounts()}
                     try:
                         ready, _ = routing_policy.eligible_accounts(observed, now, 'claude')
@@ -786,6 +820,7 @@ class GatewayState:
                 # Publish the confirmed readback without waiting for the quota poll.
                 projected = claude_routing_projection(list(actual_rows.values()), utcnow())
                 with deadline.lock(self.lock):
+                    usage_adapters.bind_claude_usage(projected, self.data.get('usage_accounts', []))
                     self.data['claude_accounts'] = projected
         if (routing_policy.state_path('claude') / 'selection.json').exists():
             threading.Thread(target=self.claude_routing_changed, daemon=True).start()
@@ -842,18 +877,23 @@ class GatewayState:
                 updates = dict(self.account_updates)
             # Date the priority read before quota polling can delay publication.
             priority_checked_at = utcnow()
-            all_files = api('/auth-files').get('files', [])
+            all_files = routing_policy.inventory_snapshot(api)
             claude_accounts = claude_routing_projection(all_files, priority_checked_at)
             files = [f for f in all_files if f.get('type') == 'codex']
             self.signins.prune(files)
             files = self.access.reconcile(files, api)
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
                 accounts = list(pool.map(lambda f: fetch_account(f, self.resets), files))
+                # Share the gateway poll's workers; refresh/browser requests obey the same budget.
+                usage_accounts = list(pool.map(lambda f: self.usage_cache.fetch(f, api),
+                                               [f for f in all_files if f.get('type') in ('claude', 'xai')]))
+            usage_adapters.bind_claude_usage(claude_accounts, usage_accounts)
             for file, account in zip(files, accounts):
                 self.access.project(file, account)
                 self.access.maybe_refresh(file, account.pop('_usage_plan', None), api)
                 account['priority_checked_at'] = priority_checked_at
             config_error = None
+            config = None
             try:
                 config = api('/config')
                 routing = config.get('routing') or {}
@@ -884,7 +924,9 @@ class GatewayState:
                         account['quota_checked_at'] = previous['quota_checked_at']
                 self.data = {'online': True, 'checked_at': utcnow(), 'accounts': accounts,
                              'routing': safe_routing, 'error': config_error, 'claude_accounts': claude_accounts,
-                             'move_available': available}
+                             'usage_accounts': usage_accounts,
+                             'move_available': available, 'inventory': providers.inventory_view(all_files),
+                             'gateway_version': getattr(config, 'version', None)}
                 changed = before != self.eligibility(accounts)
             if changed:
                 try:
@@ -908,7 +950,7 @@ class GatewayState:
                 'id', 'email', 'disabled', 'access_identity', 'quota_error', 'quota_checked_at', '_t3_usage')}
                 for a in self.data.get('accounts', [])]
             result['claude_accounts'] = [{key: copy.deepcopy(a.get(key)) for key in (
-                'auth_index', 'email', 'disabled', 'routing_id')}
+                'key', 'auth_index', 'email', 'disabled', 'routing_id', '_gateway_usage')}
                 for a in self.data.get('claude_accounts', [])]
         for account in result['accounts'] + result['claude_accounts']:
             account['email'] = email_address(account.get('email'))
@@ -925,7 +967,7 @@ class GatewayState:
         result['preference'] = preference_status(result['accounts'])
         result['claude_preference'] = preference_status(result.get('claude_accounts', []), provider='claude')
         result['routing_linked'] = routing_policy.routing_linked()
-        result['codex_account_count'] = len(routing_policy.identities('codex'))
+        result['codex_account_count'] = len(result['accounts'])
         records = billing_records()
         fast_accounts = [dict(id=a['id'], email=a['email'], name=a['_fast_file'],
                               supports_ultrafast='(25x)' in a.get('plan', '').lower())
@@ -942,81 +984,98 @@ class GatewayState:
 
 
 def usage_summary(start, db=DB, fast_modes=None, gateway=None):
-    result = {'available': False, 'since': None, 'last_collected_at': None, 'accounts': [],
-              'recent': [], 'hours': [], 'models': [],
-              'claude': {'since': None, 'accounts': [], 'models': [], 'hours': []}, 'error': None}
+    empty = lambda: dict(since=None, accounts=[], models=[], hours=[])
+    result = dict(available=False, since=None, last_collected_at=None, accounts=[], models=[],
+                  hours=[], recent=[], claude=empty(), providers={}, error=None)
     if not db.exists():
         return result
     con = None
     try:
         con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=3)
         con.row_factory = sqlite3.Row
-        with con:
-            # Keep both providers and recent requests on one read-only snapshot.
-            con.execute('BEGIN')
-            columns = {row[1] for row in con.execute('PRAGMA table_info(usage)')}
-            # The gateway queue is shared across providers. Keep pre-provider
-            # history readable, but never present Claude traffic as Codex usage.
-            codex = "(provider = 'codex' OR provider IS NULL OR provider = '')" if 'provider' in columns else '1'
-            bounds = con.execute('SELECT min(timestamp), max(collected_at) FROM usage WHERE ' + codex).fetchone()
-            result['since'], result['last_collected_at'] = bounds
-            where = ' WHERE ' + codex + ' AND julianday(timestamp) >= julianday(?)'
-            cache_fields = ('cache_read_tokens', 'cache_creation_tokens')
-            # NULL sums mean unknown; counts expose partial coverage of old rows.
-            cache_totals = ', '.join(
-                f'sum({field if field in columns else "NULL"}) AS {field}, '
-                f'count({field if field in columns else "NULL"}) AS {field.removesuffix("_tokens")}_requests'
-                for field in cache_fields)
-            totals = '''count(*) AS requests, sum(failed) AS failures,
-                sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens,
-                sum(cached_tokens) AS cached_tokens, sum(total_tokens) AS total_tokens,
-                avg(latency_ms) AS latency_ms, ''' + cache_totals
-            result['accounts'] = [dict(r) for r in con.execute('SELECT auth_index,' + totals + ' FROM usage' + where + ' GROUP BY auth_index', (start,))]
-            result['models'] = [dict(r) for r in con.execute('SELECT model,' + totals + ' FROM usage' + where + ' GROUP BY model ORDER BY requests DESC', (start,))]
-            if 'provider' in columns:
-                first = con.execute("SELECT timestamp FROM usage WHERE provider = 'claude' "
-                                    "AND julianday(timestamp) IS NOT NULL "
-                                    "ORDER BY julianday(timestamp), timestamp LIMIT 1").fetchone()
-                result['claude']['since'] = first[0] if first else None
-                claude_where = " WHERE provider = 'claude' AND julianday(timestamp) >= julianday(?)"
-                result['claude']['accounts'] = [dict(r) for r in con.execute('SELECT auth_index,' + totals + ' FROM usage' + claude_where + ' GROUP BY auth_index', (start,))]
-                result['claude']['models'] = [dict(r) for r in con.execute('SELECT model,' + totals + ' FROM usage' + claude_where + ' GROUP BY model ORDER BY requests DESC', (start,))]
-                result['claude']['hours'] = [dict(r) for r in con.execute("SELECT strftime('%Y-%m-%dT%H:00:00Z',timestamp) AS hour, auth_index, count(*) AS requests FROM usage" + claude_where + ' GROUP BY hour,auth_index ORDER BY hour', (start,))]
-            # Permit dashboard/collector deployment in either order and legacy DBs.
-            effort = 'reasoning_effort' if 'reasoning_effort' in columns else 'NULL AS reasoning_effort'
-            tiers = [name if name in columns else 'NULL AS ' + name
-                     for name in ('service_tier', 'response_service_tier')]
-            cache = [name if name in columns else 'NULL AS ' + name for name in cache_fields]
-            provider = "coalesce(nullif(provider, ''), 'codex')" if 'provider' in columns else "'codex'"
-            recent_where = ' WHERE ' + provider + " IN ('codex', 'claude') AND julianday(timestamp) >= julianday(?)"
-            limit = 12
-            candidates = con.execute('SELECT id, timestamp, auth_index, model, failed, latency_ms, total_tokens, ' + provider + ' AS provider, ' + ', '.join([effort, *tiers, *cache]) + ' FROM usage' + recent_where + ' ORDER BY id DESC LIMIT ?', (start, max(200, 10 * limit)))
-            ordered = []
-            for row in candidates:
-                key = timestamp_key(row['timestamp'])
-                if key is not None:
-                    ordered.append((key, row['id'], dict(row)))
-            ordered.sort(key=lambda item: item[:2], reverse=True)
-            result['recent'] = [row for _, _, row in ordered[:limit]]
-            emails = {}
-            for name, accounts in (('codex', (gateway or {}).get('accounts', [])),
-                                   ('claude', (gateway or {}).get('claude_accounts', []))):
-                for account in accounts:
-                    account_id = account.get('auth_index') if name == 'claude' else account.get('id')
-                    emails[(name, account_id)] = email_address(account.get('email'))
-            for row in result['claude']['accounts']:
-                row['email'] = emails.get(('claude', row['auth_index']))
-            for row in result['recent']:
-                row.pop('id')
-                row['email'] = emails.get((row['provider'], row['auth_index']))
-                if row['provider'] == 'claude':
-                    row.update(fast_mode_allowed=None, forwarded_service_tier=None)
-                else:
-                    row.update(fast_modes.request_view(row['auth_index'], row['timestamp'], row['service_tier'])
-                               if fast_modes else {'fast_mode_allowed': True,
-                                                   'forwarded_service_tier': forwarded_tier(row['service_tier'])})
-            result['hours'] = [dict(r) for r in con.execute("SELECT strftime('%Y-%m-%dT%H:00:00Z',timestamp) AS hour, auth_index, count(*) AS requests FROM usage" + where + ' GROUP BY hour,auth_index ORDER BY hour', (start,))]
-            result['available'] = True
+        con.execute('BEGIN')
+        columns = {row[1] for row in con.execute('PRAGMA table_info(usage)')}
+        provider_sql = "coalesce(nullif(provider, ''), 'codex')" if 'provider' in columns else "'codex'"
+        cache_fields = ('cache_read_tokens', 'cache_creation_tokens')
+        cache_totals = ', '.join(
+            f'sum({field if field in columns else "NULL"}) AS {field}, '
+            f'count({field if field in columns else "NULL"}) AS {field.removesuffix("_tokens")}_requests'
+            for field in cache_fields)
+        totals = """count(*) AS requests, sum(failed) AS failures,
+            sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens,
+            sum(cached_tokens) AS cached_tokens, sum(total_tokens) AS total_tokens,
+            avg(latency_ms) AS latency_ms, """ + cache_totals
+        _, result['last_collected_at'] = con.execute('SELECT min(timestamp), max(collected_at) FROM usage').fetchone()
+        inventory = (gateway or {}).get('inventory', [])
+        lookup = {(f.get('type'), f.get('auth_index')): f for f in inventory}
+        for name, field in (('codex', 'accounts'), ('claude', 'claude_accounts')):
+            for account in (gateway or {}).get(field, []):
+                lookup.setdefault((name, account.get('auth_index') if name == 'claude' else account.get('id')), account)
+        names = {r[0] for r in con.execute('SELECT DISTINCT ' + provider_sql + ' FROM usage')}
+        # Share one local calendar day and one grouped read across every provider.
+        midnight = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = midnight.astimezone().isoformat()
+        today_end = (midnight + dt.timedelta(days=1)).astimezone().isoformat()
+        today_accounts = {}
+        today_rows = con.execute('SELECT ' + provider_sql + ''' AS provider, auth_index,
+            cast(strftime('%H', timestamp, 'localtime') AS INTEGER) AS hour,
+            count(*) AS requests, coalesce(sum(failed), 0) AS failures,
+            max(strftime('%Y-%m-%dT%H:%M:%fZ', timestamp)) AS last_request
+            FROM usage WHERE julianday(timestamp) >= julianday(?)
+            AND julianday(timestamp) < julianday(?) GROUP BY 1, 2, 3''', (today_start, today_end))
+        for row in today_rows:
+            account = today_accounts.setdefault(row['provider'], {}).setdefault(row['auth_index'],
+                dict(auth_index=row['auth_index'], requests=0, failures=0, hours=[0] * 24,
+                     last_request_at=None))
+            account['requests'] += row['requests']
+            account['failures'] += row['failures']
+            account['hours'][row['hour']] += row['requests']
+            last_request = dt.datetime.fromisoformat(row['last_request'].replace('Z', '+00:00')).timestamp()
+            account['last_request_at'] = max(account['last_request_at'] or last_request, last_request)
+        for name in sorted(names):
+            summary = empty()
+            where = ' WHERE ' + provider_sql + ' = ? AND julianday(timestamp) >= julianday(?)'
+            args = (name, start)
+            first = con.execute('SELECT timestamp FROM usage WHERE ' + provider_sql +
+                                ' = ? AND julianday(timestamp) IS NOT NULL ORDER BY julianday(timestamp), timestamp LIMIT 1', (name,)).fetchone()
+            summary['since'] = first[0] if first else None
+            summary['today_accounts'] = list(today_accounts.get(name, {}).values())
+            summary['accounts'] = [dict(r) for r in con.execute('SELECT auth_index,' + totals + ' FROM usage' + where + ' GROUP BY auth_index', args)]
+            summary['models'] = [dict(r) for r in con.execute('SELECT model,' + totals + ' FROM usage' + where + ' GROUP BY model ORDER BY requests DESC', args)]
+            summary['hours'] = [dict(r) for r in con.execute("SELECT strftime('%Y-%m-%dT%H:00:00Z',timestamp) AS hour, auth_index, count(*) AS requests FROM usage" + where + ' GROUP BY hour,auth_index ORDER BY hour', args)]
+            for row in summary['accounts'] + summary['hours']:
+                account = lookup.get((name, row['auth_index']), {})
+                row.update(provider=name, key=account.get('name', account.get('key')),
+                           email=email_address(account.get('email')))
+            result['providers'][name] = summary
+        codex = result['providers'].get('codex', empty())
+        result.update(copy.deepcopy({k: codex[k] for k in ('since', 'accounts', 'models', 'hours')}))
+        for row in result['accounts'] + result['hours']:
+            for key in ('provider', 'key', 'email'):
+                row.pop(key, None)
+        result['claude'] = copy.deepcopy({k: v for k, v in result['providers'].get('claude', empty()).items() if k != 'today_accounts'})
+        for row in result['claude']['accounts'] + result['claude']['hours']:
+            for key in ('provider', 'key'):
+                row.pop(key, None)
+        for row in result['claude']['hours']:
+            row.pop('email', None)
+        optional = ('reasoning_effort', 'service_tier', 'response_service_tier', *cache_fields)
+        fields = ', '.join(name if name in columns else 'NULL AS ' + name for name in optional)
+        candidates = con.execute('SELECT id, timestamp, auth_index, model, failed, latency_ms, total_tokens, ' + provider_sql +
+                                 ' AS provider, ' + fields + ' FROM usage WHERE julianday(timestamp) >= julianday(?) ORDER BY id DESC LIMIT 200', (start,))
+        ordered = [(timestamp_key(r['timestamp']), r['id'], dict(r)) for r in candidates]
+        ordered = sorted((r for r in ordered if r[0] is not None), key=lambda r: r[:2], reverse=True)
+        for _, _, row in ordered[:12]:
+            row.pop('id')
+            account = lookup.get((row['provider'], row['auth_index']), {})
+            row.update(key=account.get('name', account.get('key')), email=email_address(account.get('email')))
+            if row['provider'] == 'codex':
+                row.update(fast_modes.request_view(row['auth_index'], row['timestamp'], row['service_tier']) if fast_modes else
+                           dict(fast_mode_allowed=True, forwarded_service_tier=forwarded_tier(row['service_tier'])))
+            else:
+                row.update(fast_mode_allowed=None, forwarded_service_tier=None)
+            result['recent'].append(row)
+        result['available'] = True
     except sqlite3.Error:
         result['error'] = 'Usage history is temporarily unavailable'
     finally:
@@ -1096,6 +1155,19 @@ class Handler(BaseHTTPRequestHandler):
         is_api = url.path.startswith('/api/')
         if not self.allowed(is_api):
             return
+        if url.path == '/api/accounts/add/status':
+            try:
+                query = parse_qs(url.query, keep_blank_values=True)
+                if set(query) != {'session'} or len(query['session']) != 1:
+                    raise ValueError()
+                result = self.server.state.adds.status(query['session'][0])
+                return self.send(200, json.dumps(result).encode())
+            except account_add.AccountError as error:
+                return self.account_error(error)
+            except (ValueError, TypeError):
+                return self.account_error(account_add.AccountError('invalid_request', 'A sign-in session is required.'))
+            except Exception:
+                return self.account_error(account_add.AccountError('gateway_error', 'Gateway temporarily unavailable.', 503))
         if url.path == '/api/overview':
             try:
                 start = parse_qs(url.query).get('since', ['1970-01-01T00:00:00Z'])[0]
@@ -1106,20 +1178,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, b'{"error":"Invalid date"}')
             gateway = self.server.state.snapshot()
             watched = watch_accounts()
-            expected = dict(zip(('claude', 'claude-b'), routing_policy.identities('claude')))
             for account in watched:
                 matches = [r for r in gateway.get('claude_accounts', [])
-                           if r.get('email') == account.get('email') == expected.get(account.get('id'))]
-                runtime = matches[0] if len(matches) == 1 else {}
-                account.update(routing_id=runtime.get('routing_id'),
+                           if account.get('email') and str(r.get('email') or '').casefold() == account['email'].casefold()]
+                unique = sum(str(a.get('email') or '').casefold() == str(account.get('email') or '').casefold()
+                             for a in watched) == 1
+                runtime = matches[0] if len(matches) == 1 and unique else {}
+                account.update(key=runtime.get('key'), routing_id=runtime.get('routing_id'),
                                routing_enabled=runtime.get('routing_enabled'),
                                runtime_available=routing_policy.claude_runtime_available(runtime) if runtime else None)
+            usage = usage_summary(start, DB, self.server.state.fast_modes, gateway)
             data = {'generated_at': utcnow(), 'gateway': gateway,
                     'watch_accounts': watched,
                     'read_only': self.headers.get('X-Router-Read-Only') == '1',
                     'access_transport': 'tailscale' if self.headers.get('X-Router-Transport') == 'tailscale' else 'local',
                     'health': health(gateway), 'notifications': self.server.state.notices.view(),
-                    'usage': usage_summary(start, DB, self.server.state.fast_modes, gateway), 'machine': 'user-Desktop'}
+                    'usage': usage, 'providers': providers.groups(gateway, watched, usage),
+                    'add_providers': account_add.catalog(gateway.get('gateway_version')), 'machine': socket.gethostname()}
             return self.send(200, json.dumps(data, allow_nan=False).encode())
         if url.path == '/api/health':
             status = health(self.server.state.snapshot())
@@ -1134,16 +1209,16 @@ class Handler(BaseHTTPRequestHandler):
             content_type = 'text/javascript'
         self.send(200, path.read_bytes(), content_type)
 
-    def apply_routing_selection(self, value, provider, deadline, call):
+    def apply_routing_selection(self, value, provider, deadline, call, inventory=None):
         """Shared controller and response contract for single and linked changes."""
         try:
             deadline.timeout(LOCK_WAIT_SECONDS)
             gateway = self.server.state.snapshot()
             if provider == 'claude':
                 observed = {'gateway': gateway, 'watch_accounts': watch_accounts()}
-                result = routing_policy.reconcile(observed, value, call=call, provider=provider)
+                result = routing_policy.reconcile(observed, value, call=call, provider=provider, inventory=inventory)
             else:
-                result = routing_policy.reconcile(routing_policy.observations(gateway), value, call=call)
+                result = routing_policy.reconcile(routing_policy.observations(gateway), value, call=call, inventory=inventory)
             deadline.timeout(LOCK_WAIT_SECONDS)
             if result.get('status') in ('failed', 'unconfirmed', 'error'):
                 return 503, result
@@ -1167,13 +1242,60 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return move_payload('uncertain', 'error')
 
+    def account_error(self, error):
+        return self.send(error.status, json.dumps({'error': error.code, 'message': error.message}).encode())
+
+    def account_change(self, deadline):
+        size = int(self.headers.get('Content-Length', '0'))
+        if not 0 < size <= 20000 or self.headers.get('Content-Type') != 'application/json':
+            raise ValueError()
+        data = json.loads(self.read_body(size, deadline))
+        if not isinstance(data, dict):
+            raise ValueError()
+        action = self.path.rsplit('/', 1)[-1]
+        if self.path.startswith('/api/accounts/add/'):
+            fields = {'provider'} if action == 'start' else {'session', 'redirect_url'} if action == 'callback' else {'session'}
+            if set(data) != fields or any(not isinstance(v, str) or not v for v in data.values()):
+                raise ValueError()
+            if action == 'start':
+                return self.server.state.adds.start(data['provider'], deadline)
+            if action == 'callback':
+                return self.server.state.adds.callback(data['session'], data['redirect_url'], deadline)
+            return self.server.state.adds.cancel(data['session'], deadline)
+        fields = {'key', 'auth_index', 'confirmed'}
+        if (set(data) != fields or any(not isinstance(data[k], str) or not 1 <= len(data[k]) <= 255
+                                      for k in ('key', 'auth_index'))
+                or type(data.get('confirmed')) is not bool):
+            raise ValueError()
+        if data['confirmed'] is not True:
+            raise account_add.AccountError('confirmation_required', 'Confirm disconnecting this account.')
+        return self.server.state.account_mutations.apply(data['key'], data['auth_index'],
+            disconnect=True, deadline=deadline)
+
     def do_POST(self):
         if t3_usage.handle(self, 'POST'):
             return
         if not self.allowed(True):
             return
+        if self.path == '/api/accounts/disconnect' and (self.headers.get('X-Router-Transport') == 'tailscale'
+                                                       or self.headers.get('X-Router-Read-Only') == '1'):
+            return self.account_error(account_add.AccountError('remote_disabled', 'Disconnect is available only on the local computer.', 403))
         if self.headers.get('X-Router-Read-Only') == '1' and self.path != '/api/refresh':
+            if self.path.startswith('/api/accounts/add/'):
+                return self.account_error(account_add.AccountError('read_only', 'Management is available on your computer.', 403))
             return self.send(403, b'{"error":"Management is available on your computer"}')
+        if self.path in ('/api/accounts/add/start', '/api/accounts/add/callback', '/api/accounts/add/cancel', '/api/accounts/disconnect'):
+            try:
+                deadline = RequestDeadline()
+                self.connection.settimeout(deadline.timeout(LOCK_WAIT_SECONDS))
+                result = self.account_change(deadline)
+                return self.send(200, json.dumps(result).encode())
+            except account_add.AccountError as error:
+                return self.account_error(error)
+            except (ValueError, TypeError, UnicodeError):
+                return self.account_error(account_add.AccountError('invalid_request', 'Invalid account request.'))
+            except Exception:
+                return self.account_error(account_add.AccountError('gateway_error', 'Account change could not be confirmed. Refresh and try again.', 503))
         if self.path == '/api/claude/accounts/routing':
             try:
                 deadline = RequestDeadline()
@@ -1199,6 +1321,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.send(503, b'{"error":"Account change could not be confirmed. Try again."}')
         if self.path in ('/api/accounts/signin/start', '/api/accounts/signin/cancel', '/api/accounts/routing'):
+            generic_routing = False
             try:
                 deadline = RequestDeadline()
                 self.connection.settimeout(deadline.timeout(LOCK_WAIT_SECONDS))
@@ -1206,6 +1329,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not 0 < size <= 2048 or self.headers.get('Content-Type') != 'application/json':
                     raise ValueError()
                 data = json.loads(self.read_body(size, deadline))
+                generic_routing = self.path == '/api/accounts/routing' and isinstance(data, dict) and 'key' in data
+                if generic_routing:
+                    if (set(data) != {'key', 'auth_index', 'enabled'}
+                            or any(not isinstance(data[k], str) or not 1 <= len(data[k]) <= 255 for k in ('key', 'auth_index'))
+                            or type(data['enabled']) is not bool):
+                        raise ValueError()
+                    result = self.server.state.account_mutations.apply(data['key'], data['auth_index'], data['enabled'], deadline=deadline)
+                    return self.send(200, json.dumps(result).encode())
                 extra = ({'handle'} if self.path.endswith('/cancel') else
                          {'enabled', 'confirmed'} if self.path.endswith('/routing') else set())
                 if (not isinstance(data, dict) or set(data) != {'account_id', 'identity'} | extra
@@ -1225,13 +1356,19 @@ class Handler(BaseHTTPRequestHandler):
                                                                   data['enabled'], data['confirmed'], deadline=deadline)
                 deadline.timeout(LOCK_WAIT_SECONDS)
                 return self.send(200, json.dumps(result).encode())
+            except account_add.AccountError as error:
+                return self.account_error(error)
             except signin.AccessError as error:
                 codes = {'account_changed', 'session_changed', 'already_finishing', 'signin_not_required', 'last_ready'}
                 code = error.code if error.code in codes else 'unavailable'
                 return self.send(409, json.dumps({'error': code}).encode())
             except (ValueError, TypeError, UnicodeError):
+                if generic_routing:
+                    return self.account_error(account_add.AccountError('invalid_request', 'Invalid account request.'))
                 return self.send(400, b'{"error":"Invalid account request"}')
             except Exception:
+                if generic_routing:
+                    return self.account_error(account_add.AccountError('gateway_error', 'The routing change could not be confirmed.', 503))
                 return self.send(503, b'{"error":"Account change could not be confirmed. Try again."}')
         if self.path == '/api/fast-mode':
             try:
@@ -1308,12 +1445,18 @@ class Handler(BaseHTTPRequestHandler):
                     if not isinstance(data, dict) or ('move' in data and type(data['move']) is not bool):
                         raise ValueError()
                     move = data.get('move') is True
+                    # Reject malformed modes before requiring gateway observations.
+                    if data.get('mode') not in routing_policy.MODES:
+                        raise ValueError()
                     # Validate against both providers before either controller can save or PATCH.
-                    selections = {provider: routing_policy.validate_selection(data, provider) for provider in providers}
                     call = deadline.wrap(routing_policy.request, maximum=15)
+                    inventory = routing_policy.inventory_snapshot(call)
+                    selections = {provider: routing_policy.validate_selection(
+                        {**data, 'preferred_key': data['preferred_keys'].get(provider)} if isinstance(data.get('preferred_keys'), dict) else data,
+                        provider, inventory) for provider in providers}
                     results, codes = {}, []
                     for provider, value in selections.items():
-                        code, results[provider] = self.apply_routing_selection(value, provider, deadline, call)
+                        code, results[provider] = self.apply_routing_selection(value, provider, deadline, call, inventory)
                         codes.append(code)
                     # Only a 200 or 202 response carries move; the frontend treats any other as not confirmed.
                     if len(providers) == 1:

@@ -338,6 +338,9 @@ class Experiment:
     def mgmt(self, path, body=None):
         req = urllib.request.Request(f'http://127.0.0.1:{self.port}/v0/management' + path, data=json.dumps(body).encode() if body is not None else None, method='PATCH' if body is not None else 'GET', headers={'Authorization': 'Bearer synthetic-management', 'Content-Type': 'application/json'})
         with HTTP.open(req, timeout=5) as response:
+            self.version = response.headers['X-CPA-VERSION']
+            assert self.version in ('8.0.30', '8.0.43', '8.0.47'), 'Reassess duplex policy expectations for this version'
+            self.result['gateway_version'] = self.version
             return json.load(response)
 
     def ws(self):
@@ -409,7 +412,10 @@ class Experiment:
         self.cfg['upstream']['codex']['response-steering'] = True
         self.reload()
         observed = self.pair()
-        self.check('EXPECTED_FAILURE_duplex_denied_followup_bypasses_policy', [r['tier'] for r in observed] == ['<absent>', 'priority'])
+        # 0fe38224 adds ordinary interceptor hooks to subsequent duplex frames.
+        fixed = self.version == '8.0.47'
+        label = 'duplex_denied_followup_enforced' if fixed else 'EXPECTED_FAILURE_duplex_denied_followup_bypasses_policy'
+        self.check(label, [r['tier'] for r in observed] == ['<absent>', '<absent>' if fixed else 'priority'])
         self.cfg['upstream']['codex']['response-steering'] = False
         self.reload()
         observed = self.pair()
@@ -470,8 +476,9 @@ websocket_connect_timeout_ms = 2000
         records = self.server.records
         self.check('native_warmup_then_first_inference', [r['generate'] for r in records] == [False, True])
         self.check('native_same_upstream_socket', len({r['connection'] for r in records}) == 1 and all(r['transport'] == 'websocket' for r in records))
-        expected = ['<absent>', 'priority' if self.steering else '<absent>']
-        label = 'EXPECTED_FAILURE_native_duplex_bypass' if self.steering else 'native_serial_enforces_first_user_turn'
+        bypass = self.steering and self.version in ('8.0.30', '8.0.43')
+        expected = ['<absent>', 'priority' if bypass else '<absent>']
+        label = 'EXPECTED_FAILURE_native_duplex_bypass' if bypass else 'native_duplex_enforces_first_user_turn' if self.steering else 'native_serial_enforces_first_user_turn'
         self.check(label, [r['tier'] for r in records] == expected and all(r['account'] == 'A' for r in records))
 
     def usage(self):
@@ -555,7 +562,7 @@ def main():
     args.binary = args.binary.resolve()
     args.scratch.mkdir(parents=True, exist_ok=True)
     results = []
-    for name, steering in [('serial-matrix', False)] + ([] if args.skip_native else [('native-serial', False), ('native-duplex-EXPECTED-FAILURE', True)]):
+    for name, steering in [('serial-matrix', False)] + ([] if args.skip_native else [('native-serial', False), ('native-duplex-versioned-policy', True)]):
         experiment = Experiment(args, name, steering)
         try:
             experiment.start()

@@ -6,9 +6,9 @@ runs CLIProxyAPI 8.0.30 through
 `/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.30.conf`; see the
 [October 15 activation](gateway-upgrade-8.0.30-2026-10-15.md).
 
-8.0.43 is installed with an ignored staged drop-in; cutover is pending. The
+8.0.47 is installed with an ignored staged drop-in; cutover is pending. The
 current nested config needs no migration for that upgrade or its rollback to
-8.0.30. See the [October 26 preparation](gateway-upgrade-8.0.43-2026-10-26.md).
+8.0.30. See the [October 29 preparation](gateway-upgrade-8.0.47-2026-10-29.md).
 8.0.7 and the migration rollback below are historical, not the current binary
 rollback target.
 

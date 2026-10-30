@@ -50,7 +50,7 @@ python3 scripts/install-operations.py --t3-usage-only
 sudo -n python3 scripts/install-operations.py --t3-usage-only --apply
 ```
 
-This scope backs up only replaced `dashboard/server.py` and `dashboard/t3_usage.py` if present, installs those two files, and restarts only `personal-codex-router-dashboard.service`. It does not reload units, restart the gateway or preview, touch provider credentials/configuration, provision tokens, or change T3 settings. It checks the gateway PID and Codex process fingerprint before and after. Snapshot/status files are private under `/var/lib/personal-codex-router-backups/t3-usage-deployments`; the key file is excluded. Other installer scopes that ship `server.py` also include the new module.
+This scope backs up the replaced dashboard Python backend modules if present, installs the complete backend required by `server.py` (including `t3_usage.py`, `providers.py`, and `routing_policy.py`), and restarts only `personal-codex-router-dashboard.service`. It does not reload units, restart the gateway or preview, touch provider credentials/configuration, provision tokens, or change T3 settings. It checks the gateway PID and Codex process fingerprint before and after. Snapshot/status files are private under `/var/lib/personal-codex-router-backups/t3-usage-deployments`; the key file is excluded. Other installer scopes that ship `server.py` also include the new module.
 
 After deployment allow the normal dashboard poll to populate the cache. Do not add a new collector, manual probe or refresh loop for T3. Focused checks are:
 

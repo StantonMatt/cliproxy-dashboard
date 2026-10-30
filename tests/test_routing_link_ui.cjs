@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const A='account-a@example.com',B='account-b@example.com';
+const A='owner@example.test',B='alternate@example.test';
 const OPTIONS=['round-robin','earliest-weekly-reset','highest-remaining-quota',A,B];
 // Just enough DOM for the routing controls: hidden flags, parents and the switch that moves between rows.
 const elements=new Map();
@@ -26,9 +26,9 @@ const source=fs.readFileSync(path.join(__dirname,'../dashboard/static/app.js'),'
 vm.runInContext(source.slice(0,source.indexOf("window.addEventListener('hashchange'")),context);
 const active=(policy,email)=>({policy,status:'active',selected_email:email,preferred_email:email});
 function snapshot(extra={}){
-  return {gateway:{online:true,routing_linked:true,preference:active('preferred-account',B),
+  return {gateway:{online:true,routing_linked:true,accounts:[{id:'a',email:A},{id:'b',email:B}],preference:active('preferred-account',B),
     claude_preference:active('preferred-account',B),...extra},
-    watch_accounts:[{id:'claude',email:A,routing_id:'c'.repeat(64),routing_enabled:true},{id:'claude-b',email:B,routing_id:'d'.repeat(64),routing_enabled:true}]
+    watch_accounts:[{id:'claude',email:A,routing_id:'c'.repeat(64),routing_enabled:true},{id:'claude-b',independent_windows:true,email:B,routing_id:'d'.repeat(64),routing_enabled:true}]
       .map(a=>({...a,runtime_available:true,status:'ok',checked_at:new Date().toISOString(),windows:['five_hour','seven_day'].map(kind=>({kind,remaining:70,resets_at:Date.now()/1000+9000}))}))};
 }
 context.fixture=snapshot();
@@ -143,6 +143,30 @@ async function saving(){
   await context.saveRoutingLink(false);
   assert.equal($('claude-routing-feedback').textContent,'');
   assert.equal($('routing-all-feedback').textContent,'Not confirmed · refresh and try again');
+
+  // A Codex preference without a Claude counterpart must leave the policies split and unchanged.
+  const unmatched='codex-only@example.test';
+  context.fixture=snapshot({routing_linked:false,preference:active('preferred-account',unmatched),claude_preference:active('round-robin')});
+  context.fixture.providers=[
+    {id:'codex',routable:true,accounts:[{key:'codex-a.json',email:A},{key:'codex-only.json',email:unmatched}]},
+    {id:'claude',routable:true,accounts:[{key:'claude-a.json',email:A},{key:'claude-b.json',email:B}]}
+  ];
+  vm.runInContext('current=fixture',context);
+  const oldOptions=$('routing-mode').options,oldSharedOptions=$('routing-all-mode').options;
+  $('routing-mode').options=[...oldOptions,{value:'codex-only.json'}];
+  $('routing-all-mode').options=[...oldSharedOptions,{value:'codex-a.json'}];
+  render();
+  const before=JSON.stringify(context.fixture.gateway);
+  posts.length=0;
+  context.request=async(route,options)=>{posts.push([route,JSON.parse(options.body)]);return {linked:true};};
+  $('routing-link').checked=false;
+  await context.saveRoutingLink(true);
+  assert.deepEqual(posts,[],'an incompatible preference must not persist linked=true');
+  assert.equal(JSON.stringify(context.fixture.gateway),before);
+  assert.equal($('routing-link').checked,true);
+  assert.equal($('routing-all').hidden,true);
+  assert.match($('claude-routing-feedback').textContent,/choose.*both/i);
+  $('routing-mode').options=oldOptions;$('routing-all-mode').options=oldSharedOptions;
 
   // Claude accounts: confirm before removing the last routable account, then send its routing id.
   const sent=[];

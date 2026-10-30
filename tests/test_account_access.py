@@ -1,3 +1,4 @@
+from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 import copy
 import datetime as dt
 import json
@@ -26,7 +27,7 @@ def setUpModule():
 class AccountAccessTests(unittest.TestCase):
     def setUp(self):
         self.record = {'type': 'codex', 'name': 'account.json', 'auth_index': 'a',
-                       'email': routing_policy.EMAILS[0], 'disabled': False,
+                       'email': CODEX_PAIR[0], 'disabled': False,
                        'id_token': {'plan_type': 'free', 'chatgpt_account_id': 'workspace-a'}}
         self.rows = [self.record]
         self.calls = []

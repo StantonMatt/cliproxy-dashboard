@@ -659,6 +659,14 @@ class ConvergenceTests(unittest.TestCase):
         self.assertEqual(self.gateway.row['id_token']['plan_type'], 'free')
         self.assertEqual([p['disabled'] for p in self.gateway.patches], [False])
 
+    def test_8_0_47_replacement_confirms_and_enables(self):
+        self.gateway.version = '8.0.47'
+        view = self.run_flow()
+        self.assertEqual(view['last_outcome'], {'kind': 'signed_in', 'at': ANY, 'enabled': True})
+        self.assertEqual(self.gateway.echoes, ['FAKE_NEW_ACCESS'])
+        self.assertEqual(self.gateway.row['id_token']['plan_type'], 'free')
+        self.assertEqual([p['disabled'] for p in self.gateway.patches], [False])
+
     def test_runtime_matches_only_after_one_repatch(self):
         self.gateway.stale_patches = 1
         self.assertEqual(self.run_flow()['last_outcome']['kind'], 'signed_in')
@@ -703,7 +711,7 @@ class ConvergenceTests(unittest.TestCase):
         self.assertNotIn(True, held)
 
     def test_unknown_gateway_version_fails_closed_before_flow_and_before_write(self):
-        for version in ('8.0.31', None, '8.0.30-dirty', '8.0.43-dirty'):
+        for version in ('8.0.31', None, '8.0.30-dirty', '8.0.43-dirty', '8.0.47-dirty'):
             with self.subTest(version=version):
                 self.setUp()
                 self.gateway.version = version

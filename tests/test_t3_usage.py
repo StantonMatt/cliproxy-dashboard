@@ -61,7 +61,7 @@ def fixture():
             'primary_window': {'used_percent': 37, 'reset_at': NOW + 2000, 'limit_window_seconds': 18000,
                                'secret': 'must-not-escape'}}}, 'identity-a', 'workspace-a')}],
         'claude_accounts': [dict(auth_index='runtime-b', email='claude@example.test', routing_id='identity-b', disabled=False)],
-        'watch_accounts': [dict(id='claude-b', email='claude@example.test', status='ok', checked_at=stamp(NOW - 10), windows=[
+        'watch_accounts': [dict(id='claude-b', independent_windows=True, email='claude@example.test', status='ok', checked_at=stamp(NOW - 10), windows=[
             dict(kind='five_hour', used=12, resets_at=NOW + 1000, measured_at=stamp(NOW - 10)),
             dict(kind='seven_day', used=24, resets_at=NOW + 10000, measured_at=stamp(NOW - 20)),
             dict(kind='weekly_model', model='Fable', used=32, resets_at=NOW + 12000, measured_at=stamp(NOW - 30))])]}
@@ -279,7 +279,7 @@ class HubTests(unittest.TestCase):
         for changed in (dict(status='error'), dict(status='stale'), dict(checked_at=stamp(NOW - 901)),
                         dict(checked_at=stamp(NOW + 1)), dict(windows=[])):
             self.cache = fixture()
-            self.cache['watch_accounts'][0].update(changed, id='claude')
+            self.cache['watch_accounts'][0].update(changed, id='claude', independent_windows=False)
             self.assertEqual(self.usage('claude')[1]['status_code'], 503)
         self.cache = fixture()
         self.cache['accounts'][0]['_t3_usage']['body']['rate_limit'] = {}
@@ -302,6 +302,7 @@ class HubTests(unittest.TestCase):
         self.assertEqual(self.usage('claude')[1]['status_code'], 503)
         self.cache = fixture()
         self.cache['watch_accounts'][0]['id'] = 'claude'
+        self.cache['watch_accounts'][0]['independent_windows'] = False
         self.cache['watch_accounts'][0]['windows'] = [{'kind': 'seven_day_sonnet', 'used': 18, 'resets_at': None}]
         self.assertEqual(json.loads(self.usage('claude')[1]['body'])['limits'][0]['scope']['model']['display_name'], 'Sonnet')
         self.cache['watch_accounts'][0]['windows'][0]['invalid_reset'] = True
