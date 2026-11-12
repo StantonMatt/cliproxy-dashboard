@@ -135,7 +135,7 @@ def _read_config(config_path, required_uid, required_gid):
         info = os.fstat(stream.fileno())
         group = _owner_gid() if required_gid is None else required_gid
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != required_uid or group is None
-                or info.st_gid != group or stat.S_IMODE(info.st_mode) != 0o640):
+                or info.st_gid != group or stat.S_IMODE(info.st_mode) not in (0o640, 0o660)):
             raise Refused('config_unsafe')
         return info, stream.read()
 

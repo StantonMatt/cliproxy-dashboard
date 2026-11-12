@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly private preview certificate renewal
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=1h
+Persistent=true
+Unit=personal-codex-router-preview-cert.service
+
+[Install]
+WantedBy=timers.target

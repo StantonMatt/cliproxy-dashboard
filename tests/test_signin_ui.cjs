@@ -32,13 +32,13 @@ context.fixture={gateway:{accounts:[structuredClone(base)],online:true,checked_a
 vm.runInContext('current=fixture;renderAccounts(current.gateway)',context);
 const html=()=>elements.get('account-grid').innerHTML;
 assert.doesNotMatch(html(),/data-signin-start|signin-panel/);
-assert.match(html(),/Use for routing/);
+assert.match(html(),/<span class="route-use">Use for <\/span>routing<\/label>/);
 // New plan labels and unconfirmed renewal dates pass through the card renderer.
 for(const [plan,label] of [['prolite','Pro 100'],['future_super_plan','Future Super Plan']]){
   const account=context.fixture.gateway.accounts[0];
   Object.assign(account,{plan_type:plan,plan:label,billing:{renewal_date:'2026-11-17',confirmed:false}});
   context.renderAccounts(context.fixture.gateway);
-  assert.ok(html().includes(`<span class="small-badge">${label}</span>`));
+  assert.ok(html().includes(`<a class="small-badge plan-badge" href="https://chatgpt.com/#settings/Billing" target="_blank" rel="noreferrer" data-access-focus="a:plan" title="Open ChatGPT billing · Check the signed-in account before changing your subscription." aria-label="${label} · Billing">${label}<svg`));
   assert.match(html(),/>Expected renewal<\/span><strong>17 Nov 2026/);
   assert.doesNotMatch(html(),/>Renews<|14 Oct 2026|Plan ended/);
 }
@@ -50,7 +50,7 @@ assert.match(html(),/is-off/);assert.match(html(),/Sign in required/);
 assert.match(html(),/data-route-account="a"[^>]*disabled[^>]*title="Sign in to use for routing"/);
 assert.doesNotMatch(html(),/data-route-account="a"[^>]*checked/);
 assert.equal(context.fixture.gateway.accounts[0].disabled,false);
-assert.doesNotMatch(html(),/Quota refresh unavailable|class="account-state"/);
+assert.doesNotMatch(html(),/Quota refresh unavailable|class="account-state/);
 const session={handle:'opaque-handle-32-characters-long',state:'pending',user_code:'ABCD-EFGH',verification_url:'https://auth.openai.com/codex/device',
   expected_email:'one@example.com',expires_at:Date.now()/1000+900,started_at:Date.now()/1000};
 let a=context.fixture.gateway.accounts[0];a.signin.session=session;
@@ -107,7 +107,7 @@ async function checks(){
   a.disabled=false;a.plan_type='free';a.plan='Free';a.auth_state='authenticated';a.quota_error=null;
   a.signin.last_outcome={kind:'signed_in',at:Date.now()/1000};
   context.renderAccounts(context.fixture.gateway);
-  assert.doesNotMatch(html(),/data-signin-start|account-access |ChatGPT billing|Disabled:/);
+  assert.doesNotMatch(html(),/data-signin-start|account-access |>ChatGPT billing<|Disabled:/);
   assert.match(html(),/Signed in just now/);
   assert.doesNotMatch(html(),/turn on routing/);
   a.disabled=true;a.signin.last_outcome={kind:'signed_in',at:Date.now()/1000,enabled:false,enable_failed:true};
@@ -129,7 +129,7 @@ async function checks(){
   a.disabled=true;a.signin.last_outcome=null;a.windows=[];
   a.billing={renewal_date:'2000-01-01',confirmed:true};
   context.renderAccounts(context.fixture.gateway);
-  assert.doesNotMatch(html(),/data-signin-start|account-access |ChatGPT billing|Disabled:/);
+  assert.doesNotMatch(html(),/data-signin-start|account-access |>ChatGPT billing<|Disabled:/);
   assert.match(html(),/>Plan ended<\/span><strong>1 Jan 2000/);
   assert.match(html(),/Not available while disabled/);
   a.windows=[{seconds:604800,label:'Weekly',remaining:null,used:null}];
@@ -218,10 +218,11 @@ async function checks(){
   const route={dataset:{accessFocus:'a:route'},focus(){document.activeElement=this;}};
   targets.set('[data-access-focus="a:route"]',route);
   let prevented=0;
-  const escape={key:'Escape',target:{closest:()=>card},preventDefault(){prevented++;}};
-  listeners.get('account-grid:keydown')(escape);
+  const escape={key:'Escape',target:{closest:selector=>selector==='[data-cardid]'?card:null},preventDefault(){prevented++;}};
+  // Account events bubble to the persistent document delegate in both widget forms.
+  listeners.get('document:keydown')(escape);
   assert.equal(prevented,1);assert.equal(document.activeElement,route);assert.doesNotMatch(html(),/No other Codex/);
-  document.activeElement=open;listeners.get('account-grid:keydown')(escape);
+  document.activeElement=open;listeners.get('document:keydown')(escape);
   assert.equal(prevented,1);assert.equal(document.activeElement,open);
   for(const blocked of ['read_only','offline','signed_out']){
     context.confirmRouting(a);
@@ -252,7 +253,7 @@ async function checks(){
   context.fetch=()=>{started++;return new Promise(resolve=>{resolveStart=resolve;});};
   const button={dataset:{signinStart:'a',accessFocus:'a:start'}};
   const click={target:{closest:selector=>selector==='[data-access-focus]'?button:null}};
-  listeners.get('account-grid:click')(click);listeners.get('account-grid:click')(click);
+  listeners.get('document:click')(click);listeners.get('document:click')(click);
   assert.equal(started,1);
   resolveStart({ok:true,json:async()=>({instance:'boot-2',session})});
   await new Promise(resolve=>setImmediate(resolve));

@@ -1,0 +1,46 @@
+[Unit]
+Description=Collect official AI provider service status
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=router-provider-status
+Group=router-provider-status
+ExecStart=/usr/bin/python3 -B /opt/personal-codex-router/collect-provider-status.py
+RuntimeDirectory=personal-codex-router-provider-status
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+UMask=0077
+TimeoutStartSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# Landlock syscalls support the collector's TCP destination-port restriction.
+SystemCallFilter=landlock_create_ruleset landlock_add_rule landlock_restrict_self
+# Internet/DNS access belongs only to this collector, never the dashboard.
+# Landlock permits TCP 443 only; DNS uses UDP/Unix. The client allowlists HTTPS
+# feed URLs and disables redirects/proxies. Unsupported kernels fail closed.
+SocketBindDeny=any
+# Keep credential and private-state masks as defense in depth.
+InaccessiblePaths=-/etc/cliproxyapi -/var/lib/cliproxyapi
+InaccessiblePaths=-/var/lib/personal-codex-router/disconnected
+InaccessiblePaths=-/var/lib/personal-codex-router-routing -/var/lib/personal-codex-router-watch

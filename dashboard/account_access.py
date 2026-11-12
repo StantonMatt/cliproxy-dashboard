@@ -5,8 +5,9 @@ import math
 import re
 import time
 from urllib.parse import urlencode
+import api_keys
 
-PLAN_LABELS = {'free': 'Free', 'pro': 'Pro (10x)', 'plus': 'Plus', 'team': 'Team',
+PLAN_LABELS = {'free': 'Free', 'pro': 'Pro 200', 'plus': 'Plus', 'team': 'Team',
                'business': 'Business', 'enterprise': 'Enterprise', 'edu': 'Edu', 'go': 'Go',
                'prolite': 'Pro 100'}
 
@@ -41,6 +42,8 @@ def claim(record):
 
 
 def identity(record):
+    if api_keys.is_api_key_row(record):
+        return None
     fields = [record.get(k) for k in ('name', 'auth_index', 'email')]
     if not all(isinstance(v, str) and v for v in fields):
         return None
@@ -54,7 +57,8 @@ def identity(record):
 def claude_routing_id(record):
     """Opaque binding to a listed Claude identity, without credential material."""
     fields = [record.get(k) for k in ('type', 'name', 'auth_index', 'email')]
-    if fields[0] != 'claude' or not all(isinstance(v, str) and v for v in fields):
+    if (fields[0] != 'claude' or api_keys.is_api_key_row(record)
+            or not all(isinstance(v, str) and v for v in fields)):
         return None
     return hashlib.sha256(json.dumps(fields).encode()).hexdigest()
 
@@ -139,7 +143,7 @@ class AccountAccess:
         if prune:
             now = time.monotonic()
             self.refreshes = {k: v for k, v in self.refreshes.items() if now - v < 600}
-        return [record for record in records if record.get('type') == 'codex']
+        return [record for record in records if record.get('type') == 'codex' and not api_keys.is_api_key_row(record)]
 
     def project(self, record, account):
         key = identity(record)

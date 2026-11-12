@@ -126,8 +126,12 @@ class SingleCodexTests(unittest.TestCase):
         data=observed(self.rows)
         groups=providers.groups(data['gateway'],data['watch_accounts'])
         self.assertEqual([p['id'] for p in groups],['codex','claude'])
-        self.assertEqual(groups[0]['accounts'][0]['email'],groups[1]['accounts'][0]['email'])
-        self.assertNotEqual(groups[0]['accounts'][0]['key'],groups[1]['accounts'][0]['key'])
+        # Default display order follows labels/emails, not auth filenames.
+        codex=next(a for a in groups[0]['accounts'] if a['key']=='codex-0.json')
+        claude=next(a for a in groups[1]['accounts'] if a['key']=='claude-0.json')
+        self.assertEqual(codex['email'],A)
+        self.assertEqual(claude['email'],A)
+        self.assertNotEqual(codex['key'],claude['key'])
         self.assertFalse(groups[0]['routable'])
         self.assertTrue(groups[1]['routable'])
 
@@ -141,7 +145,7 @@ class SingleCodexTests(unittest.TestCase):
         for p in groups[2:]:
             self.assertEqual(p['features'],[])
             self.assertFalse(p['routable'])
-            self.assertEqual(p['accent'],'xai' if p['id']=='xai' else 'neutral')
+            self.assertEqual(p['accent'],{'xai':'xai','kimi':'kimi','antigravity':'antigravity'}.get(p['id'],'neutral'))
         self.assertEqual((groups[-1]['name'],groups[-2]['name']),('Grok','mystery'))
         xai=groups[-1]['accounts'][0]
         self.assertEqual((xai['key'],xai['label']),('xai-service.json','xai-service.json'))

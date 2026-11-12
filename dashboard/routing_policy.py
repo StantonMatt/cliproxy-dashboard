@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 from account_access import runtime_matches
 from request_deadline import RequestDeadline
 import usage_adapters
+import api_keys
 
 STATE = Path('/var/lib/personal-codex-router-routing')
 KEY = Path('/etc/cliproxyapi/dashboard-management-key')
@@ -34,13 +35,13 @@ def inventory_snapshot(call=None):
     value = (call or request)('/auth-files')
     if not isinstance(value, dict) or not isinstance(value.get('files'), list):
         raise Hold('Gateway inventory is unavailable')
-    return copy.deepcopy(value['files'])
+    return copy.deepcopy([r for r in value['files'] if not api_keys.is_api_key_row(r)])
 
 
 def inventory_for(overview):
     gateway = overview.get('gateway', {})
     if 'inventory' in gateway:
-        return gateway['inventory']
+        return [r for r in gateway['inventory'] if not api_keys.is_api_key_row(r)]
     # Public projections also carry filename keys; useful for read-only callers.
     return [dict(a, type=provider, name=a.get('key', a.get('name')))
             for provider, field in (('codex', 'accounts'), ('claude', 'claude_accounts'))
@@ -49,13 +50,13 @@ def inventory_for(overview):
 
 def identities(provider, inventory):
     return tuple(a.get('email') for a in sorted(inventory, key=lambda a: a.get('name') or '')
-                 if a.get('type', a.get('provider')) == provider and a.get('email'))
+                 if a.get('type', a.get('provider')) == provider and a.get('email') and not api_keys.is_api_key_row(a))
 
 
 def membership(inventory, provider):
     return [{k: a.get(k) for k in ('name', 'email', 'auth_index')}
             for a in sorted(inventory, key=lambda a: a.get('name') or '')
-            if a.get('type') == provider]
+            if a.get('type') == provider and not api_keys.is_api_key_row(a)]
 
 
 def state_path(provider='codex'):
@@ -116,7 +117,7 @@ def observations(gateway):
     """
     result = {k: copy.deepcopy(gateway[k]) for k in ('online', 'checked_at', 'inventory') if k in gateway}
     fields = ('key', 'provider', 'id', 'label', 'email', 'active', 'disabled', 'access_state', 'auth_state', 'priority',
-              'quota_checked_at', 'quota_error', 'windows', 'availability')
+              'quota_checked_at', 'fresh_until', 'quota_error', 'windows', 'availability')
     result['accounts'] = [{k: copy.deepcopy(account[k]) for k in fields if k in account}
                           for account in gateway.get('accounts', [])]
     return {'gateway': result}
@@ -175,13 +176,15 @@ def claude_observations(overview, now):
             continue
         if account.get('status') != 'ok' or account.get('error'):
             raise DataHold(f'quota unavailable for {label}')
-        # Collectors run every five minutes; preserve their measured timestamps.
+        # Preserve event/header measurement times; established windows expire at reset.
         checked = account.get('checked_at')
-        if not fresh(checked, now, max_age=900):
+        if not usage_adapters.observation_fresh(account, now):
             raise DataHold(f'stale quota data for {label}')
         windows = copy.deepcopy(account.get('windows', []))
         for kind, seconds in (('five_hour', 18000), ('seven_day', 604800)):
             primary = [w for w in windows if w.get('kind') == kind]
+            if kind == 'five_hour' and not primary:
+                continue
             if len(primary) != 1:
                 raise DataHold(f'account allowance is not reported for {label}')
             primary[0]['seconds'] = seconds
@@ -192,10 +195,16 @@ def claude_observations(overview, now):
             remaining = window.get('remaining')
             if remaining is None and finite(window.get('used')) and window['used'] == 0:
                 remaining = 100
+            measured = window.get('measured_at', checked)
+            if not usage_adapters.window_fresh(window, checked, now, account.get('fresh_until'),
+                    primary=window.get('kind') in ('five_hour', 'seven_day')):
+                raise DataHold(f'stale quota window for {label}')
             if reset is None and finite(remaining) and remaining == 100:
-                # An unused allowance cannot expire until one full period after first use.
-                reset = now + (18000 if window.get('kind') == 'five_hour' else 604800)
-                window.update(remaining=100, resets_at=reset)
+                # Fresh explicit zero is unused; no reset window is established yet.
+                window['remaining'] = 100
+                if window.get('kind') not in ('five_hour', 'seven_day'):
+                    window.pop('seconds', None)
+                continue
             if (not finite(reset) or not now < reset <= now + 8 * 86400
                     or not finite(window.get('remaining')) or not 0 <= window['remaining'] <= 100):
                 raise DataHold(f'account allowance is not reported for {label}')
@@ -203,8 +212,9 @@ def claude_observations(overview, now):
             if window.get('kind') not in ('five_hour', 'seven_day'):
                 window.pop('seconds', None)
         result.append(dict(email=account['email'], active=not disabled,
-                           disabled=disabled, windows=windows, quota_checked_at=checked))
-    # Quota freshness was checked against the collector's five-minute cadence.
+                           disabled=disabled, windows=windows, quota_checked_at=checked,
+                           usage_source=account.get('usage_source'), fresh_until=account.get('fresh_until')))
+    # Each allowance was checked independently against its measured reset.
     return {'gateway': {**gateway, 'accounts': result}}
 
 
@@ -239,9 +249,11 @@ def eligible_accounts(overview, now, provider='codex', inventory=None):
         if account.get('quota_error'):
             error_class = 'auth_required' if account.get('auth_state') == 'sign_in_required' else 'quota_unavailable'
             raise DataHold(f'quota error for {label}: {error_class}')
-        if not fresh(account.get('quota_checked_at'), now, 900 if provider == 'claude' else 180):
+        if not usage_adapters.observation_fresh(account, now, 'quota_checked_at'):
             raise DataHold(f'stale quota data for {label}')
         windows = account.get('windows', [])
+        if any(finite(w.get('resets_at')) and w['resets_at'] <= now for w in windows):
+            raise DataHold(f'waiting for the next usage window reset observation for {label}')
         weekly = [w for w in windows if w.get('seconds') == 604800]
         # Plans without a weekly window (Free reports one 30-day window) are
         # secondary: ranked only when no weekly account has allowance.
@@ -260,15 +272,16 @@ def eligible_accounts(overview, now, provider='codex', inventory=None):
                 ranked = unused
             if not finite(ranked.get('resets_at')):
                 raise DataHold(f'usage window reset time is not reported for {label}')
-            reset = ranked['resets_at']
+            reset = ranked.get('resets_at')
             if not now < reset <= now + ranked['seconds'] + 86400:
                 raise DataHold(f'waiting for the next usage window reset observation for {label}')
         else:
-            if len(weekly) != 1 or not finite(weekly[0].get('resets_at')):
+            if len(weekly) != 1:
                 raise DataHold(f'weekly reset time is not reported for {label}')
             ranked = weekly[0]
-            reset = ranked['resets_at']
-            if not now < reset <= now + 8 * 86400:
+            reset = ranked.get('resets_at')
+            unused = provider == 'claude' and reset is None and ranked.get('remaining') == 100
+            if not unused and (not finite(reset) or not now < reset <= now + 8 * 86400):
                 raise DataHold(f'waiting for the next weekly reset observation for {label}')
         if any(not finite(w.get('remaining')) or not 0 <= w['remaining'] <= 100 for w in windows):
             raise DataHold(f'account allowance is not reported for {label}')
@@ -276,6 +289,8 @@ def eligible_accounts(overview, now, provider='codex', inventory=None):
             excluded[email] = reason or 'no remaining allowance'
             continue
         candidates[email] = {'remaining': ranked['remaining'], 'reset': reset, 'secondary': secondary}
+        if provider == 'claude':
+            candidates[email]['near_limit'] = bool(usage_adapters.claude_near_limit_windows(account, now))
     return candidates, excluded
 
 
@@ -296,20 +311,31 @@ def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='
         raise Hold('No account currently reports available allowance')
     # Never compare a weekly percentage with a longer window's percentage.
     candidates = {e: c for e, c in candidates.items() if not c['secondary']} or candidates
-    quota = mode == 'highest-remaining-quota'
-    rank = lambda email: -candidates[email]['remaining'] if quota else candidates[email]['reset']
-    winner = min(candidates, key=rank)
+    warned = {e for e, c in candidates.items() if c.get('near_limit')}
+    unwarned = {e: c for e, c in candidates.items() if e not in warned}
     reason = None
+    if warned and unwarned:
+        label = current if current in warned else next(e for e in candidates if e in warned)
+        reason = f'Moving new sessions off {label}: near its limit'
+        # Apply ranking and stability only within the unwarned group. If all
+        # accounts are warned, preserve the existing ranking and margins.
+        candidates = unwarned
+    quota = mode == 'highest-remaining-quota'
+    # An unused weekly allowance has no measured reset. Sort it after known
+    # resets without manufacturing a date in the observation or published plan.
+    rank = lambda email: (-candidates[email]['remaining'] if quota else
+                          candidates[email]['reset'] if candidates[email]['reset'] is not None else float('inf'))
+    winner = min(candidates, key=rank)
     if current in candidates and winner != current:
         lead = rank(current) - rank(winner)
-        if (quota and lead < 5) or (not quota and lead <= 900):
+        if rank(current) == rank(winner) or (quota and lead < 5) or (not quota and lead <= 900):
             winner = current
             reason = 'Keeping the current account within the stability margin'
     elif current not in candidates:
         leaders = {e for e in candidates if (
-            rank(e) == rank(winner) if quota else rank(e) - rank(winner) <= 900)}
+            rank(e) == rank(winner) or (not quota and rank(e) - rank(winner) <= 900))}
         if len(leaders) > 1:
-            plan = priority_plan(None, None if quota else candidates[winner]['reset'], provider=provider, inventory=inventory)
+            plan = priority_plan(None, None if quota else candidates[winner]['reset'], reason, provider=provider, inventory=inventory)
             # Preserve neutral priorities when everyone ties; otherwise demote non-leaders.
             if len(leaders) < len(plan['priorities']):
                 plan['priorities'].update({e: 100 for e in leaders})
@@ -324,12 +350,15 @@ def request(path, body=None, method=None, base='http://127.0.0.1:8317', timeout=
                   headers={'Authorization': 'Bearer ' + KEY.read_text().strip(),
                            'Content-Type': 'application/json'})
     with urlopen(req, timeout=timeout) as response:
-        return json.load(response)
+        result = json.load(response)
+        if path == '/auth-files' and isinstance(result.get('files'), list):
+            result['files'] = [r for r in result['files'] if not api_keys.is_api_key_row(r)]
+        return result
 
 
 def records(call=None, provider='codex', inventory=None):
     inventory = inventory_snapshot(call) if inventory is None else inventory
-    rows = sorted((a for a in inventory if a.get('type') == provider), key=lambda a: a.get('name') or '')
+    rows = sorted((a for a in inventory if a.get('type') == provider and not api_keys.is_api_key_row(a)), key=lambda a: a.get('name') or '')
     emails = [a.get('email') for a in rows]
     if any(not isinstance(e, str) or not e for e in emails) or len({e.casefold() for e in emails if isinstance(e, str)}) != len(emails):
         raise Hold('Gateway accounts are incomplete or ambiguous')
@@ -469,7 +498,8 @@ def validate_selection(value, provider='codex', inventory=None):
         raise ValueError('Choose a supported routing mode')
     mode, email = value['mode'], value.get('preferred_email')
     if mode == 'preferred-account' and 'preferred_key' in value:
-        matches = [a for a in (inventory or []) if a.get('type') == provider and a.get('name') == value['preferred_key']]
+        matches = [a for a in (inventory or []) if a.get('type') == provider
+                   and a.get('name') == value['preferred_key'] and not api_keys.is_api_key_row(a)]
         if not isinstance(value['preferred_key'], str) or len(matches) != 1:
             raise ValueError('Choose a connected account')
         email = matches[0].get('email')
@@ -546,7 +576,7 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
         inventory = inventory_snapshot(call) if inventory is None else inventory
         emails = identities(provider, inventory)
         wanted = validate_selection(selected, provider, inventory) if selected is not None else selection(state_dir, provider, inventory)
-        if not any(a.get('type') == provider for a in inventory):
+        if not any(a.get('type') == provider and not api_keys.is_api_key_row(a) for a in inventory):
             status = dict(policy=wanted['mode'], status='idle', checked_at=stamp(now),
                           selected_email=None, preferred_email=None, intended_priorities={},
                           pending_plan=False, membership=membership(inventory, provider))

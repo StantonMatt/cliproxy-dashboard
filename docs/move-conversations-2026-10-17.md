@@ -43,6 +43,12 @@ leaves everything read-only except the config file and the request directory
 (`ReadWritePaths=`) plus the helper’s own state and runtime directories. It has
 no network, no devices and a `@system-service` system-call filter.
 
+The config must be a regular file, not a symlink, owned by `root:cliproxyapi`
+with mode exactly `0640` or `0660`. Mode `0660` supports dashboard API-key
+config saves and is intentional; the helper preserves either accepted mode.
+World permissions, execute permissions and special mode bits are refused as
+`config_unsafe`, as are an unexpected owner or group.
+
 The helper never opens the request. It `lstat`s the entry, notes whether its
 `ctime` is more than 15 s from now (`stale_request`), and always removes it
 (`rmdir` for a directory, `unlink` otherwise), whatever it is. If it can’t, the

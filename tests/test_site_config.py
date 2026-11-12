@@ -277,6 +277,12 @@ class HostInstallerTests(unittest.TestCase):
         requests = self.root / 'move-requests'
         requests.mkdir()
         user = SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid(), pw_dir=str(self.root))
+        status_user = SimpleNamespace(pw_uid=987, pw_gid=987, pw_dir='/nonexistent',
+                                      pw_shell='/usr/sbin/nologin')
+        gateway_user = SimpleNamespace(pw_uid=988, pw_gid=988)
+        def lookup_user(name):
+            return (status_user if name == installer.PROVIDER_STATUS_USER else
+                    gateway_user if name == 'cliproxyapi' else user)
         command = Mock(side_effect=lambda *args: 'active' if args[-1] == 'personal-codex-router-move.path' else '123')
         with ExitStack() as stack:
             for context in (patch.object(installer.site_config, 'load', return_value=site),
@@ -288,8 +294,10 @@ class HostInstallerTests(unittest.TestCase):
                             patch.object(installer, 'version_fingerprint', return_value=None),
                             patch.object(installer.os, 'geteuid', return_value=0), patch.object(os, 'chown'),
                             patch.object(Path, 'mkdir'), patch.object(Path, 'chmod'),
-                            patch.object(installer.pwd, 'getpwnam', return_value=user),
-                            patch.object(installer.grp, 'getgrnam', return_value=SimpleNamespace(gr_gid=os.getgid())),
+                            patch.object(installer.pwd, 'getpwnam', side_effect=lookup_user),
+                            patch.object(installer.grp, 'getgrnam', side_effect=lambda name:
+                                         SimpleNamespace(gr_gid=987 if name == installer.PROVIDER_STATUS_USER else os.getgid())),
+                            patch.object(installer.os, 'getgrouplist', return_value=[987]),
                             patch.object(installer, 'command', command),
                             patch.object(sys, 'argv', ['install-operations.py', '--apply']), redirect_stdout(io.StringIO())):
                 stack.enter_context(context)
@@ -374,7 +382,7 @@ class HostInstallerTests(unittest.TestCase):
                                         capture_output=True, text=True, timeout=15)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(marker.exists(), use_heavy)
-                self.assertEqual((case / 'output/fast-mode-policy-v0.1.2.so').read_text(), 'fixture')
+                self.assertEqual((case / 'output/fast-mode-policy-v0.2.0.so').read_text(), 'fixture')
 
     def test_mac_log_repair_discovers_legacy_and_neutral_helper_labels(self):
         repair = load_script('repair-friendly-url-log')

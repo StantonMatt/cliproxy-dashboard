@@ -86,7 +86,7 @@ class FlipTests(HelperCase):
         self.assertEqual(self.handle()['value'], '1h0m1s')
         after = self.config.stat()
         self.assertEqual((after.st_ino, after.st_uid, after.st_gid, stat.S_IMODE(after.st_mode)),
-                         (before.st_ino, before.st_uid, before.st_gid, 0o640))
+                         (before.st_ino, before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode)))
         self.assertEqual(result['inode_before'], before.st_ino)
         self.assertEqual(result['inode_after'], before.st_ino)
 
@@ -95,6 +95,15 @@ class FlipTests(HelperCase):
 
     def test_legacy_layout_flips_both_directions_in_place(self):
         self.config.write_bytes(LEGACY.read_bytes())
+        self.check_both_directions()
+
+    def test_group_writable_v8_flips_both_directions_in_place(self):
+        self.config.chmod(0o660)
+        self.check_both_directions()
+
+    def test_group_writable_legacy_flips_both_directions_in_place(self):
+        self.config.write_bytes(LEGACY.read_bytes())
+        self.config.chmod(0o660)
         self.check_both_directions()
 
     def test_accepts_canonical_hour_and_writes_same_length_value(self):
@@ -139,17 +148,26 @@ class ConfigRefusalTests(HelperCase):
         self.assertFalse((self.state / 'last-flip').exists())
 
     def test_wrong_mode(self):
-        self.config.chmod(0o644)
-        self.assert_refused('config_unsafe')
+        for base in (0o640, 0o660):
+            for extra in (0o004, 0o002, 0o001, 0o100, 0o010, 0o1000, 0o2000, 0o4000):
+                with self.subTest(mode=oct(base | extra)):
+                    self.config.chmod(base | extra)
+                    self.assert_refused('config_unsafe')
+        for mode in (0o600, 0o620):
+            with self.subTest(mode=oct(mode)):
+                self.config.chmod(mode)
+                self.assert_refused('config_unsafe')
 
     def test_wrong_owner_or_group(self):
-        for uid, gid in ((self.uid + 1, self.gid), (self.uid, self.gid + 1)):
-            with self.subTest(uid=uid, gid=gid):
-                self.write_request()
-                result = move.handle(self.request, self.config, self.state, self.runtime,
-                                     required_uid=uid, required_gid=gid)
-                self.assertEqual((result['outcome'], result['code']), ('refused', 'config_unsafe'))
-                self.assertEqual(self.ttl(), '1h')
+        for mode in (0o640, 0o660):
+            self.config.chmod(mode)
+            for uid, gid in ((self.uid + 1, self.gid), (self.uid, self.gid + 1)):
+                with self.subTest(mode=oct(mode), uid=uid, gid=gid):
+                    self.write_request()
+                    result = move.handle(self.request, self.config, self.state, self.runtime,
+                                         required_uid=uid, required_gid=gid)
+                    self.assertEqual((result['outcome'], result['code']), ('refused', 'config_unsafe'))
+                    self.assertEqual(self.ttl(), '1h')
 
     def test_default_group_lookup_is_used(self):
         self.write_request()
@@ -161,7 +179,20 @@ class ConfigRefusalTests(HelperCase):
         real = self.root / 'real.yaml'
         self.config.rename(real)
         self.config.symlink_to(real)
-        self.assert_refused('config_symlink')
+        for mode in (0o640, 0o660):
+            with self.subTest(mode=oct(mode)):
+                real.chmod(mode)
+                self.assert_refused('config_symlink')
+
+    def test_nonregular_config(self):
+        self.config.unlink()
+        os.mkfifo(self.config)
+        for mode in (0o640, 0o660):
+            with self.subTest(mode=oct(mode)):
+                self.config.chmod(mode)
+                with self.assertRaises(move.Refused) as caught:
+                    move.preflight(self.config, self.state, required_uid=self.uid, required_gid=self.gid)
+                self.assertEqual(caught.exception.code, 'config_unsafe')
 
     def test_missing_config(self):
         self.config.unlink()

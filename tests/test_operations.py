@@ -46,6 +46,41 @@ class OperationsTests(unittest.TestCase):
                       'last_success_at': self.stamp, 'failed_spools': 0,
                       'quarantined_records': 0, 'quarantine_increased': False}
 
+    def test_deliberately_deferred_exhaustion_keeps_health_and_notices_current(self):
+        old = ops.dt.datetime.fromtimestamp(self.now - 1800, ops.dt.timezone.utc).isoformat()
+        future = ops.dt.datetime.fromtimestamp(self.now + 60, ops.dt.timezone.utc).isoformat()
+        self.account.update(quota_attempted_at=old, quota_checked_at=old, fresh_until=future,
+            availability={'state': 'quota_exhausted'}, windows=[dict(remaining=0, seconds=604800, resets_at=self.now + 60)])
+        self.assertEqual(ops.account_health(self.account, self.gateway, self.now), 'limited')
+        self.assertIsNotNone(ops.weekly_allowance(self.account, self.gateway, self.now))
+        self.assertEqual(ops.account_health(self.account, self.gateway, self.now + 61), 'stale')
+        self.assertIsNone(ops.weekly_allowance(self.account, self.gateway, self.now + 61))
+
+    def test_endpoint_usage_health_and_notices_remain_valid_until_reset(self):
+        other = self.exhausted_accounts()
+        self.now += 600
+        self.gateway['checked_at'] = ops.usage_adapters.stamp(self.now)
+        store = ops.NoticeStore(self.path / 'notices.json', self.path)
+        self.assertEqual(ops.account_health(self.account, self.gateway, self.now), 'limited')
+        self.assertEqual(ops.account_health(other, self.gateway, self.now), 'healthy')
+        self.assertTrue(ops.can_serve(other, self.gateway, self.now))
+        store.update(self.gateway, self.now)
+        notice = next(n for n in store.view()['items'] if n['kind'] == 'weekly_exhausted')
+        self.assertEqual(notice['message'], 'Weekly limit reached · using the other account')
+        self.account['windows'][0]['remaining'] = 20
+        store.update(self.gateway, self.now)
+        self.assertFalse(any(n['kind'] == 'weekly_exhausted' for n in store.view()['items']))
+        # Reset validity does not extend failures or a failed endpoint's attempt age.
+        other['quota_error'] = 'Quota unavailable'
+        self.assertEqual(ops.account_health(other, self.gateway, self.now), 'stale')
+        self.assertIsNone(ops.weekly_allowance(other, self.gateway, self.now))
+        other['quota_error'] = None
+        self.now += 1200
+        self.gateway['checked_at'] = ops.usage_adapters.stamp(self.now)
+        self.assertEqual(ops.account_health(other, self.gateway, self.now), 'stale')
+        self.assertFalse(ops.can_serve(other, self.gateway, self.now))
+        self.assertIsNone(ops.weekly_allowance(other, self.gateway, self.now))
+
     def write_usage(self, checked_at=None):
         (self.path / 'health.json').write_text(json.dumps({
             'checked_at': checked_at or self.stamp, 'usage_collection': self.usage}))
@@ -369,14 +404,12 @@ class OperationsTests(unittest.TestCase):
             with self.subTest(reset=value):
                 self.account['windows'][0]['resets_at'] = value
                 other['windows'][0]['resets_at'] = self.now + 120
-                notices = ops.exhaustion_candidates({a['email']: a for a in self.gateway['accounts']},
-                                                   self.gateway, self.now)
-                self.assertEqual(next(iter(notices.values()))['message'],
+                # Formatting retained notices is independent of observation validity.
+                details = [dict(weekly_resets_at=value), dict(weekly_resets_at=self.now + 120)]
+                self.assertEqual(ops.exhaustion_message(details, True, False, self.now),
                                  'Weekly limits reached · Codex requests fail · resets in 2m')
-                other['windows'][0]['resets_at'] = None
-                notices = ops.exhaustion_candidates({a['email']: a for a in self.gateway['accounts']},
-                                                   self.gateway, self.now)
-                self.assertEqual(next(iter(notices.values()))['message'],
+                details[1]['weekly_resets_at'] = None
+                self.assertEqual(ops.exhaustion_message(details, True, False, self.now),
                                  'Weekly limits reached · Codex requests fail')
 
     def test_single_exhaustion_reports_failover_reset_balance_and_action(self):
@@ -422,7 +455,7 @@ class OperationsTests(unittest.TestCase):
         changes = [{'availability':{'state':state,'scope':'account'}}
                    for state in ('quota_exhausted','rate_limited','provider_unavailable','auth_required','disabled','unknown')]
         changes += [{'auth_state':'sign_in_required'}, {'disabled':True},
-                    {'quota_checked_at':dt.datetime.fromtimestamp(self.now-181, dt.timezone.utc).isoformat()}]
+                    {'quota_checked_at':dt.datetime.fromtimestamp(self.now+1, dt.timezone.utc).isoformat()}]
         for change in changes:
             with self.subTest(change=change):
                 other.clear();other.update(copy.deepcopy(original));other.update(change)
@@ -436,7 +469,7 @@ class OperationsTests(unittest.TestCase):
         other = self.exhausted_accounts()
         for remaining in (0, None, -1, float('nan'), True):
             with self.subTest(remaining=remaining):
-                other['windows'] = [other['windows'][0], {'label':'Provider window','seconds':12345,'remaining':remaining}]
+                other['windows'] = [other['windows'][0], {'label':'Provider window','seconds':12345,'remaining':remaining,'resets_at':self.now + 1800}]
                 notice = next(iter(ops.exhaustion_candidates({a['email']:a for a in self.gateway['accounts']},
                                                            self.gateway, self.now).values()))
                 self.assertEqual(notice['urgency'], 'critical')
@@ -654,11 +687,19 @@ class OperationsTests(unittest.TestCase):
                 patch.object(probe.subprocess, 'run', return_value=Mock(returncode=0)) as run:
             probe.deliver()
             self.assertEqual(run.call_count, 3)
-            self.assertIn('--urgency=critical', run.call_args_list[0].args[0])
+            first = run.call_args_list[0].args[0]
+            # gdbus avoids the notify-send AppArmor denial inside the unit's mount namespace.
+            self.assertIn('/usr/bin/gdbus', first)
+            self.assertNotIn('/usr/bin/notify-send', first)
+            self.assertEqual(first[-4:], ['"Exhausted"', '[]', "{'urgency': <byte 2>}", '0'])
+            self.assertIn('"Personal Router · Both accounts"', first)
             for call in run.call_args_list[1:]:
-                self.assertIn('--urgency=normal', call.args[0])
+                self.assertEqual(call.args[0][-2:], ["{'urgency': <byte 1>}", '15000'])
             probe.deliver()
             self.assertEqual(run.call_count, 3)
+
+    def test_desktop_text_is_quoted_as_gvariant_strings(self):
+        self.assertEqual(probe.gvariant_string('a "b" \\ c\nd · e'), '"a \\"b\\" \\\\ c\\nd · e"')
 
     def test_renewal_has_two_stages_and_never_promotes_an_estimate_to_confirmed(self):
         store = ops.NoticeStore(self.path / 'notices.json')

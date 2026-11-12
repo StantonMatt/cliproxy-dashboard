@@ -5,6 +5,8 @@ Description=Private project previews for personal Tailscale devices
 [Service]
 Type=simple
 DynamicUser=true
+LoadCredential=preview.crt:/var/lib/personal-codex-router-preview-tls/current/cert.pem
+LoadCredential=preview.key:/var/lib/personal-codex-router-preview-tls/current/key.pem
 ExecStart=/usr/bin/node /opt/personal-codex-router/router-preview.mjs
 Restart=always
 RestartSec=10

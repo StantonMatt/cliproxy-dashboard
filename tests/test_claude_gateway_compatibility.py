@@ -2,9 +2,10 @@ from codex_fixture import CODEX_PAIR, CODEX_INVENTORY
 """Mixed gateway providers must never enter Codex controls or activity."""
 import contextlib
 import copy
+import datetime as dt
 import importlib.util
-import io
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -125,26 +126,30 @@ class ClaudeGatewayCompatibilityTests(unittest.TestCase):
         call.assert_not_called()
 
     def test_collector_preserves_provider_and_codex_views_exclude_other_providers(self):
-        db, key = self.root / 'usage.sqlite3', self.root / 'key'
-        key.write_text('synthetic-client-key')
+        db = self.root / 'usage.sqlite3'
         events = [dict(provider=provider, model=model, auth_index=account,
                        timestamp=at, tokens={'total_tokens': tokens})
                   for provider, model, account, at, tokens in [
                       ('codex', 'gpt-6', 'codex-0', '2026-10-15T13:00:00Z', 10),
                       ('claude', 'claude-opus-4-8', 'claude-a', '2026-10-15T14:00:00Z', 900),
                       ('gemini', 'gemini', 'other', '2026-10-01T00:00:00Z', 800)]]
-        with patch.object(collector.urllib.request, 'urlopen', return_value=io.BytesIO(json.dumps(events).encode())), \
-                contextlib.redirect_stdout(io.StringIO()):
-            collector.collect(db, key)
-        with contextlib.closing(sqlite3.connect(db)) as con:
+        # Persist through the collector so raw rows and the hourly rollup agree.
+        # Claude has the latest collection time, independent of request/replay order.
+        collected = ('2026-10-16T00:00:00+00:00', '2099-01-01T00:00:00+00:00',
+                     '2026-10-17T00:00:00+00:00')
+        with contextlib.closing(collector.connect(db)) as con:
+            for index, (event, stamp) in enumerate(zip(events, collected)):
+                spool = self.root / f'batch-{index}.json'
+                spool.write_text(json.dumps([event]))
+                seconds = dt.datetime.fromisoformat(stamp).timestamp()
+                os.utime(spool, (seconds, seconds))
+                self.assertEqual(collector.replay_spool(con, spool), (1, 0, 0))
             self.assertEqual(con.execute('SELECT provider FROM usage ORDER BY id').fetchall(),
                              [('codex',), ('claude',), ('gemini',)])
-            con.execute("UPDATE usage SET collected_at='2099-01-01' WHERE provider='claude'")
-            con.commit()
         report = server.usage_summary('1970-01-01T00:00:00Z', db)
         self.assertTrue(report['available'])
         self.assertEqual(report['since'], '2026-10-15T13:00:00Z')
-        self.assertEqual(report['last_collected_at'], '2099-01-01')
+        self.assertEqual(report['last_collected_at'], collected[1])
         self.assertEqual([r['auth_index'] for r in report['accounts']], ['codex-0'])
         self.assertEqual([r['model'] for r in report['models']], ['gpt-6'])
         # Recent requests include every recorded provider, newest first.
@@ -152,13 +157,28 @@ class ClaudeGatewayCompatibilityTests(unittest.TestCase):
                          [('claude', 'claude-a'), ('codex', 'codex-0'), ('gemini', 'other')])
         self.assertEqual([r['auth_index'] for r in report['hours']], ['codex-0'])
         self.assertEqual(report['accounts'][0]['total_tokens'], 10)
+        self.assertEqual(server.usage_summary('2100-01-01T00:00:00Z', db)['last_collected_at'],
+                         collected[1])  # Collection freshness is independent of the selected range.
 
     def test_usage_retains_legacy_rows_without_provider(self):
         db = self.root / 'usage.sqlite3'
-        with contextlib.closing(collector.connect(db)) as con:
+        # These rows predate the collector's migrations, as real legacy rows do.
+        with contextlib.closing(sqlite3.connect(db)) as con:
+            con.execute('''CREATE TABLE usage (id INTEGER PRIMARY KEY, collected_at TEXT NOT NULL,
+                timestamp TEXT, provider TEXT, model TEXT, auth_index TEXT, failed INTEGER,
+                latency_ms REAL, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER,
+                cached_tokens INTEGER, total_tokens INTEGER)''')
             for provider in (None, '', 'codex', 'claude'):
                 con.execute('INSERT INTO usage (collected_at,timestamp,provider,auth_index) VALUES (?,?,?,?)',
                             ('2026-10-15', '2026-10-15T00:00:00Z', provider, str(provider)))
             con.commit()
-        report = server.usage_summary('1970-01-01T00:00:00Z', db)
-        self.assertEqual(sum(r['requests'] for r in report['accounts']), 3)
+        before = server.usage_summary('1970-01-01T00:00:00Z', db)
+        self.assertTrue(before['available'])
+        self.assertEqual(sum(r['requests'] for r in before['accounts']), 3)
+        for _ in range(2):
+            with contextlib.closing(collector.connect(db)) as con:
+                self.assertEqual(con.execute('SELECT provider, sum(requests) FROM usage_hourly '
+                                             'GROUP BY provider ORDER BY provider').fetchall(),
+                                 [('claude', 1), ('codex', 3)])
+            report = server.usage_summary('1970-01-01T00:00:00Z', db)
+            self.assertEqual(report, before)

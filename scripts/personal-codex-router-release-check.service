@@ -1,0 +1,19 @@
+[Unit]
+Description=Check public CLIProxyAPI stable releases without upgrading
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cliproxyapi
+Group=cliproxyapi
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/check-gateway-release.py
+StateDirectory=personal-codex-router
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

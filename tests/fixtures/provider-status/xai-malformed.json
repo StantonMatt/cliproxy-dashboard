@@ -1,0 +1,28 @@
+{
+  "updated_at": "2026-10-31T12:00:00Z",
+  "overall": {
+    "status": "available"
+  },
+  "products": [
+    {
+      "id": "grok",
+      "name": "Grok",
+      "status": "available",
+      "components": [
+        {
+          "id": "grok-com",
+          "name": "grok.com",
+          "status": "available"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "name": "API",
+      "status": "available",
+      "components": [
+        null
+      ]
+    }
+  ]
+}

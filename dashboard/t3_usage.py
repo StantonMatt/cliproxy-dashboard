@@ -62,21 +62,33 @@ def claude_body(observation, now):
     independent = observation.get('independent_windows') is True
     if observation.get('status') not in (('ok', 'stale') if independent else ('ok',)):
         return None
-    if not independent and not fresh(observation.get('checked_at'), now, 900):
+    if not independent and not usage_adapters.observation_fresh(observation, now):
         return None
     body = {}
     seen = set()
+    primary = [r.get('kind') for r in observation.get('windows', []) if r.get('kind') in ('five_hour', 'seven_day')]
+    if primary.count('seven_day') != 1 or primary.count('five_hour') > 1:
+        return None
     for row in observation.get('windows', []):
         used, reset, kind = row.get('used'), row.get('resets_at'), row.get('kind')
-        # B retains windows independently; a fresh main window cannot freshen a model window.
-        if (independent or 'measured_at' in row) and not fresh(row.get('measured_at'), now, 900):
+        if not (usage_adapters.window_fresh(
+                row, observation.get('checked_at'), now, observation.get('fresh_until'),
+                primary=kind in ('five_hour', 'seven_day')) or
+                kind not in ('five_hour', 'seven_day') and reset is None and
+                fresh(row.get('measured_at'), now, 900)):
+            if kind in ('five_hour', 'seven_day'):
+                return None
             continue
         if (not number(used) or not 0 <= used <= 100 or row.get('invalid_reset') or
                 (reset is not None and (not number(reset) or reset <= now))):
+            if kind in ('five_hour', 'seven_day'):
+                return None
             continue
         try:
             resets_at = dt.datetime.fromtimestamp(reset, dt.timezone.utc).isoformat() if reset is not None else None
         except (ValueError, OverflowError, OSError):
+            if kind in ('five_hour', 'seven_day'):
+                return None
             continue
         if kind in ('five_hour', 'seven_day'):
             if kind in seen:
@@ -92,7 +104,7 @@ def claude_body(observation, now):
             seen.add(model.casefold())
             body.setdefault('limits', []).append({'kind': 'weekly_scoped', 'percent': used,
                 'resets_at': resets_at, 'scope': {'model': {'display_name': model}}})
-    return body or None
+    return body if 'seven_day' in body else None
 
 
 def accounts(cache, now):
@@ -129,8 +141,13 @@ def accounts(cache, now):
                     # Bind JWT-derived workspaces too, even if the access controller's ID stayed stable.
                     public['id'] = public['auth_index'] = f'{shim_id}:{account_id}'
                 candidate = observed.get('body')
-                if (current and not row.get('quota_error') and fresh(row.get('quota_checked_at'), now, 180)
-                        and isinstance(candidate, dict) and candidate.get('rate_limit')):
+                primary = dict(checked_at=row.get('quota_checked_at'), windows=[dict(
+                    used=w.get('used_percent'), resets_at=w.get('reset_at'), seconds=w.get('limit_window_seconds'))
+                    for w in (candidate or {}).get('rate_limit', {}).values()])
+                if (current and not row.get('quota_error') and usage_adapters.observation_fresh(primary, now)
+                        and isinstance(candidate, dict) and candidate.get('rate_limit')
+                        and all(not number(w.get('reset_at')) or w['reset_at'] > now
+                                for w in candidate['rate_limit'].values())):
                     body = candidate
             else:
                 if current:

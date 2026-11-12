@@ -4,6 +4,8 @@ import json
 import math
 import time
 
+import usage_adapters
+
 
 def epoch(value):
     try:
@@ -36,9 +38,8 @@ def classify(record, account, now=None):
     cooldowns = [c for c in (record.get('cooldowns') if isinstance(record.get('cooldowns'), list) else []) if isinstance(c, dict)
                  and (epoch(c.get('retry_at')) or 0) > now]
     quota = error.get('type') == 'usage_limit_reached' or error.get('code') == 'usage_limit_reached'
-    checked = epoch(account.get('quota_checked_at'))
     fresh = (not account.get('quota_error') and account.get('auth_state') == 'authenticated'
-             and checked is not None and -30 <= now - checked <= 180)
+             and usage_adapters.observation_fresh(account, now, 'quota_checked_at'))
     windows = account.get('windows', [])
     positive = fresh and bool(windows) and all(
         isinstance(w.get('remaining'), (int, float)) and not isinstance(w.get('remaining'), bool)

@@ -1,4 +1,4 @@
-:root{--bg:#0b0e13;--surface:#10151d;--raised:#141b25;--line:#252d38;--line-soft:#1c242f;--text:#edf1f7;--muted:#8c98aa;--faint:#647287;--blue:#87c3ff;--mint:#83d8be;--amber:#e5bd80;--track:#202d3d;--codex:#9d82f1;--codex-2:#d0bcfb;--claude:#d97757;--claude-2:#f8bf8c;--shadow:0 8px 32px #00000014;--font:'Manrope',sans-serif;--mono:'IBM Plex Mono',monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}button,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}a{color:inherit;text-decoration:none}button{cursor:pointer}button:disabled{cursor:wait;opacity:.5}button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:5px}svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.symbols{position:absolute;width:0;height:0;overflow:hidden}[hidden]{display:none!important}.topbar{height:86px;padding:0 4.3%;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:56px}.brand{display:flex;align-items:center;gap:12px;letter-spacing:-.45px;font-size:18px;white-space:nowrap}.brand b{font-weight:700}.brand-icon{display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;color:var(--blue);background:var(--raised)}.brand-icon svg{width:26px;height:26px}.topbar nav{height:100%;display:flex;gap:30px}.topbar nav a{display:flex;align-items:center;color:var(--muted);font-size:13px;font-weight:600;border-bottom:2px solid transparent;padding-top:2px;transition:color .15s}.topbar nav a:hover{color:var(--text)}.topbar nav a.active{color:var(--text);border-bottom-color:var(--blue)}.header-right{margin-left:auto;display:flex;align-items:center;gap:22px}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;font-weight:600}.status i,.tiny-dot,.pulse-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--mint)}.status.connecting i{background:var(--amber)}.status.offline i{background:#ee987e}.icon-button{height:34px;width:34px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);transition:background .15s,color .15s}.icon-button:hover{background:var(--raised);color:var(--text)}.icon-button svg{width:16px;height:16px}main{max-width:1232px;padding:0 38px;margin:auto}.pool-name{display:flex;align-items:center;gap:14px;min-width:0}.provider-icon{width:40px;height:40px;border-radius:12px;background:#30264d;color:var(--codex);display:flex;align-items:center;justify-content:center}.pool-name strong{display:block;font-size:15px;letter-spacing:-.3px}.pool-name>div>span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.pool-stat{display:flex;flex-direction:column;padding-left:27px;border-left:1px solid var(--line);gap:5px}.pool-stat>span{font-size:10px;color:var(--muted);white-space:nowrap}.pool-stat strong{font-family:var(--mono);font-size:18px;font-weight:400;white-space:nowrap}.section-label{display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;gap:20px}.section-label h2{font-size:13px;font-weight:600;margin:0;letter-spacing:-.1px}.section-label h2>span{color:var(--faint);font-size:10px;margin-left:8px;font-family:var(--mono)}.section-label>span{font-size:10px;color:var(--faint)}.account-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.account-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:25px 28px 23px;box-shadow:var(--shadow);position:relative;overflow:hidden}.account-card.loading{min-height:280px}.account-top{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.account-name{font-size:14px;font-weight:650;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}.account-email{font-size:10px;color:var(--muted);margin-top:5px}.small-badge{border:1px solid var(--line);color:var(--muted);padding:3px 9px;font-size:9px;letter-spacing:.25px;border-radius:5px;white-space:nowrap}.quota-label{margin-top:25px;color:var(--muted);font-size:10px;display:flex;gap:8px;align-items:center}.quota-value{font-size:52px;letter-spacing:-2px;font-weight:500;line-height:1.3;color:var(--accent);font-variant-numeric:tabular-nums}.quota-value .percent{font-size:25px;letter-spacing:-1px;margin-left:3px}.quota-value .remaining-word{font-size:10px;letter-spacing:0;color:var(--muted);margin-left:11px}.quota-track{height:5px;border-radius:3px;background:var(--track);margin:15px 0 9px;overflow:hidden}.quota-track>span{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .5s}.quota-used{font-size:9px;color:var(--faint);text-align:right;font-family:var(--mono)}.account-bottom{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line-soft);padding-top:16px;margin-top:17px;font-size:10px}.reset-block>span{color:var(--faint);font-size:9px;display:block;margin-bottom:3px}.reset-block strong{font-size:11px;font-weight:500}.account-state{color:var(--muted);display:flex;align-items:center;gap:6px}.account-state svg{width:13px;height:13px;color:var(--mint)}.quota-warning{color:var(--amber);font-size:10px;margin-top:10px}.secondary-quota{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin:10px 0}.activity-title{margin-top:33px}.text-link{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10px}.text-link:hover{color:var(--blue)}.text-link svg{height:12px;width:12px}.activity-grid{display:grid;grid-template-columns:1fr 1.55fr;gap:20px}.activity-card,.traffic-card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:22px 25px;min-height:204px}.card-eyebrow{font:9px var(--mono);letter-spacing:1.2px;color:var(--muted)}.activity-value{font:33px var(--mono);letter-spacing:-1.2px;margin:11px 0 5px}.activity-card p,.chart-header p{font-size:10px;color:var(--faint);margin:4px 0 0}.token-track{height:4px;background:var(--track);border-radius:3px;margin:23px 0 8px;overflow:hidden}.token-track span{background:var(--blue);height:100%;display:block;max-width:100%}.track-label{display:flex;justify-content:space-between;font-size:9px;color:var(--faint)}.track-label b{font-family:var(--mono);font-weight:400;color:var(--muted)}.chart-header{display:flex;justify-content:space-between;align-items:center}.legend{display:flex;gap:15px;font-size:9px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:5px;height:5px;border-radius:50%;display:inline-block}.codex-one{background:var(--codex)}.codex-two{background:var(--codex-2)}.claude-one{background:var(--claude)}.claude-two{background:var(--claude-2)}.chart{margin-top:20px}.bars{height:96px;display:flex;align-items:flex-end;gap:5px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(to top,transparent 0,transparent 31px,var(--line-soft) 31px,var(--line-soft) 32px)}.bar-slot{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative;min-width:1px}.bar-slot:focus-visible{outline:1px solid var(--blue)}.bar-slot>span{display:block;min-height:0;opacity:.85;transition:height .5s}.bar-slot>span:first-child{border-radius:2px 2px 0 0}.bar-slot:hover>span{opacity:1}.chart-labels{display:flex;justify-content:space-between;color:var(--faint);font:8px var(--mono);margin-top:8px}.table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto;background:var(--surface)}table{width:100%;border-collapse:collapse;text-align:left;font-size:11px}th{font-size:9px;color:var(--faint);font-weight:500;padding:13px 20px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:12px 20px;border-bottom:1px solid var(--line-soft);white-space:nowrap}tr:last-child td{border-bottom:0}.mono{font-family:var(--mono);font-size:10px;color:var(--muted)}.number{text-align:right;font-family:var(--mono);font-size:10px}.account-chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px}.account-chip i{width:5px;height:5px;border-radius:50%;display:inline-block}.outcome{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--muted)}.outcome svg{width:12px;height:12px;color:var(--mint)}.failed{color:#e69887}.empty-state{padding:34px;text-align:center;color:var(--muted);font-size:12px}.segmented{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}.segmented button{border:0;color:var(--muted);background:transparent;padding:6px 12px;border-radius:4px;font-size:10px}.segmented button.selected{color:var(--text);background:var(--raised)}.usage-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin:22px 0}.metric-card{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:23px}.metric-card span{font-size:10px;color:var(--muted)}.metric-card strong{font:28px var(--mono);display:block;margin-top:12px;letter-spacing:-1px}.full-chart .bars{height:165px}.system-card{padding:29px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:20px}.system-heading{display:flex;align-items:center;gap:14px}.system-heading h2,.advanced h2{font-size:15px;margin:0;letter-spacing:-.3px}.system-heading p,.advanced p{color:var(--muted);font-size:11px;margin:5px 0 0}.system-heading>.small-badge{margin-left:auto}.connection-flow{display:flex;align-items:center;gap:16px;margin:30px 0 25px;padding:25px;background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;justify-content:space-between;font-size:11px}.flow-line{flex:1;text-align:center;position:relative;color:var(--faint);font:8px var(--mono);border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:7px;max-width:175px}.flow-line:after{content:'›';font-size:15px;position:absolute;right:-3px;bottom:-10px}dl{margin:0;display:grid;grid-template-columns:1fr 1fr}dt,dd{padding:13px 0;border-bottom:1px solid var(--line-soft);font-size:11px;margin:0}dt{color:var(--muted)}dd{text-align:right;font-family:var(--mono);font-size:10px}.advanced{display:flex;justify-content:space-between;align-items:center;gap:20px}.outline-button{display:inline-flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:10px 15px;color:var(--muted);font-size:11px}.outline-button:hover{color:var(--text);background:var(--raised)}.outline-button svg{width:13px;height:13px}.footnote{font-size:10px;line-height:1.8;color:var(--faint);margin:20px 0}.notice{margin:0 0 24px;border:1px solid #655032;background:#241e15;color:var(--amber);border-radius:8px;padding:13px 18px;font-size:12px}footer{margin:34px 0 25px;padding-top:22px;border-top:1px solid var(--line-soft);display:flex;align-items:center;gap:30px;font-size:9px;color:var(--faint)}footer>span:first-child{display:flex;align-items:center;gap:7px}.tiny-dot{width:4px;height:4px}.footer-brand{margin-left:auto;font:8px var(--mono);letter-spacing:1.4px}.loading{color:var(--muted);display:flex;align-items:center;justify-content:center;animation:breathe 2s infinite}.refreshing svg{animation:spin 1.2s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@keyframes breathe{50%{opacity:.5}}.view{animation:appear .3s ease-out}@keyframes appear{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}[data-theme=light]{--bg:#f4f5f7;--surface:#fff;--raised:#edf0f5;--line:#dbe1e9;--line-soft:#e7ebf0;--text:#1b2838;--muted:#637185;--faint:#7b8797;--blue:#3276b8;--mint:#298a71;--amber:#8a6100;--track:#e4edf5;--codex:#7a58dc;--codex-2:#45309a;--claude:#c2603f;--claude-2:#7c3019;--shadow:0 8px 30px #16213505}[data-theme=light] .notice{background:#fff6e8}@media(min-width:1450px){main{max-width:1260px}.account-card{padding:29px 32px 25px}.quota-label{margin-top:31px}.quota-value{font-size:58px}}@media(max-width:1040px){.topbar{gap:35px;padding:0 28px}.header-right{gap:12px}.account-card{padding:23px}.account-email{font-size:9px}}@media(max-width:760px){.topbar{height:74px;padding:0 20px;gap:24px}.topbar nav{gap:18px}.brand{font-size:15px;gap:8px}.brand-icon{width:29px;height:29px}.header-right .status{display:none}.header-right{margin-left:auto}main{padding:0 20px}.account-grid{gap:14px}.account-card{padding:20px}.account-email{overflow-wrap:anywhere}.quota-value{font-size:44px}.quota-value .remaining-word{display:none}.account-bottom{align-items:flex-end}.activity-grid{grid-template-columns:1fr}.activity-card{min-height:190px}.usage-summary{grid-template-columns:1fr 1fr}.connection-flow{padding:18px 10px;gap:8px;font-size:9px}.flow-line{font-size:7px}.section-label>span{font-size:9px}.segmented button{padding:6px 8px;font-size:9px}.advanced{align-items:flex-start;flex-direction:column}footer{gap:12px;font-size:8px}.footer-brand{display:none}}@media(max-width:490px){.topbar{flex-wrap:wrap;height:auto;gap:0;padding-top:17px}.topbar nav{order:3;width:100%;height:48px;margin-top:8px}.header-right{margin-left:auto}.account-grid{grid-template-columns:1fr}.account-email{font-size:10px}.section-label.usage-toolbar{align-items:flex-start;flex-direction:column;gap:13px}.metric-card{padding:17px}.metric-card strong{font-size:23px}.connection-flow{flex-direction:column;gap:8px}.flow-line{width:100%;max-width:110px;margin:0 0 5px}td,th{padding-left:14px;padding-right:14px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+:root{--bg:#0b0e13;--surface:#10151d;--raised:#141b25;--line:#252d38;--line-soft:#1c242f;--text:#edf1f7;--muted:#8c98aa;--faint:#647287;--blue:#87c3ff;--mint:#83d8be;--amber:#e5bd80;--track:#202d3d;--codex:#9d82f1;--codex-2:#d0bcfb;--claude:#d97757;--claude-2:#f8bf8c;--shadow:0 8px 32px #00000014;--font:'Manrope',sans-serif;--mono:'IBM Plex Mono',monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}button,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}a{color:inherit;text-decoration:none}button{cursor:pointer}button:disabled{cursor:wait;opacity:.5}button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:5px}svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.symbols{position:absolute;width:0;height:0;overflow:hidden}[hidden]{display:none!important}.topbar{height:86px;padding:0 4.3%;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:56px}.brand{display:flex;align-items:center;gap:12px;letter-spacing:-.45px;font-size:18px;white-space:nowrap}.brand b{font-weight:700}.brand-icon{display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;color:var(--blue);background:var(--raised)}.brand-icon svg{width:26px;height:26px}.topbar nav{height:100%;display:flex;gap:30px}.topbar nav a{display:flex;align-items:center;color:var(--muted);font-size:13px;font-weight:600;border-bottom:2px solid transparent;padding-top:2px;transition:color .15s}.topbar nav a:hover{color:var(--text)}.topbar nav a.active{color:var(--text);border-bottom-color:var(--blue)}.header-right{margin-left:auto;display:flex;align-items:center;gap:22px}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;font-weight:600}.status i,.tiny-dot,.pulse-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--mint)}.status.connecting i{background:var(--amber)}.status.offline i{background:#ee987e}.icon-button{height:34px;width:34px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);transition:background .15s,color .15s}.icon-button:hover{background:var(--raised);color:var(--text)}.icon-button svg{width:16px;height:16px}main{max-width:1232px;padding:0 38px;margin:auto}.pool-name{display:flex;align-items:center;gap:14px;min-width:0}.provider-icon{width:40px;height:40px;border-radius:12px;background:var(--tile);color:var(--tile-ink);box-shadow:inset 0 0 0 1px var(--tile-line,transparent);display:flex;align-items:center;justify-content:center}.pool-name strong{display:block;font-size:15px;letter-spacing:-.3px}.pool-name>div>span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.pool-stat{display:flex;flex-direction:column;padding-left:27px;border-left:1px solid var(--line);gap:5px}.pool-stat>span{font-size:10px;color:var(--muted);white-space:nowrap}.pool-stat strong{font-family:var(--mono);font-size:18px;font-weight:400;white-space:nowrap}.section-label{display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;gap:20px}.section-label h2{font-size:13px;font-weight:600;margin:0;letter-spacing:-.1px}.section-label h2>span{color:var(--faint);font-size:10px;margin-left:8px;font-family:var(--mono)}.section-label>span{font-size:10px;color:var(--faint)}.account-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.account-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:25px 28px 23px;box-shadow:var(--shadow);position:relative;overflow:hidden}.account-card.loading{min-height:280px}.account-top{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.account-name{font-size:14px;font-weight:650;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}.account-email{font-size:10px;color:var(--muted);margin-top:5px}.small-badge{border:1px solid var(--line);color:var(--muted);padding:3px 9px;font-size:9px;letter-spacing:.25px;border-radius:5px;white-space:nowrap}.quota-label{margin-top:25px;color:var(--muted);font-size:10px;display:flex;gap:8px;align-items:center}.quota-value{font-size:52px;letter-spacing:-2px;font-weight:500;line-height:1.3;color:var(--accent);font-variant-numeric:tabular-nums}.quota-value .percent{font-size:25px;letter-spacing:-1px;margin-left:3px}.quota-value .remaining-word{font-size:10px;letter-spacing:0;color:var(--muted);margin-left:11px}.quota-track{height:5px;border-radius:3px;background:var(--track);margin:15px 0 9px;overflow:hidden}.quota-track>span{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .5s}.quota-used{font-size:9px;color:var(--muted);text-align:right;font-family:var(--mono)}.account-bottom{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line-soft);padding-top:16px;margin-top:17px;font-size:10px}.reset-block>span{color:var(--muted);font-size:9px;display:block;margin-bottom:3px}.reset-block strong{font-size:11px;font-weight:500}.account-state{color:var(--muted);display:flex;align-items:center;gap:6px}.account-state svg{width:13px;height:13px;color:var(--mint)}.quota-warning{color:var(--amber);font-size:10px;margin-top:10px}.secondary-quota{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin:10px 0}.activity-title{margin-top:33px}.text-link{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10px}.text-link:hover{color:var(--blue)}.text-link svg{height:12px;width:12px}.activity-card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:22px 25px;min-height:204px}.card-eyebrow{font:9px var(--mono);letter-spacing:1.2px;color:var(--muted)}.activity-value{font:33px var(--mono);letter-spacing:-1.2px;margin:11px 0 5px}.activity-card p{font-size:10px;color:var(--faint);margin:4px 0 0}.token-track{height:4px;background:var(--track);border-radius:3px;margin:23px 0 8px;overflow:hidden}.token-track span{background:var(--blue);height:100%;display:block;max-width:100%}.track-label{display:flex;justify-content:space-between;font-size:9px;color:var(--faint)}.track-label b{font-family:var(--mono);font-weight:400;color:var(--muted)}.table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto;background:var(--surface)}table{width:100%;border-collapse:collapse;text-align:left;font-size:11px}th{font-size:9px;color:var(--faint);font-weight:500;padding:13px 20px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:12px 20px;border-bottom:1px solid var(--line-soft);white-space:nowrap}tr:last-child td{border-bottom:0}.mono{font-family:var(--mono);font-size:10px;color:var(--muted)}.number{text-align:right;font-family:var(--mono);font-size:10px}.account-chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px}.account-chip i{width:5px;height:5px;border-radius:50%;display:inline-block}.outcome{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--muted)}.outcome svg{width:12px;height:12px;color:var(--mint)}.failed{color:#e69887}.empty-state{padding:34px;text-align:center;color:var(--muted);font-size:12px}.segmented{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}.segmented button{border:0;color:var(--muted);background:transparent;padding:6px 12px;border-radius:4px;font-size:10px}.segmented button.selected{color:var(--text);background:var(--raised)}.metric-card{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:23px}.metric-card span{font-size:10px;color:var(--muted)}.metric-card strong{font:28px var(--mono);display:block;margin-top:12px;letter-spacing:-1px}.system-card{padding:29px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:20px}.system-heading{display:flex;align-items:center;gap:14px}.system-heading h2,.advanced h2{font-size:15px;margin:0;letter-spacing:-.3px}.system-heading p,.advanced p{color:var(--muted);font-size:11px;margin:5px 0 0}.system-heading>.small-badge{margin-left:auto}.connection-flow{display:flex;align-items:center;gap:16px;margin:30px 0 25px;padding:25px;background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;justify-content:space-between;font-size:11px}.flow-line{flex:1;text-align:center;position:relative;color:var(--faint);font:8px var(--mono);border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:7px;max-width:175px}.flow-line:after{content:'›';font-size:15px;position:absolute;right:-3px;bottom:-10px}dl{margin:0;display:grid;grid-template-columns:1fr 1fr}dt,dd{padding:13px 0;border-bottom:1px solid var(--line-soft);font-size:11px;margin:0}dt{color:var(--muted)}dd{text-align:right;font-family:var(--mono);font-size:10px}.advanced{display:flex;justify-content:space-between;align-items:center;gap:20px}.outline-button{display:inline-flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:10px 15px;color:var(--muted);font-size:11px}.outline-button:hover{color:var(--text);background:var(--raised)}.outline-button svg{width:13px;height:13px}.footnote{font-size:10px;line-height:1.8;color:var(--faint);margin:20px 0}.notice{margin:0 0 24px;border:1px solid #655032;background:#241e15;color:var(--amber);border-radius:8px;padding:13px 18px;font-size:12px}footer{margin:34px 0 25px;padding-top:22px;border-top:1px solid var(--line-soft);display:flex;align-items:center;gap:30px;font-size:9px;color:var(--faint)}footer>span:first-child{display:flex;align-items:center;gap:7px}.tiny-dot{width:4px;height:4px}.footer-brand{margin-left:auto;font:8px var(--mono);letter-spacing:1.4px}.loading{color:var(--muted);display:flex;align-items:center;justify-content:center;animation:breathe 2s infinite}.refreshing svg{animation:spin 1.2s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@keyframes breathe{50%{opacity:.5}}.view{animation:appear .3s ease-out}@keyframes appear{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}[data-theme=light]{--bg:#f4f5f7;--surface:#fff;--raised:#edf0f5;--line:#dbe1e9;--line-soft:#e7ebf0;--text:#1b2838;--muted:#637185;--faint:#7b8797;--blue:#3276b8;--mint:#298a71;--amber:#8a6100;--track:#e4edf5;--codex:#7a58dc;--codex-2:#45309a;--claude:#c2603f;--claude-2:#7c3019;--shadow:0 8px 30px #16213505}[data-theme=light] .notice{background:#fff6e8}@media(min-width:1450px){main{max-width:1260px}.account-card{padding:29px 32px 25px}.quota-label{margin-top:31px}.quota-value{font-size:58px}}@media(max-width:1040px){.topbar{gap:35px;padding:0 28px}.header-right{gap:12px}.account-card{padding:23px}.account-email{font-size:9px}}@media(max-width:760px){.topbar{height:74px;padding:0 20px;gap:24px}.topbar nav{gap:18px}.brand{font-size:15px;gap:8px}.brand-icon{width:29px;height:29px}.header-right .status{display:none}.header-right{margin-left:auto}main{padding:0 20px}.account-grid{gap:14px}.account-card{padding:20px}.account-email{overflow-wrap:anywhere}.quota-value{font-size:44px}.quota-value .remaining-word{display:none}.activity-card{min-height:190px}.connection-flow{padding:18px 10px;gap:8px;font-size:9px}.flow-line{font-size:7px}.section-label>span{font-size:9px}.segmented button{padding:6px 8px;font-size:9px}.advanced{align-items:flex-start;flex-direction:column}footer{gap:12px;font-size:8px}.footer-brand{display:none}}@media(max-width:490px){.topbar{flex-wrap:wrap;height:auto;gap:0;padding-top:17px}.topbar nav{order:3;width:100%;height:48px;margin-top:8px}.header-right{margin-left:auto}.account-grid{grid-template-columns:1fr}.account-email{font-size:10px}.metric-card{padding:17px}.metric-card strong{font-size:23px}.connection-flow{flex-direction:column;gap:8px}.flow-line{width:100%;max-width:110px;margin:0 0 5px}td,th{padding-left:14px;padding-right:14px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 /* Account email addresses remain readable at every dashboard width. */
 .health-panel{display:flex;flex-wrap:wrap;gap:9px 22px;margin:0 0 24px;color:var(--muted);font-size:10px}
@@ -12,17 +12,16 @@
 .health-stale i,.health-unknown i,.health-limited i{background:var(--amber)}
 .health-down i,.health-failed i,.health-sign_in_required i,.health-unavailable i{background:#ee987e}
 .health-down b,.health-failed b,.health-sign_in_required b{color:#ee987e}
-.account-top{gap:12px}.account-identity{min-width:0}.account-name>span{overflow-wrap:anywhere}.account-chip i,.legend i{flex-shrink:0}.account-top>.small-badge{flex-shrink:0}.chart-header{gap:16px;flex-wrap:wrap}.legend{flex-direction:column;gap:4px}.legend span{overflow-wrap:anywhere}.account-chip{font-family:var(--font)}
+.account-top{gap:12px}.account-identity{min-width:0}.account-name>span{overflow-wrap:anywhere}.account-chip i{flex-shrink:0}.account-top>.small-badge{flex-shrink:0}.account-chip{font-family:var(--font)}
 
 /* Billing is a distinct, prominent calendar date; quota remains below it. */
-.account-bottom{flex-wrap:wrap;gap:12px 20px}
 .account-dates{display:flex;flex-wrap:wrap;gap:12px 24px}
-.account-state{margin-left:auto}
 .billing-renewal strong{font-variant-numeric:tabular-nums;white-space:nowrap}
 .billing-renewal.renewal-soon strong{color:var(--amber)}
 
-.account-resets{display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line-soft)}
-.account-resets>span{color:var(--faint);font-size:10px}
+/* Resets sit under the allowance bars, above the facts line, where other cards have their limit rows. */
+.account-resets{display:flex;align-items:center;gap:12px;margin-top:16px}
+.account-resets>span{color:var(--muted);font-size:10px}
 .resets-button{display:inline-flex;align-items:center;gap:9px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;font-size:11px;padding:6px 10px}
 .resets-button:hover{color:var(--text);background:var(--raised)}
 .resets-button span{color:var(--text);font-variant-numeric:tabular-nums}
@@ -61,17 +60,12 @@
 .reset-empty{color:var(--muted);font-size:13px;padding:18px 0}
 @media(max-width:490px){.reset-dialog{padding:22px}.reset-dialog h2{font-size:20px}.reset-row-action{flex-direction:column;gap:4px}.reset-wait{max-width:90px}}
 
-.pool-availability{font-size:11px;color:var(--amber);margin:-15px 0 22px}.account-state{flex-wrap:wrap;justify-content:flex-end;text-align:right;max-width:160px}
+.pool-availability{font-size:11px;color:var(--amber);margin:-15px 0 22px}
 
-.routing-control{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-12px 0 28px;font-size:11px;color:var(--muted)}.routing-control select{font:inherit;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--surface);color:var(--text)}.routing-control select:focus-visible{outline:2px solid var(--blue);outline-offset:3px}.routing-control small{flex-basis:100%;font-size:9px;color:var(--faint)}.routing-feedback{font-size:10px;color:var(--muted)}
-
-/* Keep the per-request reasoning column readable in compact dashboard windows. */
-#recent-table td,#recent-table th{padding-left:12px;padding-right:12px}
+.routing-control{font-size:11px;color:var(--muted)}.routing-control small{font-size:9px;color:var(--faint)}.routing-feedback{font-size:10px;color:var(--muted)}
 
 /* Routing hold states and reset-timing warnings. */
 :root{--danger:#ee987e;--danger-line:#5e3a33;--danger-bg:#231816}[data-theme=light]{--danger:#b8452c;--danger-line:#e8b4a6;--danger-bg:#fdf1ee}
-.routing-state{flex-basis:100%;display:flex;align-items:flex-start;gap:7px;font-size:10px;line-height:1.5;color:var(--amber);overflow-wrap:anywhere}.routing-state:before{content:'';flex-shrink:0;width:5px;height:5px;margin-top:5px;border-radius:50%;background:var(--amber)}
-#routing-resume,#claude-routing-resume{padding:6px 10px}
 .reset-warning{font-size:12px;line-height:1.6;color:var(--amber);margin:14px 0 0}.reset-step-warning{color:var(--amber)}
 
 /* Claude card: same structure as the Codex cards, with Anthropic's warm palette scoped to the card.
@@ -82,28 +76,16 @@
 .claude-card .quota-value .percent{letter-spacing:-.5px}
 .claude-card .small-badge{font-family:var(--mono);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .claude-card .resets-button:hover{border-color:var(--accent);color:var(--accent)}
-.claude-card .account-state svg{color:var(--mint)}
-.claude-card .watch-state-warn,.generic-card .watch-state-warn{color:var(--amber)}.claude-card .watch-state-warn svg,.generic-card .watch-state-warn svg{color:var(--amber)}
-.claude-card .watch-state-down{color:var(--danger)}.claude-card .watch-state-down svg{color:var(--danger)}
+.account-state.watch-state-warn,.account-state.watch-state-warn svg{color:var(--amber)}
+.account-state.watch-state-down,.account-state.watch-state-down svg{color:var(--danger)}
 
 /* Claude reset grants: disabled grants stay listed but recede; absent kinds read as "None right now". */
 .reset-row-off>div:first-child,.reset-row-none>div{opacity:.55}
 .reset-row-none p{color:var(--faint)}
 
-.account-fast{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
-.account-fast>div{min-width:0}
-.account-fast label{display:block;font-size:11px;color:var(--muted);cursor:pointer}
 .fast-usage{display:block;font-size:10px;color:var(--faint);margin-top:2px;overflow-wrap:anywhere}
 .fast-usage.warn{color:var(--amber)}
 .fast-usage.error{color:var(--danger)}
-.account-fast input{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
-.account-fast input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
-.account-fast input:checked{background:var(--accent)}
-.account-fast input:checked:before{left:17px;background:var(--bg)}
-.account-fast input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
-.account-fast input:disabled{opacity:.45;cursor:not-allowed}
-.account-fast input[aria-busy=true]{cursor:wait}
-.account-fast:has(input:disabled) label{cursor:default}
 .mono.tier-fast{color:var(--text)}
 .mono.tier-warn{color:var(--amber)}
 [data-theme=light] .fast-usage.warn,[data-theme=light] .mono.tier-warn{color:#8a6100}
@@ -116,12 +98,18 @@
 .pace-bar:not(.pace-behind){background:var(--pace-under);box-shadow:2px 0 0 var(--surface)}
 .pace-bar.pace-behind{z-index:0}
 .quota-used{display:flex;align-items:center;gap:12px}
-.quota-used>span:last-child{margin-left:auto;white-space:nowrap}
-.pace{display:inline-flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
-.pace:before{content:'';width:9px;height:5px;border-radius:3px;background:var(--pace);flex-shrink:0}
-.quota-track:has(>.pace-bar:not(.pace-behind))+.quota-used .pace:before{background:var(--pace-under)}
-.pace.pace-warn{color:var(--amber)}
-[data-theme=light] .pace.pace-warn{color:#8a6100}
+.quota-used>:is(.used-figure,.foot-reset){margin-left:auto;white-space:nowrap}
+.quota-used>.foot-reset{display:none}
+/* Allowance forecast (forecast in app.js): one short phrase where pace text used to be, on the hero's foot line and the
+   limit rows. Quiet states are muted; only a run-out takes colour, red within 30 minutes. Narrow cards' limit rows take
+   the short forms; narrower still, the quiet states give way and every run-out stays. */
+.forecast{display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.forecast .fc-short{display:none}
+.forecast.fc-out{color:var(--amber)}
+.forecast.fc-soon{color:var(--danger)}
+.limit-row .secondary-quota>.forecast{margin-left:auto;font:9px var(--mono)}
+@container card-body (max-width:300px){.limit-row .forecast .fc-long{display:none}.limit-row .forecast .fc-short{display:inline}}
+@container card-body (max-width:224px){.limit-row .forecast.fc-quiet{display:none}}
 
 /* Provider regions reuse the existing pool header. */
 .pool-name h2{display:block;font-size:15px;font-weight:700;letter-spacing:-.3px;margin:0}
@@ -170,33 +158,136 @@
 .signin-panel.finishing .signin-status i{background:var(--mint)}
 .signin-panel [aria-disabled=true]{pointer-events:none;opacity:.4}
 
-/* Optional: per-account routing switch, same row style as fast mode. */
-.account-route{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+/* Per-account routing switch at the card's foot. Codex's speed slider leads the same row, so the routing switch stays
+   at the row's end on every card. */
+.account-route{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+/* The routing label and switch never separate; beside the speed slider they keep to the row's end. */
+.route-toggle{flex:1;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .account-route label{font-size:11px;color:var(--muted);cursor:pointer}
-.account-route input{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
-.account-route input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
-.account-route input:checked{background:var(--accent)}
-.account-route input:checked:before{left:17px;background:var(--bg)}
-.account-route input:disabled{opacity:.45;cursor:not-allowed}
-.account-route input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.account-route input[role=switch]{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.account-route input[role=switch]:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
+.account-route input[role=switch]:checked{background:var(--accent)}
+.account-route input[role=switch]:checked:before{left:17px;background:var(--bg)}
+.account-route input[role=switch]:disabled{opacity:.45;cursor:not-allowed}
+.account-route input[role=switch]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+/* Codex speed (speedRow in app.js): a stepped slider, Normal · Fast · Ultrafast, drawn like the routing switch: grey,
+   with the accent filling up to the thumb and a small dot at every stop, so it always reads as three positions. Two
+   stops (no ultrafast models) is the switch's exact size, with no dots. The label before it names the current speed in
+   a slot as wide as the longest name, so the track never moves under the pointer. */
+.account-speed{display:flex;align-items:center;gap:10px;min-width:0;margin-right:auto;flex-shrink:0}
+.account-speed .speed-value{display:grid;white-space:nowrap}
+.account-speed .speed-value>span{grid-area:1/1;visibility:hidden}
+.account-speed .speed-value>span.on{visibility:visible}
+.account-speed:has(input:disabled) .speed-value{cursor:default}
+/* The fill is background layers driven by the stop (data-at): a dot at each stop (--d0 to --d2) over a round end and
+   the bar to it. Dots ahead of the thumb are grey on the track; behind it they take the thumb's colour on the fill; the
+   thumb covers its own. */
+.account-speed input{--w:48px;--step:15px;--at:0;--fill:calc(min(var(--at),1)*(18px + var(--at)*var(--step)));
+  --dot:color-mix(in srgb,var(--muted) 70%,transparent);--dot-on:color-mix(in srgb,var(--bg) 60%,transparent);
+  --d0:var(--dot);--d1:var(--dot);--d2:var(--dot);
+  appearance:none;-webkit-appearance:none;display:block;margin:0;padding:0;width:var(--w);height:18px;border:0;border-radius:9px;
+  flex-shrink:0;cursor:pointer;background-color:var(--line);
+  background-image:
+    radial-gradient(circle 2px at 9px 50%,var(--d0) 1.5px,transparent 2px),
+    radial-gradient(circle 2px at calc(9px + var(--step)) 50%,var(--d1) 1.5px,transparent 2px),
+    radial-gradient(circle 2px at calc(9px + 2*var(--step)) 50%,var(--d2) 1.5px,transparent 2px),
+    radial-gradient(circle 9px at calc(var(--fill) - 9px) 50%,var(--accent) 8.5px,transparent 9px),
+    linear-gradient(90deg,var(--accent) calc(var(--fill) - 9px),transparent 0)}
+.account-speed input[data-at="1"]{--at:1;--d0:var(--dot-on)}
+.account-speed input[data-at="2"]{--at:2;--d0:var(--dot-on);--d1:var(--dot-on)}
+.account-speed.two input{--w:32px;--step:14px;background-image:
+    radial-gradient(circle 9px at calc(var(--fill) - 9px) 50%,var(--accent) 8.5px,transparent 9px),
+    linear-gradient(90deg,var(--accent) calc(var(--fill) - 9px),transparent 0)}
+/* Ultrafast can't be picked now (ultrafast_unavailable_reason): the last stop is a hollow ring the thumb can't reach. */
+.account-speed input.ultra-off{background-image:
+    radial-gradient(circle 2px at 9px 50%,var(--d0) 1.5px,transparent 2px),
+    radial-gradient(circle 2px at calc(9px + var(--step)) 50%,var(--d1) 1.5px,transparent 2px),
+    radial-gradient(circle 3.5px at calc(9px + 2*var(--step)) 50%,transparent 2px,var(--faint) 2.2px 3px,transparent 3.4px),
+    radial-gradient(circle 9px at calc(var(--fill) - 9px) 50%,var(--accent) 8.5px,transparent 9px),
+    linear-gradient(90deg,var(--accent) calc(var(--fill) - 9px),transparent 0)}
+/* The thumb is an 18px box with a 3px clear border, so it travels like the switch's knob. */
+.account-speed input::-webkit-slider-runnable-track{height:18px;background:none;border:0}
+.account-speed input::-moz-range-track{height:18px;background:none;border:0}
+.account-speed input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;box-sizing:border-box;width:18px;height:18px;
+  border:3px solid transparent;border-radius:50%;background:var(--bg) padding-box;transition:background-color .15s}
+.account-speed input::-moz-range-thumb{box-sizing:border-box;width:18px;height:18px;border:3px solid transparent;border-radius:50%;
+  background:var(--bg) padding-box}
+.account-speed input[data-at="0"]::-webkit-slider-thumb{background-color:var(--muted)}
+.account-speed input[data-at="0"]::-moz-range-thumb{background-color:var(--muted)}
+.account-speed input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.account-speed input:disabled{opacity:.45;cursor:not-allowed}
+/* Saving: the slider breathes, as reason picks do, and stays usable; the newest choice wins. */
+.account-speed input[aria-busy=true]{animation:breathe 1.6s infinite;cursor:progress}
+@media(prefers-reduced-motion:reduce){.account-speed input[aria-busy=true]{opacity:.6}}
+/* Touch screens: wider stops, and a 38px-tall tap area that doesn't change the row's height. It sits above the line
+   under the row, which it overlaps; that line's Try again stays on top. */
+@media(pointer:coarse){
+  .account-speed input{--w:60px;--step:21px;width:calc(var(--w) + 12px);height:38px;margin:-10px -6px;border:solid transparent;
+    border-width:10px 6px;border-radius:15px/19px;background-clip:padding-box;position:relative;z-index:1}
+  /* The ring keeps to the visible track, clear of the line under the row. */
+  .account-speed input:focus-visible{outline-offset:-6px}
+  .account-speed.two input{--w:40px;--step:22px}
+}
+/* Choosing Ultrafast asks first (speedAsk in app.js): a .menu-pop under the slider's row, or above it near the window's
+   foot, with the route confirmation's buttons (not its .confirm class, which boards.css takes for its dialog);
+   .menu-pop's menu-item look is undone for them. */
+.speed-confirm{width:min(288px,calc(100vw - 16px));min-width:0;padding:14px 14px 12px}
+.speed-confirm h2{margin:0 0 6px;font-size:13px;font-weight:600;line-height:1.4;letter-spacing:-.1px}
+.speed-confirm p{margin:0;font-size:11px;line-height:1.6;color:var(--muted)}
+.speed-model{white-space:nowrap}
+.speed-confirm-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:14px}
+.menu-pop.speed-confirm button{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:32px;padding:0 12px;border-radius:8px;font-size:11px}
+.menu-pop.speed-confirm .reset-cancel:hover{color:var(--text)}
+.menu-pop.speed-confirm .reset-primary{min-width:0;border:1px solid var(--text);background:var(--text);color:var(--bg);font-weight:600}
+/* Outranks .menu-pop button:hover, which would set --raised under the --bg label. */
+.menu-pop.speed-confirm .reset-primary:hover:not([aria-disabled=true]){background:var(--text);color:var(--bg);opacity:.88}
+.menu-pop.speed-confirm button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:760px){.menu-pop.speed-confirm button{min-height:40px;padding:0 14px;font-size:12px}.speed-confirm p{font-size:12px}}
+/* A failed save's line under the row resends it. */
+.speed-retry{padding:0;border:0;background:none;font:inherit;color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);text-underline-offset:2px;cursor:pointer}
+.speed-retry:hover{text-decoration-color:currentColor}
+.speed-retry:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:2px}
+@media(pointer:coarse){.speed-retry{padding:10px 0;margin:-10px 0;position:relative;z-index:2}}
+/* The speed stays on the routing row at every width, so the Codex card is no taller than its neighbours. The speed
+   never truncates; a narrower card tightens the gaps and shortens "Use for routing" to "Routing" (the switch keeps its
+   full name), and the narrowest (248px cards) draws the touch slider at its pointer size so "Routing" still fits. */
+.account-route:has(>.account-speed){flex-wrap:nowrap}
+.account-route:has(>.account-speed)>.route-toggle{flex:0 1 auto;margin-left:auto;min-width:0}
+.account-route:has(>.account-speed) .route-toggle label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-route .route-toggle label::first-letter{text-transform:uppercase}
+@container card-body (max-width:278px){.account-route:has(>.account-speed){column-gap:12px}.account-route:has(>.account-speed)>.route-toggle{gap:10px}}
+@container card-body (max-width:240px){
+  .account-route:has(>.account-speed) .route-use{display:none}
+  .account-route:has(>.account-speed){column-gap:10px}
+  .account-route:has(>.account-speed)>.route-toggle,.account-speed{gap:8px}
+}
+@media(pointer:coarse){@container card-body (max-width:224px){.account-speed:not(.two) input{--w:48px;--step:15px}}}
 .route-confirm{display:flex;align-items:center;justify-content:space-between;gap:8px 10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--amber)}
 .route-confirm>div{display:flex;align-items:center;gap:4px;margin-left:auto}
 .route-confirm .reset-primary{min-width:0;padding:6px 11px;font-size:11px}
 [data-theme=light] .route-confirm{color:#8a6100}
 
-/* Routing change choice: a small modal with the two ways to apply it. */
-.routing-dialog{width:min(380px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 28px 110px #0008}
-.routing-dialog::backdrop{background:#03060b99;backdrop-filter:blur(5px)}
-.routing-dialog h2{font-size:17px;font-weight:600;letter-spacing:-.3px;line-height:1.4;margin:0 0 20px;overflow-wrap:anywhere}
-.routing-dialog-error{font-size:12px;color:var(--danger);margin:-8px 0 16px}
-.routing-dialog-error:empty{display:none}
-.routing-dialog-choices{display:grid;gap:8px}
-.routing-dialog .reset-primary{min-height:42px;font-size:13px}
-.routing-dialog .reset-primary[aria-busy=true]:disabled{opacity:1;cursor:wait;animation:breathe 1.6s infinite}
-.routing-dialog-note{font-size:11px;color:var(--muted);text-align:center;margin:8px 0 0}
-.routing-dialog .reset-cancel{display:block;min-height:38px;margin:10px auto -6px;padding:0 14px;font-size:12px}
-.routing-dialog .reset-cancel:hover:not(:disabled){color:var(--text)}
-.routing-control select.pending{border-color:color-mix(in srgb,var(--amber) 60%,var(--line))}
+/* Routing: the header's button shows the policy and opens a menu like the card menu's, the current policy checked.
+   Picking one turns the menu in place into the ways to apply it, under a short title. */
+.routing-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;height:24px;min-width:0;max-width:100%;padding:0 5px 0 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;white-space:nowrap}
+.routing-trigger:hover:not(:disabled),.routing-trigger[aria-expanded=true]{border-color:var(--muted)}
+.routing-trigger:focus-visible{outline-offset:3px}
+.routing-trigger:disabled{cursor:default}
+.routing-value{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.routing-trigger svg{width:14px;height:14px;flex-shrink:0;color:var(--muted);transition:transform .15s}
+.routing-trigger[aria-expanded=true] svg{transform:rotate(180deg)}
+.routing-trigger.pending{border-color:color-mix(in srgb,var(--amber) 60%,var(--line))}
+.routing-menu{max-width:min(340px,calc(100vw - 16px))}
+.routing-menu [role=menuitemradio]{flex-direction:row;align-items:center;justify-content:space-between;gap:14px}
+.routing-menu [role=menuitemradio]>span{min-width:0;overflow-wrap:anywhere}
+.routing-menu [role=menuitemradio] svg{width:14px;height:14px;flex-shrink:0;color:var(--blue);stroke-width:2}
+.routing-menu-title{margin:0;padding:7px 11px 5px;font-size:11px;font-weight:600;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
+.routing-menu-error{margin:0 11px 5px;font-size:11px;line-height:1.45;color:var(--danger)}
+.routing-menu-error:empty{display:none}
+.routing-menu button[aria-busy=true][aria-disabled=true]{color:var(--text);cursor:wait;animation:breathe 1.6s infinite}
+.routing-menu .routing-back{flex-direction:row;align-items:center;gap:5px;color:var(--muted)}
+.routing-menu .routing-back svg{width:13px;height:13px;margin-left:-3px;transform:rotate(90deg)}
+.routing-menu .routing-back:hover:not([aria-disabled=true]){color:var(--text)}
 
 @media(max-width:760px){.signin-open,.account-access .resets-button,.signin-code .resets-button{min-height:38px}}
 @container (max-width:250px){.signin-code code{font-size:21px;letter-spacing:1px}}
@@ -208,26 +299,35 @@
    gets the same width and a line is always full. A section that does not fit wraps onto its own line; cards wrap the same way. */
 @media(min-width:1180px){main{max-width:1680px}}
 :root{--card-min:248px;--card-gap:20px}
-.gateways{display:flex;flex-wrap:wrap;align-items:stretch;gap:36px 32px;margin-bottom:40px}
+.gateways{display:flex;flex-wrap:wrap;align-items:stretch;gap:36px var(--card-gap);margin-bottom:40px}
 .gateway{--n:1;flex:var(--n) 1 min(100%,calc(var(--n)*var(--card-min) + (var(--n) - 1)*var(--card-gap)));display:flex;flex-direction:column;min-width:0}
 /* The header has one shape at every width, identity then stats, so sections sharing a line keep their cards level. */
 .gateway-head{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px 20px;margin-bottom:16px}
 .gateway-head .pool-name{flex:1 1 100%}
-.gateway-head .pool-name>div{min-width:0}
+.gateway-head .pool-name>div{flex:1;min-width:0}
 .gateway-head .provider-icon{width:36px;height:36px;border-radius:10px;flex-shrink:0}
 .gateway-head .provider-icon svg{width:20px;height:20px}
-.claude-gateway .provider-icon{background:#3a2219;color:var(--claude)}
-[data-theme=light] .provider-icon{background:#e8e3ff}[data-theme=light] .claude-gateway .provider-icon{background:#f6e3da}
 .gateway-title{display:flex;align-items:baseline;gap:12px}
 .gateway-title h2{font-size:15px;font-weight:700;letter-spacing:-.3px;margin:0}
-/* Items that do not fit wrap onto a clipped second line; problems sort ahead of healthy items so they stay visible. */
-.gateway-status{display:flex;flex-wrap:wrap;column-gap:14px;height:15px;overflow:hidden;margin-top:3px;font-size:10px;line-height:15px;color:var(--muted)}
-.status-item{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.status-item.ok{order:1}
+/* One line at every width, problems ahead of healthy items. Too narrow, items take shorter forms (fitStatus in app.js),
+   healthy ones first; past the shortest, healthy items truncate down to their dot while problems keep their text. Only a
+   line too narrow for its problems alone (cramped) truncates them too. */
+.gateway-status{display:flex;flex-wrap:nowrap;column-gap:14px;min-width:0;margin-top:3px;font-size:10px;line-height:15px;color:var(--muted)}
+.status-item{display:block;flex:0 0 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status-item:not(.warn,.down),.gateway-status.cramped .status-item{flex-shrink:1}
+.status-item.ok{order:1;min-width:11px}
 .status-item:before{content:'';display:inline-block;vertical-align:middle;margin:-2px 6px 0 0;width:5px;height:5px;border-radius:50%;background:var(--faint)}
 .status-item.ok:before{background:var(--mint)}.status-item.warn{color:var(--amber)}.status-item.warn:before{background:var(--amber)}
 .status-item.down{color:var(--danger)}.status-item.down:before{background:var(--danger)}
 [data-theme=light] .status-item.warn{color:#8a6100}
+/* The provider's official status (officialStatus) links to its status page. Healthy or unknown, it follows the account
+   items; a problem sorts ahead with theirs. Unknown is a quiet link without a dot. The focus ring stays close to the text. */
+.status-slot{display:contents}
+.status-item.official{order:2}.status-item.official.warn,.status-item.official.down{order:0}
+.status-item.official.neutral{color:var(--faint)}.status-item.official.neutral:before{display:none}
+a.status-item svg{width:9px;height:9px;margin-left:3px;vertical-align:-1px;opacity:.75}
+a.status-item:hover>span:first-child{text-decoration:underline;text-underline-offset:2px}
+a.status-item:focus-visible{outline-width:1.5px;outline-offset:1px;border-radius:3px}
 .gateway-stats{display:flex;gap:14px;width:100%}
 .gateway-stats .pool-stat{padding-left:14px;gap:3px;min-width:0}
 .gateway-stats .pool-stat:first-child{border:0;padding-left:0}
@@ -242,7 +342,7 @@
 .account-body{display:flex;flex-direction:column;flex:1;container:card-body/inline-size}
 .account-hero,.account-side{display:contents}
 .account-side>.account-bottom{margin-top:auto}
-.account-side>:has(+.account-bottom){margin-bottom:17px}
+.account-side>:has(+.account-bottom),.account-hero:has(+.account-side>.account-bottom:first-child)>:last-child{margin-bottom:17px}
 /* Wide cards (a lone account on a line): the allowance or headline takes the left half and the other rows stack on the right,
    so the card stays short instead of stretching thin bars across the page. */
 @container card (min-width:620px){
@@ -253,59 +353,99 @@
   .account-side>.account-bottom{margin-top:0}
   .account-side>.account-bottom:first-child{border-top:0;padding-top:0}
   .account-side>.limit-rows+.account-bottom{margin-top:17px}
-  .account-side>.account-resets.reserved{display:none}
-  .generic-card .hour-chart{flex:none}
-  .generic-card .hour-bars{flex:none;height:58px}
 }
-/* The plan badge always shares the email's line; a long email truncates and keeps its full text in the tooltip. */
-.account-top{flex-wrap:nowrap;align-items:center;gap:12px;min-width:0}.account-identity{flex:1;min-width:0}.account-name{min-width:0}.account-name>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Facts: dates keep one line and the state keeps its own line under them, reserved even when empty, so paired cards match.
-   Wide cards fit the state beside the dates. Long states truncate; the full text is in the tooltip. */
-.account-bottom{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(15px,auto);align-items:center;gap:12px 20px}
-.account-dates{flex-wrap:nowrap}
+/* The plan badge always shares the email's line; a long email truncates and keeps its full text in the tooltip. The line
+   keeps the badge's height without one, so the rows under it match across cards. */
+.account-top{flex-wrap:nowrap;align-items:center;gap:12px;min-width:0;min-height:22px}.account-identity{flex:1;min-width:0}.account-name{min-width:0}.account-name>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Facts: the dates on one line (wrapping only when they must), then the status on a line of its own, full width, worded
+   the same on every card, with the usage refresh at its end. A long status truncates; its popover has the full text. */
+.account-bottom{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 16px}
+.account-dates{flex:1 1 100%;min-width:0;flex-wrap:wrap}
 .account-dates .reset-block{white-space:nowrap}
-.account-bottom>.account-state{justify-self:end;min-width:0;max-width:100%;margin:0;flex-wrap:nowrap}
-.account-state>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-bottom>.account-state{flex:1 1 100%;min-width:0;min-height:22px;margin:0;font-size:11px}
+.account-bottom>.account-state>.usage-refresh{margin-left:auto}
+.state-text{display:inline-flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;border-radius:5px;background:none;color:inherit;font:inherit;text-align:left;cursor:default}
+.account-bottom>.account-state>.state-text{align-self:stretch}
+.state-text>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.state-text:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .account-state svg{flex-shrink:0}
-@container card-body (min-width:300px){.account-bottom{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto}}
-.account-resets.reserved{visibility:hidden}
+.account-state:not(.watch-state-ok,.watch-state-warn,.watch-state-down) .state-text svg{color:var(--faint)}
+/* A card without a routing row keeps an invisible one when a card beside it has one (reserveCardRows in app.js). */
+.account-route.reserved{visibility:hidden}
+.account-route.reserved .route-toggle{height:18px}
 .limit-rows{display:flex;flex-direction:column;gap:11px;margin-top:16px}
 .limit-row .secondary-quota{margin:0 0 5px}
 .limit-row .secondary-quota>span:last-child{font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap}
 .limit-track{height:3px;border-radius:2px;background:var(--track);overflow:hidden}
 .limit-track>span{display:block;height:100%;border-radius:2px;background:var(--accent);opacity:.75;transition:width .5s}
 .limit-track.empty{background:repeating-linear-gradient(90deg,var(--track) 0 6px,transparent 6px 9px)}
+/* Limit rows: the label, the forecast, then the figure; five-hour and weekly ones show the pace bar as the hero does. */
+.limit-row .secondary-quota{gap:10px}
+.limit-row .secondary-quota>span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.limit-track.has-pace{position:relative;isolation:isolate}
+.limit-track.has-pace>span{position:relative;z-index:1;max-width:100%}
+.limit-track>.pace-bar{border-radius:2px}
 .account-card.is-off .limit-track>span{background:var(--faint)}
 @media(min-width:1180px){.gateway .account-card{padding:24px 24px 22px}.gateway .quota-label{margin-top:22px}}
 @media(min-width:1180px) and (max-width:1699px){.gateway .account-card{padding:22px 20px 20px}.gateway .account-name{font-size:13px}}
 
-/* Routing: one control under all four cards; split, each gateway gets its own row under its cards. */
-.gateway>.routing-control,.routing-linked{margin:20px 0 0;align-content:flex-start}
-/* A section without its own routing row reserves the height of one beside it on the same line (reserveRouting in app.js). */
-.routing-slot{margin-top:20px}
-.routing-linked{flex-basis:100%;margin-top:-16px}
-.routing-split{display:inline-flex;align-items:center;gap:10px;margin-left:auto;cursor:pointer;color:var(--muted);font-size:11px}
-.routing-split input{appearance:none;margin:0;width:32px;height:18px;background:var(--line);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
-.routing-split input:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
+/* Routing ends its gateway's stats line, shaped like a stat: the label line, then the routing button with its state and
+   actions. On a line too narrow for both it wraps under the stats, still above the cards. Linked, one control takes
+   Claude's place and carries the switch; split, the switch stays with Claude's. Sections on one line level their headers
+   (levelHeads); the stats keep to the header's foot, so they stay level beside a taller header. */
+.gateway-head{justify-content:space-between;align-content:space-between}
+.gateway-stats{width:auto}
+.routing-control{display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%}
+.routing-top{display:flex;flex-wrap:wrap;align-items:center;gap:3px 8px;min-height:15px;font-size:10px;line-height:15px;white-space:nowrap}
+.routing-pick{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.routing-pick .resets-button{height:24px;padding:0 10px;font-size:10px;flex-shrink:0;color:var(--text)}
+/* The state is one amber word; its popover (showStateTip) has the full text. */
+.routing-state{display:inline-flex;align-items:center;flex-shrink:0;height:24px;font-size:10px;color:var(--amber)}
+.routing-state .state-text{gap:5px;cursor:pointer}
+.routing-state svg{width:13px;height:13px}
+.state-pop>*+strong{margin-top:8px}
+.routing-split{display:inline-flex;align-items:center;gap:8px;margin-left:auto;cursor:pointer;color:var(--muted);font-size:10px}
+.routing-split input{appearance:none;margin:0;width:28px;height:16px;background:var(--line);border-radius:10px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.routing-split input:before{content:'';position:absolute;width:10px;height:10px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
 .routing-split input:checked{background:var(--blue)}
-.routing-split input:checked:before{left:17px;background:var(--bg)}
+.routing-split input:checked:before{left:15px;background:var(--bg)}
 .routing-split input:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
 .routing-split input:disabled{opacity:.45;cursor:not-allowed}
 .routing-split:has(input:disabled){cursor:default}
-.routing-states{flex-basis:100%;display:flex;flex-direction:column;gap:3px}
-.routing-states .routing-state b{font-weight:600;margin-right:6px}
 
-/* Request flow: two shades per gateway, one per account. */
-.bar-slot>span+span{box-shadow:0 -1px 0 var(--surface)}
-.legend{flex-direction:row;flex-wrap:wrap;gap:6px 22px}
-.legend-group{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
-.legend-group b{font-weight:600;color:var(--faint);font-size:9px}
+/* Request flow: each account takes one of its gateway's four shades (seriesColor in app.js): the accent, the second
+   shade, then one at the other end of the theme's lightness and a shifted sibling, all clear of each other and of the card.
+   Newer themes derive the last two from their accent. */
+:root{--codex-3:#5d5bc5;--codex-4:#b761c5;--claude-3:#ae453d;--claude-4:#d2a242;--xai-3:#6b6d71;--xai-4:#c2c4c8;--blue-2:#5f9bd6;--blue-3:#3d6ea4;--blue-4:#d1e7ff;--series-far:#000}
+[data-theme=light]{--codex-3:#af92eb;--claude-3:#e48d7e;--claude-4:#bc912b;--xai-3:#a5a7aa;--xai-4:#424447;--blue-2:#1b4f80;--blue-3:#7fafe2;--blue-4:#707ed4;--series-far:#fff}
+:root{--gemini-3:color-mix(in oklab,var(--gemini) 72%,var(--series-far));--meta-3:color-mix(in oklab,var(--meta) 72%,var(--series-far));--antigravity-3:color-mix(in oklab,var(--antigravity) 72%,var(--series-far));
+  --kimi-3:color-mix(in oklab,var(--kimi) 72%,var(--series-far));--devin-3:color-mix(in oklab,var(--devin) 72%,var(--series-far));--compat-3:color-mix(in oklab,var(--compat) 72%,var(--series-far));
+  --gemini-4:color-mix(in srgb,var(--gemini) 60%,var(--faint));--meta-4:color-mix(in srgb,var(--meta) 60%,var(--faint));--antigravity-4:color-mix(in srgb,var(--antigravity) 60%,var(--faint));
+  --kimi-4:color-mix(in srgb,var(--kimi) 60%,var(--faint));--devin-4:color-mix(in srgb,var(--devin) 60%,var(--faint));--compat-4:color-mix(in srgb,var(--compat) 60%,var(--faint))}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@media(max-width:490px){}
 
 /* System health that is not specific to one gateway lives in the footer. */
 footer .health-panel{margin:0;font-size:9px}
 
-@media(max-width:760px){.gateway-head{row-gap:12px}.gateway-status{height:auto;overflow:visible}.status-item{white-space:normal}.gateway-stats{gap:0}.gateway-stats .pool-stat{flex:1}}
-@media(max-width:490px){:root{--card-gap:14px}.gateway-stats .pool-stat{padding-left:12px}.gateway-stats .pool-stat>span{white-space:normal}.routing-split{margin-left:0}.routing-control>.routing-split{order:1}.routing-control>.routing-state,.routing-control>.routing-states,.routing-control>small{order:2}}
+@media(max-width:760px){.gateway-head{row-gap:12px}.gateway-stats{gap:0;width:100%}.gateway-stats .pool-stat{flex:1}.routing-trigger,.routing-pick .resets-button,.routing-state{height:36px}}
+@media(max-width:490px){:root{--card-gap:14px}.gateway-stats .pool-stat{padding-left:12px}.gateway-stats .pool-stat>span{white-space:normal}.routing-control{flex-basis:100%}.routing-trigger{flex:1 1 200px}.routing-feedback{white-space:normal}}
 
 /* Gateway colours: Codex violet, Claude terracotta. Cards and table rows share each gateway's palette.
    The page keeps its navy and blue; status colours keep their meaning. */
@@ -315,12 +455,19 @@ main{padding-top:22px}
 .account-card.codex-card,tbody tr.codex-row{--accent:var(--codex);--accent-2:var(--codex-2);--surface:#191823;--raised:#222130;--line:#353246;--line-soft:#262433;--track:#302d43}
 [data-theme=light] .account-card.codex-card,[data-theme=light] tbody tr.codex-row{--surface:#fbfaff;--raised:#f1eefa;--line:#ddd9ef;--line-soft:#e8e6f4;--track:#e4dff5}
 .codex-card .small-badge{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+/* The plan badge links to the provider's billing page; a subscription problem takes the plan's place, amber when payment
+   is due and red when the subscription has ended. */
+.plan-badge{display:inline-flex;align-items:center;gap:4px}
+.plan-badge svg{width:10px;height:10px;flex-shrink:0;opacity:.75}
+.plan-badge:hover{border-color:currentColor}
+.plan-badge:focus-visible{outline-offset:2px}
+.account-card .plan-badge.warn{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 45%,transparent);background:color-mix(in srgb,var(--amber) 10%,transparent)}
+.account-card .plan-badge.down{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:color-mix(in srgb,var(--danger) 10%,transparent)}
 .codex-card .resets-button:hover{border-color:var(--accent);color:var(--accent)}
-.codex-gateway>.routing-control>label:first-child{color:var(--codex)}.claude-gateway>.routing-control>label:first-child{color:var(--claude)}
-.legend-group.codex b{color:var(--codex)}.legend-group.claude b{color:var(--claude)}
-#token-detail{display:flex;flex-wrap:wrap;gap:4px 16px}
-#token-detail span{display:inline-flex;align-items:center;gap:6px}
-#token-detail i{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+
+
+
 tbody tr.codex-row,tbody tr.claude-row{background:var(--surface);color:var(--text)}
 .codex-row .gateway-name,.claude-row .gateway-name{color:var(--accent)}
 
@@ -337,34 +484,65 @@ tbody tr.codex-row,tbody tr.claude-row{background:var(--surface);color:var(--tex
 .metric-card .metric-detail span{font-size:inherit;color:inherit}
 .partial{cursor:help}
 
-/* Grok (xAI): monochrome, after xAI's black-and-white identity. Bone white on graphite in dark, ink on paper in light. */
+/* Provider themes. Every provider has an accent (with a second shade for charts) and a tinted tile behind its mark, in dark
+   and light; API-key channels take their provider's. Codex violet and Claude terracotta are set above. */
+.provider-icon{--tile:#30264d;--tile-ink:var(--codex)}
+[data-theme=light] .provider-icon{--tile:#e8e3ff}
+.claude-gateway .provider-icon,.provider-icon.claude-mark{--tile:#3a2219;--tile-ink:var(--claude)}
+[data-theme=light] :is(.claude-gateway .provider-icon,.provider-icon.claude-mark){--tile:#f6e3da}
+
+/* Grok (xAI): black, after xAI's black-and-white identity. A black tile ringed in graphite and near-black cards with
+   bone-white figures in dark; a solid black tile with ink figures and switches in light. */
 :root{--xai:#e6e8ec;--xai-2:#9a9ca3}[data-theme=light]{--xai:#17181b;--xai-2:#6f7178}
-.account-card.xai-card,tbody tr.xai-row{--accent:var(--xai);--surface:#161719;--raised:#212225;--line:#333438;--line-soft:#26272b;--track:#2d2e33;--muted:#9a9ca3;--faint:#6f7178}
+.account-card.xai-card,tbody tr.xai-row{--accent:var(--xai);--surface:#0f0f11;--raised:#1b1b1e;--line:#2e2e33;--line-soft:#212124;--track:#2b2b30;--muted:#9a9ca3;--faint:#6f7178}
 [data-theme=light] .account-card.xai-card,[data-theme=light] tbody tr.xai-row{--surface:#fcfcfc;--raised:#f0f0f1;--line:#dcdde0;--line-soft:#e9e9eb;--track:#e5e6e9;--muted:#5f6268;--faint:#83868c}
+.xai-gateway .provider-icon,.provider-icon.xai-mark{--tile:#000;--tile-ink:#f4f5f7;--tile-line:#3a3b41}
+[data-theme=light] :is(.xai-gateway .provider-icon,.provider-icon.xai-mark){--tile:#111214;--tile-ink:#fff;--tile-line:transparent}
 tbody tr.xai-row{background:var(--surface);color:var(--text)}
-.xai-gateway .provider-icon,.empty-icons .xai-mark{background:#25262a;color:#f1f2f4}
-[data-theme=light] .xai-gateway .provider-icon,[data-theme=light] .empty-icons .xai-mark{background:#e6e6e8;color:#111214}
-.xai-card .hour-bars>span:not(.none){opacity:.6}
-.xai-card .small-badge{font-family:var(--mono);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
-.legend-group.xai b,.xai-row .gateway-name{color:var(--xai)}
+.xai-row .gateway-name{color:var(--xai)}
+
+/* Gemini green, Meta blue, Antigravity rose, Kimi cyan, Devin teal, OpenAI-compatible APIs slate. Cards and table rows
+   are faintly tinted with the accent, as Codex's and Claude's are. */
+:root{--gemini:#7fcf74;--gemini-2:#c0e9b4;--meta:#5c9dff;--meta-2:#aecbff;--antigravity:#f07fa6;--antigravity-2:#f8bdd2;--kimi:#4fc3e2;--kimi-2:#a7e2f1;--devin:#3fcaa7;--devin-2:#a2e6d3;--compat:#a9b4c4;--compat-2:#d4dae3}
+[data-theme=light]{--gemini:#2c8239;--gemini-2:#17541f;--meta:#0866ff;--meta-2:#0a3d8f;--antigravity:#bf3a6b;--antigravity-2:#781b40;--kimi:#0a7896;--kimi-2:#074a5d;--devin:#0d7f64;--devin-2:#08503f;--compat:#536176;--compat-2:#2c3747}
+.account-card.gemini-card,tbody tr.gemini-row{--accent:var(--gemini);--accent-2:var(--gemini-2)}
+.account-card.meta-card,tbody tr.meta-row{--accent:var(--meta);--accent-2:var(--meta-2)}
+.account-card.antigravity-card,tbody tr.antigravity-row{--accent:var(--antigravity);--accent-2:var(--antigravity-2)}
+.account-card.kimi-card,tbody tr.kimi-row{--accent:var(--kimi);--accent-2:var(--kimi-2)}
+.account-card.devin-card,tbody tr.devin-row{--accent:var(--devin);--accent-2:var(--devin-2)}
+.account-card.compat-card,tbody tr.compat-row{--accent:var(--compat);--accent-2:var(--compat-2)}
+:is(.account-card,tbody tr):is(.gemini-card,.meta-card,.antigravity-card,.kimi-card,.devin-card,.compat-card,.gemini-row,.meta-row,.antigravity-row,.kimi-row,.devin-row,.compat-row){--surface:color-mix(in srgb,var(--accent) 6%,#121419);--raised:color-mix(in srgb,var(--accent) 8%,#1a1c22);--line:color-mix(in srgb,var(--accent) 14%,#262931);--line-soft:color-mix(in srgb,var(--accent) 9%,#1d2027);--track:color-mix(in srgb,var(--accent) 14%,#22252d)}
+[data-theme=light] :is(.account-card,tbody tr):is(.gemini-card,.meta-card,.antigravity-card,.kimi-card,.devin-card,.compat-card,.gemini-row,.meta-row,.antigravity-row,.kimi-row,.devin-row,.compat-row){--surface:color-mix(in srgb,var(--accent) 2.5%,#fff);--raised:color-mix(in srgb,var(--accent) 5%,#f6f6f8);--line:color-mix(in srgb,var(--accent) 10%,#e4e6ec);--line-soft:color-mix(in srgb,var(--accent) 7%,#eceef2);--track:color-mix(in srgb,var(--accent) 10%,#e8eaf0)}
+tbody tr:is(.gemini-row,.meta-row,.antigravity-row,.kimi-row,.devin-row,.compat-row){background:var(--surface);color:var(--text)}
+tbody tr:is(.gemini-row,.meta-row,.antigravity-row,.kimi-row,.devin-row,.compat-row) .gateway-name{color:var(--accent)}
+
+
+.gemini-gateway .provider-icon,.provider-icon.gemini-mark{--tile:#1a3220;--tile-ink:var(--gemini)}
+.meta-gateway .provider-icon,.provider-icon.meta-mark{--tile:#12264a;--tile-ink:var(--meta)}
+.antigravity-gateway .provider-icon,.provider-icon.antigravity-mark{--tile:#3b1a29;--tile-ink:var(--antigravity)}
+.kimi-gateway .provider-icon,.provider-icon.kimi-mark{--tile:#0f2f3a;--tile-ink:var(--kimi)}
+.devin-gateway .provider-icon,.provider-icon.devin-mark{--tile:#0f3229;--tile-ink:var(--devin)}
+.compat-gateway .provider-icon,.provider-icon.compat-mark{--tile:#212a36;--tile-ink:var(--compat)}
+[data-theme=light] :is(.gemini-gateway .provider-icon,.provider-icon.gemini-mark){--tile:#dff2da}
+[data-theme=light] :is(.meta-gateway .provider-icon,.provider-icon.meta-mark){--tile:#dce8ff}
+[data-theme=light] :is(.antigravity-gateway .provider-icon,.provider-icon.antigravity-mark){--tile:#fbe0ea}
+[data-theme=light] :is(.kimi-gateway .provider-icon,.provider-icon.kimi-mark){--tile:#d9f0f6}
+[data-theme=light] :is(.devin-gateway .provider-icon,.provider-icon.devin-mark){--tile:#d7f1e9}
+[data-theme=light] :is(.compat-gateway .provider-icon,.provider-icon.compat-mark){--tile:#e5e9ef}
+.compat-gateway .provider-icon svg,.provider-icon.compat-mark svg{stroke-width:1.9}
+
 /* Any other provider uses the page's own navy and blue, with its initial for an icon. */
 .account-card.other-card,tbody tr.other-row{--accent:var(--blue)}
-.other-gateway .provider-icon{background:#172638;color:var(--blue)}
-[data-theme=light] .other-gateway .provider-icon{background:#e1ecf7}
-.other-card .small-badge{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.other-gateway .provider-icon,.provider-icon.other-mark{--tile:#172638;--tile-ink:var(--blue)}
+[data-theme=light] :is(.other-gateway .provider-icon,.provider-icon.other-mark){--tile:#e1ecf7}
 .provider-icon .monogram{font:700 15px/1 var(--font);letter-spacing:-.3px}
-.legend-group.other b,.other-row .gateway-name{color:var(--blue)}
+.other-row .gateway-name{color:var(--blue)}
+/* Plan and API-key badges on other providers' cards take the accent, as on Codex and Claude cards. */
+.generic-card .small-badge{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.xai-card .small-badge{font-family:var(--mono);border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 
-/* Generic account card: today's requests are the headline when the provider reports no allowance.
-   The hour chart takes a stretched card's spare height, up to 84px. */
+/* Generic account card: today's requests are the headline when the provider reports no allowance. */
 .generic-card .quota-value .remaining-word{margin-left:10px}
-.hour-chart{margin-top:16px;flex:1;display:flex;flex-direction:column;justify-content:flex-end;min-height:0}
-.hour-bars{flex:1;min-height:46px;max-height:84px;display:flex;align-items:flex-end;gap:3px;border-bottom:1px solid var(--line)}
-.hour-bars>span{flex:1;min-width:1px;border-radius:2px 2px 0 0;background:var(--accent);opacity:.8}
-.hour-bars>span.none{height:1px;background:var(--line);opacity:1}
-.hour-bars>span.later{opacity:0}
-.hour-axis{display:flex;justify-content:space-between;margin-top:6px;color:var(--faint);font:8px var(--mono)}
-.account-card.is-off .hour-bars>span:not(.none){background:var(--faint);opacity:.5}
 
 /* No accounts: one quiet panel in place of the sections. */
 .accounts-empty{flex-basis:100%;display:flex;flex-direction:column;align-items:center;gap:22px;padding:64px 24px 60px;background:var(--surface);border:1px solid var(--line);border-radius:13px;text-align:center}
@@ -373,11 +551,9 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .empty-icons .provider-icon{width:44px;height:44px;border-radius:13px;border:3px solid var(--surface);margin-left:-9px}
 .empty-icons .provider-icon:first-child{margin-left:0}
 .empty-icons .provider-icon svg{width:22px;height:22px}
-.empty-icons .claude-mark{background:#3a2219;color:var(--claude)}
-[data-theme=light] .empty-icons .claude-mark{background:#f6e3da}
 @media(max-width:490px){.accounts-empty{padding:48px 20px 44px}}
 
-/* Adding and removing accounts: the top-bar entry point, the card menu and one account dialog shaped like the routing choice. */
+/* Adding and removing accounts: the top-bar entry point, the card menu and one account dialog. */
 .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .add-button{height:34px;display:inline-flex;align-items:center;gap:7px;padding:0 13px 0 10px;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;white-space:nowrap;transition:background .15s}
 .add-button:hover{background:var(--raised)}
@@ -402,6 +578,15 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .card-menu:hover,.card-menu[aria-expanded=true]{background:var(--raised);color:var(--text)}
 .card-menu svg{width:16px;height:16px}
 .card-menu:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+/* Manual usage read: a quiet icon after the status that never grows the status row. */
+.usage-refresh{width:22px;height:22px;margin:-4px -5px -4px -2px;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:var(--faint)}
+.usage-refresh:hover:not([aria-disabled=true]){background:var(--raised);color:var(--text)}
+.usage-refresh:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.account-card .account-state .usage-refresh svg{width:13px;height:13px;color:inherit}
+.usage-refresh[aria-disabled=true]{cursor:not-allowed;opacity:.45}
+.usage-refresh[aria-busy=true]{cursor:progress;opacity:1;color:var(--muted)}
+.usage-refresh-note{text-align:right;margin-top:6px}
+@media(max-width:760px){.usage-refresh{width:32px;height:32px;margin:-9px -9px -9px -7px}}
 .menu-pop{position:absolute;inset:auto;margin:0;min-width:208px;padding:5px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 60px #0007;z-index:20}
 .menu-pop button{display:flex;flex-direction:column;align-items:flex-start;width:100%;min-height:36px;padding:8px 11px;border:0;border-radius:8px;background:transparent;color:var(--text);font-size:12px;font-weight:500;text-align:left}
 .menu-pop button:hover:not([aria-disabled=true]),.menu-pop button:focus-visible{background:var(--raised)}
@@ -411,8 +596,17 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .menu-pop small{font-size:10px;color:var(--faint);font-weight:400;margin-top:1px}
 .menu-pop hr{border:0;border-top:1px solid var(--line-soft);margin:4px 2px}
 @media(max-width:760px){.menu-pop button{min-height:42px}}
+/* State popover: the state pill's full text and its details, above the pill (state tip in app.js). */
+.state-pop{position:absolute;inset:auto;margin:0;width:max-content;max-width:min(280px,calc(100vw - 16px));padding:9px 12px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 44px #0007;font-size:11px;line-height:1.5;z-index:20}
+.state-pop strong{display:flex;align-items:flex-start;gap:7px;color:var(--text);font-weight:600}
+.state-pop strong svg{width:13px;height:13px;flex-shrink:0;margin-top:2px;color:var(--mint)}
+.state-pop>span{display:block;margin:2px 0 0 20px;overflow-wrap:anywhere}
+.state-pop.state-warn strong,.state-pop.state-warn svg{color:var(--amber)}
+.state-pop.state-down strong,.state-pop.state-down svg{color:var(--danger)}
+.state-pop.state-off svg{color:var(--faint)}
+[data-theme=light] .state-pop{box-shadow:0 14px 40px #1621351f}
 
-/* Account dialog: same shell as the routing choice. */
+/* Account dialog: a small modal with a title, its content and the actions. */
 .account-dialog{width:min(400px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 28px 110px #0008}
 .account-dialog::backdrop{background:#03060b99;backdrop-filter:blur(5px)}
 .account-dialog:focus{outline:none}
@@ -426,6 +620,7 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .account-dialog .reset-cancel{display:block;min-height:38px;margin:10px auto -6px;padding:0 14px;font-size:12px}
 .account-dialog .reset-cancel:hover:not(:disabled){color:var(--text)}
 .dialog-actions{display:grid;gap:8px}
+.dialog-actions.split{grid-template-columns:1fr 1fr}
 .dialog-note{font-size:12px;line-height:1.6;color:var(--muted);margin:-8px 0 20px}
 .dialog-warn{display:flex;gap:8px;font-size:12px;line-height:1.55;color:var(--amber);margin:-6px 0 20px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--amber) 35%,transparent);border-radius:9px;background:color-mix(in srgb,var(--amber) 7%,transparent)}
 .dialog-warn svg{width:14px;height:14px;flex-shrink:0;margin-top:2px}
@@ -433,12 +628,6 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .dialog-error{font-size:12px;line-height:1.5;color:var(--danger);margin:-6px 0 16px}
 .reset-primary.danger{background:var(--danger-bg);border-color:var(--danger-line);color:var(--danger)}
 .reset-primary.danger:hover:not(:disabled){border-color:var(--danger)}
-.provider-icon.claude-mark{background:#3a2219;color:var(--claude)}
-.provider-icon.xai-mark{background:#25262a;color:#f1f2f4}
-.provider-icon.other-mark{background:#172638;color:var(--blue)}
-[data-theme=light] .provider-icon.claude-mark{background:#f6e3da}
-[data-theme=light] .provider-icon.xai-mark{background:#e6e6e8;color:#111214}
-[data-theme=light] .provider-icon.other-mark{background:#e1ecf7}
 .provider-list{display:grid;gap:6px}
 .provider-option{display:flex;align-items:center;gap:12px;width:100%;min-height:50px;padding:9px 14px 9px 10px;border:1px solid var(--line);border-radius:11px;background:var(--raised);color:var(--text);font-size:13px;font-weight:600;text-align:left}
 .provider-option:hover{border-color:var(--muted)}
@@ -466,6 +655,8 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .paste-input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .paste-input[aria-invalid=true]{border-color:var(--danger-line)}
 .paste-input:read-only{color:var(--muted)}
+/* The date picker follows the page's theme, not the system's. */
+[data-theme=dark] .paste-input{color-scheme:dark}[data-theme=light] .paste-input{color-scheme:light}
 .paste-error{font-size:11px;line-height:1.5;color:var(--danger);margin:7px 0 0}
 .paste-step .reset-primary{margin-top:10px}
 .dialog-result{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 4px}
@@ -476,3 +667,480 @@ tbody tr.xai-row{background:var(--surface);color:var(--text)}
 .dialog-result .result-name{color:var(--text);font-weight:500;font-size:13px;margin-top:7px}
 .dialog-result+.dialog-actions{margin-top:22px}
 @media(max-width:490px){.account-dialog{padding:22px 20px}.code-box{padding:14px 12px 14px 14px}.code-box code{font-size:25px;letter-spacing:2px}}
+
+/* Account management, continued: picker groups, the paste fallback, API-key forms and typed disconnect confirmation. */
+.provider-group{font-size:11px;font-weight:600;color:var(--muted);margin:0 0 8px}
+.provider-list+.provider-group{margin-top:20px}
+.provider-group+.provider-list .provider-option{min-height:46px;padding:7px 12px 7px 9px}
+.provider-group+.provider-list .provider-option .provider-icon{width:28px;height:28px;border-radius:8px}
+.provider-list.key-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+.provider-list.key-list .provider-option:last-child:nth-child(odd){grid-column:1/-1}
+.provider-list.key-list .provider-option>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.manual-step{margin-top:16px;padding-top:8px;border-top:1px solid var(--line-soft);text-align:center}
+.link-button{min-height:38px;padding:0 10px;border:0;background:transparent;color:var(--muted);font-size:12px;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.link-button:hover{color:var(--text);text-decoration-color:currentColor}
+.key-form{display:grid;gap:14px;margin:0 0 20px}
+.key-field label{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted);margin:0 0 7px}
+.key-field label span{font-size:11px;color:var(--faint)}
+textarea.paste-input{display:block;min-height:66px;resize:vertical;line-height:1.5}
+.key-field .paste-input:read-only,.confirm-step .paste-input:read-only{color:var(--muted)}
+/* Plan suggestions under the field: picking one fills it, and the one matching the field is checked. */
+.plan-picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.plan-picks button{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:5px 11px;border:1px solid var(--line);border-radius:8px;background:var(--raised);color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap}
+.plan-picks button:hover:not(:disabled){color:var(--text);border-color:var(--muted)}
+.plan-picks button:focus-visible{outline-offset:2px}
+.plan-picks button:disabled{cursor:default}
+.plan-picks svg{display:none;width:13px;height:13px;flex-shrink:0;margin-left:-3px;color:var(--blue);stroke-width:2}
+.plan-picks button[aria-pressed=true]{color:var(--text);border-color:color-mix(in srgb,var(--blue) 70%,var(--line));background:color-mix(in srgb,var(--blue) 10%,var(--raised))}
+.plan-picks button[aria-pressed=true] svg{display:block}
+@media(max-width:760px){.plan-picks button{min-height:38px}}
+.confirm-step{margin:0 0 20px}
+.confirm-step label{display:block;font-size:12px;line-height:1.55;color:var(--muted);margin:0 0 8px;overflow-wrap:anywhere}
+.confirm-step label b{font:500 12px var(--mono);color:var(--text)}
+.dialog-head+.dialog-warn{margin-top:-4px}
+
+/* Endpoint of an API-key card: a long host truncates; the full address is in the tooltip. */
+.account-dates{min-width:0}
+/* The endpoint takes the room the other facts leave and truncates, rather than wrapping under them. */
+.account-dates .reset-block.endpoint{flex:1 1 0;min-width:64px}
+.reset-block.endpoint strong{display:block;overflow:hidden;text-overflow:ellipsis}
+
+
+/* Proposed additions to dashboard/static/style.css: Claude allowance banners and card cues. */
+
+/* Banners stack at the top of every page: the connection notice, then the all-out alert, then the low warning. */
+.banner-stack{display:grid;gap:10px;margin:0 0 24px}
+.banner-stack>.notice{margin:0}
+
+/* Low allowance: the existing amber notice, with one aligned row per account and limit. */
+.allowance-banner{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:22px;align-items:start;border:1px solid #655032;background:#241e15;border-radius:8px;padding:11px 10px 11px 18px;font-size:12px;line-height:20px;color:var(--muted)}
+[data-theme=light] .allowance-banner{background:#fff6e8}
+.allowance-head{display:flex;align-items:center;gap:8px;color:var(--amber);font-weight:600;white-space:nowrap}
+.allowance-head svg{width:15px;height:15px;flex-shrink:0}
+.allowance-rows{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,max-content) max-content max-content minmax(0,1fr);column-gap:24px;row-gap:4px;min-width:0}
+.allowance-rows>li{display:contents}
+.allowance-rows>li>span{min-width:0;white-space:nowrap}
+.allowance-account{color:var(--text);overflow:hidden;text-overflow:ellipsis}
+.allowance-account.same{visibility:hidden}
+.allowance-left{color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
+.allowance-when{font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+.allowance-when time{color:var(--muted)}
+.allowance-note{color:var(--amber)}
+.allowance-off{color:var(--faint)}
+[data-theme=light] .allowance-head,[data-theme=light] .allowance-left,[data-theme=light] .allowance-note{color:#8a6100}
+.allowance-banner .reset-close{width:28px;height:28px;margin:-4px 0;font-size:22px}
+
+/* All Claude accounts out: same shape, danger colours, a larger headline and the first return time on the right. */
+.allowance-banner.out{grid-template-columns:auto minmax(0,1fr) auto;column-gap:14px;border-color:var(--danger-line);background:var(--danger-bg);padding:16px 22px 16px 16px}
+.out-icon{width:26px;height:26px;border-radius:50%;background:var(--danger);color:var(--danger-bg);display:flex;align-items:center;justify-content:center}
+.out-icon svg{width:18px;height:18px;stroke-width:2.6}
+.out-main{min-width:0}
+.out-title{display:flex;flex-wrap:wrap;align-items:center;column-gap:10px;margin:1px 0 12px;font-size:15px;line-height:24px;letter-spacing:-.3px}
+.out-title h2{font-size:inherit;font-weight:700;color:var(--danger);margin:0}
+.out-switch{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-weight:400}
+.out-switch svg{width:15px;height:15px;color:var(--codex)}
+.allowance-banner.out .allowance-rows{grid-template-columns:minmax(0,max-content) max-content minmax(0,1fr)}
+.out-back{text-align:right;white-space:nowrap}
+.out-back>span{display:block;font-size:10px;color:var(--muted)}
+.out-back strong{display:block;font-size:30px;font-weight:500;letter-spacing:-1px;line-height:1.15;color:var(--text);font-variant-numeric:tabular-nums}
+.out-back time{font-size:11px;color:var(--muted)}
+
+/* Card cues: a limit under 10% turns its figure amber. Near-limit and limit-reached states reuse the account state slot. */
+.limit-row .secondary-quota>span.low,.quota-used>span.low{color:var(--amber)}
+
+/* Tablets and phones: short limit names, the exact reset time moves to the countdown's tooltip, and long emails truncate before the times do. */
+@media(max-width:1040px){
+  .allowance-rows{grid-template-columns:minmax(0,max-content) repeat(3,max-content);column-gap:16px}
+  .allowance-banner.out .allowance-rows{grid-template-columns:minmax(0,max-content) repeat(2,max-content)}
+  .limit-more,.allowance-clock{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+}
+@media(max-width:760px){
+  .allowance-banner{column-gap:14px;padding:10px 6px 10px 14px}
+  .allowance-rows{column-gap:10px}
+  .allowance-verb{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .allowance-banner .reset-close{width:32px;height:32px;margin:-6px 0}
+  .allowance-banner.out{column-gap:12px;padding:14px 16px 14px 14px}
+}
+/* Phones: the title and dismiss share the first line, then one line per account row. */
+@media(max-width:600px){
+  .allowance-banner{grid-template-columns:minmax(0,1fr) auto;row-gap:6px}
+  .allowance-banner .reset-close{grid-column:2;grid-row:1}
+  .allowance-rows{grid-column:1/-1;grid-row:2;padding-right:8px}
+  .allowance-banner.out{grid-template-columns:auto minmax(0,1fr);row-gap:0;padding:12px 14px}
+  .out-icon{width:22px;height:22px}
+  .out-icon svg{width:15px;height:15px}
+  .out-main{display:contents}
+  .out-title{grid-column:2;grid-row:1;margin:0;line-height:22px}
+  .out-back{grid-column:2;grid-row:2;text-align:left;margin-top:2px;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:6px}
+  .out-back>span{display:inline;font-size:11px}
+  .out-back strong{display:inline;font-size:22px}
+  .allowance-banner.out .allowance-rows{grid-column:1/-1;grid-row:3;margin-top:10px;padding:10px 0 0;border-top:1px solid var(--danger-line)}
+}
+
+#claude-warnings:not([hidden]){display:contents}
+.allowance-banner .dismiss-error{grid-column:1/-1;color:var(--amber)}
+
+.claude-card.is-out .quota-value{color:var(--faint)}
+.claude-card.is-out .quota-track>span:not(.pace-bar){background:var(--faint)}
+.out-back.checking>span{font-size:12px}
+
+/* Reordering (reorder in app.js): a provider moves by its name block, a card by its top row, once there are two to
+   order. The handle takes a grab cursor and, on hover or keyboard focus, a grip in the margin beside it. A lifted item
+   follows the pointer above the page while a dashed slot holds the place where it will land. */
+.gateways.sortable>.gateway>.gateway-head .pool-name,:is(.account-grid,.watch-grid).sortable>.account-card>.account-top{position:relative;cursor:grab;-webkit-touch-callout:none}
+.gateways.sortable>.gateway>.gateway-head .pool-name:before,:is(.account-grid,.watch-grid).sortable>.account-card>.account-top:before{content:'';position:absolute;top:50%;left:-17px;width:7px;height:11px;margin-top:-5.5px;background:radial-gradient(circle,currentColor 1px,transparent 1.4px) -.5px -.5px/4px 4px;color:var(--faint);opacity:0;transition:opacity .15s;pointer-events:none}
+:is(.account-grid,.watch-grid).sortable>.account-card>.account-top:before{left:-16px}
+@media(hover:hover){
+  .gateways.sortable>.gateway>.gateway-head .pool-name:hover:not(:has(a:hover)):before,
+  :is(.account-grid,.watch-grid).sortable>.account-card>.account-top:hover:not(:has(a:hover,button:hover)):before{opacity:1}
+}
+.gateways.sortable .pool-name:has(>.provider-icon:focus-visible):before{opacity:1}
+.gateways.sortable .gateway-head .provider-icon:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+/* A long press lifts the item, so it selects no text. */
+@media(pointer:coarse){.gateways.sortable>.gateway>.gateway-head .pool-name,:is(.account-grid,.watch-grid).sortable>.account-card>.account-top{-webkit-user-select:none;user-select:none}}
+.reordering,.reordering *{cursor:grabbing!important;-webkit-user-select:none!important;user-select:none!important}
+.reorder-lifted{position:fixed!important;z-index:40;margin:0!important;transition:box-shadow .18s ease-out;will-change:translate}
+.account-card.reorder-lifted{scale:1.02;box-shadow:0 22px 56px #0009,0 0 0 1px var(--line)}
+.gateway.reorder-lifted{scale:1.01;border-radius:16px;background:var(--bg);box-shadow:0 0 0 14px var(--bg),0 26px 70px 12px #000a}
+[data-theme=light] .account-card.reorder-lifted{box-shadow:0 22px 50px #1621352e,0 0 0 1px var(--line)}
+[data-theme=light] .gateway.reorder-lifted{box-shadow:0 0 0 14px var(--bg),0 24px 60px 12px #16213529}
+.account-card.reorder-landing{box-shadow:var(--shadow)}
+.gateway.reorder-landing{box-shadow:0 0 0 14px var(--bg),0 0 0 0 transparent}
+.reorder-slot{border:1.5px dashed color-mix(in srgb,var(--muted) 40%,transparent);border-radius:13px;background:color-mix(in srgb,var(--raised) 40%,transparent)}
+.gateways>.reorder-slot{border-radius:16px}
+.gateway>:is(.account-grid,.watch-grid)>.reorder-slot{flex:1 1 var(--card-min);min-width:0}
+
+/* Requests (Usage tab): "Requests" on the left; on the right "Show new requests" or "Back to latest", Failed only, the
+   provider filter and the time button, which sits last, above the Time column. Then the table and Show more. Overview's
+   Recent requests shares the row renderer, the column widths and the phone layout. */
+/* A short or empty list (Failed only, a quiet provider) keeps the heading where it was instead of the page clamping its
+   scroll and dropping the controls just used to the bottom of the screen. */
+section.requests{min-height:calc(100dvh - 16px)}
+.requests-head{scroll-margin-top:16px}
+.requests-head h2{margin-right:auto}
+.requests-head h2:focus{outline:none}
+.requests-head h2:focus-visible{outline:2px solid var(--blue);outline-offset:5px;border-radius:2px}
+/* Too narrow for one line (a tablet, with a link showing), the filter and time button wrap below, on the right. */
+.requests-tools{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px 16px;min-width:0}
+.requests-tools .text-link{border:0;background:none;padding:0;white-space:nowrap}
+.requests-tools .text-link svg{flex-shrink:0}
+.requests-picks{display:flex;align-items:center;gap:8px;min-width:0}
+/* Failed only: the routing control's switch. Its text turns full colour while it's on. */
+.requests-failed{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);font-size:10px;white-space:nowrap}
+.requests-failed input{appearance:none;margin:0;width:28px;height:16px;background:var(--line);border-radius:10px;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.requests-failed input:before{content:'';position:absolute;width:10px;height:10px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:left .15s}
+.requests-failed input:checked{background:var(--blue)}
+.requests-failed input:checked:before{left:15px;background:var(--bg)}
+.requests-failed input:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+.requests-failed:has(input:checked){color:var(--text)}
+.requests-failed:has(input:disabled){cursor:default;opacity:.45}
+.requests-failed input:disabled{cursor:default}
+/* The time button: the provider filter's button with a clock, which turns blue while the list is at a past time. */
+.time-trigger{gap:6px;padding-left:8px}
+.time-trigger>svg:first-child{width:13px;height:13px;color:var(--muted);transform:none!important}
+.time-trigger.jumped>svg:first-child{color:var(--blue)}
+.time-trigger .routing-value{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis}
+/* Its popover: a small non-modal dialog under the button, right edges aligned, as the provider menu. Native time fields
+   bring the system pickers; they follow the theme. */
+.jump-pop{width:min(276px,calc(100vw - 16px));min-width:0;padding:14px}
+.jump-pop form{margin:0}
+.jump-pop label{display:block;font-size:11px;color:var(--muted);margin:0 0 7px}
+.jump-input{display:block;width:100%;height:34px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);padding:0 9px;font:11px var(--mono);color-scheme:dark}
+[data-theme=light] .jump-input{color-scheme:light}
+.jump-input:hover{border-color:var(--muted)}
+.jump-input:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.jump-input[aria-invalid=true]{border-color:var(--danger)}
+.jump-input[aria-invalid=true]:focus-visible{outline-color:var(--danger)}
+.jump-input::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
+.jump-error{margin:8px 0 0;font-size:11px;line-height:1.45;color:var(--danger)}
+.jump-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px}
+.jump-actions .resets-button{margin-right:auto;color:var(--text);padding:6px 12px}
+.jump-actions .reset-primary{min-width:64px;padding:6px 14px;font-size:11px}
+/* .menu-pop flattens its buttons into menu items; the popover's two buttons keep their own look. */
+.menu-pop.jump-pop button{display:inline-flex;flex-direction:row;width:auto;min-height:0;align-items:center;justify-content:center;border:1px solid var(--line)}
+.menu-pop.jump-pop .reset-primary{background:var(--raised)}
+.menu-pop.jump-pop button:hover{background:var(--raised);border-color:var(--muted)}
+/* The provider filter: the routing control's button and menu, with each provider's mark. */
+.filter-trigger{gap:7px;padding-left:9px}
+.filter-trigger .provider-icon,.filter-menu .provider-icon{width:18px;height:18px;border-radius:5px;flex-shrink:0}
+.filter-trigger .provider-icon svg,.filter-menu .provider-icon svg{width:11px;height:11px;color:var(--tile-ink)}
+.filter-trigger[aria-expanded=true] .provider-icon svg{transform:none}
+.filter-trigger .provider-icon{margin-left:-4px}
+.filter-trigger .provider-icon .monogram,.filter-menu .provider-icon .monogram{font-size:10px}
+.filter-menu{min-width:190px;max-width:min(300px,calc(100vw - 16px))}
+.filter-menu [role=menuitemradio]{flex-direction:row;align-items:center;justify-content:space-between;gap:14px}
+.filter-menu [role=menuitemradio]>span{display:flex;align-items:center;gap:10px;min-width:0;overflow-wrap:anywhere}
+.filter-menu [role=menuitemradio]>svg{width:14px;height:14px;flex-shrink:0;color:var(--blue);stroke-width:2}
+/* Long names and model ids end in an ellipsis; the title has the full text. */
+.request-table .account-chip{max-width:100%}
+.request-table .account-chip>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.request-table .model{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+.request-table tbody tr:focus{outline:none}
+.request-table tbody tr:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+/* Steady columns: both tables lay out from these widths (the <colgroup> in app.js), not from their content, so no column
+   moves on Show more, between ranges, or between Overview and the list. A wider table shares the extra out in proportion;
+   a window too narrow for their sum scrolls the table sideways. Cells clip with an ellipsis. Phones keep the three-line
+   rows below. */
+@media(min-width:491px){
+  /* When the controls wrap to two rows, "Requests" stays level with the first one. */
+  .requests-head{align-items:baseline}
+  .request-table{table-layout:fixed}
+  .request-table :is(th,td){padding-left:14px;padding-right:14px;overflow:hidden;text-overflow:ellipsis}
+  .request-table col.c-account{width:176px}
+  .request-table col.c-model{width:124px}
+  .request-table col.c-reasoning{width:92px}
+  .request-table col.c-mode{width:92px}
+  .request-table col.c-tokens{width:72px}
+  .request-table col.c-cache{width:108px}
+  .request-table col.c-result{width:96px}
+  /* Room for the list's "Oct 30, 12:50:07 PM". */
+  .request-table col.c-time{width:144px}
+  /* A row from an earlier year ("Dec 30, 2025, 10:59:07 PM") wraps inside its cell instead of widening the column. */
+  .request-table td.c-time{white-space:normal}
+}
+/* After "Show new requests", rows that weren't in the list before hold a blue tint and edge for about a second, then
+   fade (3s in all). Late-finishing requests sort by start time, so a new row can sit below the top. */
+.request-table tbody tr.row-new td{animation:row-new 3s ease-out}
+.request-table tbody tr.row-new td:first-child{animation-name:row-new-edge}
+@keyframes row-new{0%,40%{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--blue) 13%,transparent)}100%{box-shadow:inset 0 0 0 999px transparent}}
+@keyframes row-new-edge{0%,40%{box-shadow:inset 3px 0 0 var(--blue),inset 0 0 0 999px color-mix(in srgb,var(--blue) 13%,transparent)}100%{box-shadow:inset 3px 0 0 transparent,inset 0 0 0 999px transparent}}
+/* Reduced motion: the same tint and edge without the fade; app.js removes the class after 3 seconds. */
+@media(prefers-reduced-motion:reduce){
+  .request-table tbody tr.row-new td{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--blue) 13%,transparent)}
+  .request-table tbody tr.row-new td:first-child{box-shadow:inset 3px 0 0 var(--blue),inset 0 0 0 999px color-mix(in srgb,var(--blue) 13%,transparent)}
+}
+/* A new range or provider dims the rows shown until its first page replaces them. */
+.table-wrap[aria-busy=true] tbody{opacity:.4;animation:breathe 1.6s infinite}
+.empty-state.loading{display:block}
+.empty-state .resets-button{margin-top:12px;color:var(--text)}
+.empty-state p{margin:0}
+/* Show more, centred under the list; a failed page keeps the rows and says so above the button. */
+.requests-more{display:flex;flex-direction:column;align-items:center;gap:9px;margin-top:14px}
+.more-button{min-width:150px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);padding:9px 18px;font-size:11px;font-weight:600}
+.more-button:hover:not([aria-disabled=true]){background:var(--raised);border-color:var(--muted)}
+.more-button[aria-busy=true]{cursor:wait;color:var(--muted);animation:breathe 1.6s infinite}
+.requests-error{margin:0;font-size:11px;color:var(--danger)}
+/* Phone: each request is three lines and nothing scrolls sideways. Account and time, model and result, then reasoning,
+   mode, tokens and cache, with unrecorded cells hidden. Explicit roles keep the table's semantics (app.js). */
+@media(max-width:490px){
+  .stack-table table,.stack-table tbody{display:block}
+  .stack-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .stack-table tbody tr{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:12px;row-gap:2px;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+  .stack-table tbody tr:last-child{border-bottom:0}
+  .stack-table tbody tr:before,.stack-table tbody tr:after{content:'';flex-basis:100%;height:0}
+  .stack-table tbody tr:before{order:3}
+  .stack-table tbody tr:after{order:6}
+  .stack-table td,#recent-table.stack-table td{padding:0;border:0;min-width:0}
+  .stack-table .c-account{order:1;flex:1 1 0}
+  .stack-table .c-time{order:2}
+  .stack-table .c-model{order:4;flex:1 1 0}
+  .stack-table .c-result{order:5}
+  .stack-table :is(.c-reasoning,.c-mode,.c-tokens,.c-cache),#recent-table.stack-table :is(.c-reasoning,.c-mode,.c-tokens,.c-cache){order:7;padding-top:3px}
+  .stack-table :is(.c-reasoning,.c-mode,.c-tokens,.c-cache) .mono:not(.tier-fast,.tier-warn){color:var(--faint)}
+  .stack-table td[data-label]:before{content:attr(data-label) ' ';font:10px var(--mono);color:var(--faint)}
+  /* Hidden from sight only: each row keeps a cell under every column header. */
+  .stack-table td.unset{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .stack-table .account-chip{max-width:100%;font-size:11px}
+  .stack-table .model{max-width:100%;display:block}
+  .stack-table colgroup{display:none}
+  .requests-more .more-button{width:100%;min-height:42px}
+  .requests-tools .text-link{padding:10px 0;margin:-10px 0}
+  /* Two lines of controls: "Requests", then the link and Failed only on the right; below, the provider filter and the
+     time button, half the width each. */
+  .requests-head{flex-wrap:wrap;row-gap:12px;column-gap:14px}
+  .requests-tools{display:contents}
+  .requests-failed{font-size:11px;padding:10px 0;margin:-10px 0}
+  .requests-picks{order:5;flex:1 0 100%;gap:8px}
+  .requests-picks>*{flex:0 1 calc(50% - 4px);min-width:0}
+  .requests-picks .routing-trigger{width:100%;height:36px}
+  .requests-picks .routing-value{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis}
+  .stack-table tbody tr.row-new td,.stack-table tbody tr.row-new td:first-child{animation:none;box-shadow:none}
+  .stack-table tbody tr.row-new{animation:row-new-edge 3s ease-out}
+}
+@media(max-width:490px) and (prefers-reduced-motion:reduce){
+  .stack-table tbody tr.row-new{box-shadow:inset 3px 0 0 var(--blue),inset 0 0 0 999px color-mix(in srgb,var(--blue) 13%,transparent)}
+}
+/* Scrollbars follow the theme: thin, a muted thumb on no track, and the browser's own dark or light parts. */
+[data-theme=dark]{color-scheme:dark}
+[data-theme=light]{color-scheme:light}
+*{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--line) 55%,var(--faint)) transparent}
+
+/* Top bar health: the gateway's state, its dot taking the worst tone of the desktop's health (healthSummary in app.js).
+   It opens the health popover. Problems colour the words as well as the dot. */
+.health-button{background:transparent;border:0;margin:0 -8px;padding:0 8px;height:34px;border-radius:7px;font-size:12px;white-space:nowrap;color:var(--muted)}
+@media(hover:hover){.health-button:hover{color:var(--text);background:var(--raised)}}
+.health-button[aria-expanded=true]{background:var(--raised)}
+.health-button:focus-visible{outline-offset:1px}
+.header-right .health-button+.updated{margin-left:-2px}
+.health-button.connecting{color:var(--amber)}
+.health-button.offline{color:var(--danger)}
+.health-button.offline i{background:var(--danger)}
+.health-button i{flex-shrink:0}
+.health-short{display:none}
+.updated{font-size:12px;color:var(--muted)}
+.health-pop{display:grid;gap:11px;width:max-content;min-width:250px;max-width:min(330px,calc(100vw - 16px));padding:13px 15px;font-size:12px}
+.health-row{display:grid;grid-template-columns:7px auto 1fr;align-items:center;column-gap:9px}
+:where(.health-row,.health-value) i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.health-row>span{color:var(--text);font-weight:600;white-space:nowrap}
+.health-row b{font-weight:400;color:var(--muted);text-align:right;white-space:nowrap}
+.health-row small{grid-column:2/-1;color:var(--muted);font-size:12px;line-height:1.45}
+.health-warning i{background:var(--amber)}
+:is(.health-row,.health-value,footer .health-item):is(.health-stale,.health-unknown,.health-warning) b,.health-value:is(.health-stale,.health-unknown,.health-warning){color:var(--amber)}
+:is(.health-row,.health-value,footer .health-item):is(.health-down,.health-failed) b,.health-value:is(.health-down,.health-failed){color:var(--danger)}
+:is(.health-row,.health-value,footer .health-item).health-down i,:is(.health-row,.health-value,footer .health-item).health-failed i{background:var(--danger)}
+
+/* Footer: readable sizes, data in the stronger grey; one item per line on phones. */
+footer{font-size:11px;color:var(--muted);flex-wrap:wrap;row-gap:10px}
+footer .health-panel{font-size:11px;color:var(--muted)}
+footer .health-item b{color:var(--muted)}
+footer .health-item{gap:7px}
+footer .health-item i{width:6px;height:6px}
+.footer-private .tiny-dot{flex-shrink:0;width:6px;height:6px}
+.footer-brand{font-size:10px}
+
+/* System tab: health rows lead the details, each with its dot. */
+.system-heading p,.advanced p{font-size:12px}
+.system-badge{font-size:11px;padding:3px 10px}
+.system-badge.warn{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 45%,transparent)}
+.system-badge.down{color:var(--danger);border-color:var(--danger-line)}
+.connection-flow{font-size:12px}
+.flow-line{font-size:11px;color:var(--muted)}
+#system-details dt{font-size:12px}
+#system-details dd{font-size:12px}
+.health-value{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.health-value i{flex-shrink:0}
+.outline-button{font-size:12px}
+#system-view>.footnote{font-size:12px;color:var(--muted)}
+
+@media(max-width:760px){
+  /* Phones and narrow windows: the dot alone while all is well, a short word when it isn't; the full state stays the
+     button's name. */
+  .header-right .status.health-button{display:flex}
+  .health-button{margin:0;min-width:34px;justify-content:center}
+  .health-button i{width:10px;height:10px}
+  .health-full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .health-short{display:inline;font-weight:600}
+  footer{font-size:11px;gap:10px 20px}
+  .connection-flow{font-size:12px}
+  .flow-line{font-size:11px}
+}
+@media(max-width:490px){
+  /* The buttons share the brand's line; health ends the tab row, so a long word never crowds them. */
+  .header-right{display:contents}
+  .brand{margin-right:auto}
+  .header-right>*{order:1}
+  .header-right>button:not(.health-button){margin-left:12px}
+  .topbar:after{content:'';order:2;flex-basis:100%}
+  .topbar nav{order:3;width:auto;flex:1 1 auto;min-width:0}
+  .topbar .health-button{order:4;height:48px;margin:8px -8px 0 0;padding:0 8px}
+  footer{flex-direction:column;align-items:flex-start;gap:10px}
+  footer .health-panel{flex-direction:column;gap:10px}
+  .system-card{padding:22px 20px}
+  .flow-line{max-width:190px}
+}
+/* Touch: 44px hit areas around the header's 34px buttons, without changing how they look. */
+@media(pointer:coarse){
+  .header-right>button{position:relative}
+  /* The inset counts from inside the 1px border. */
+  .header-right>button:before{content:'';position:absolute;inset:-6px}
+  .header-right>.health-button:before{inset:-5px}
+}
+/* On the tab row the health button is already 48px tall; only its width grows, clear of the buttons above. */
+@media(pointer:coarse) and (max-width:490px){.header-right>.health-button:before{inset:0 -5px}}
+@media(max-width:600px){
+  /* Two header rows start before the buttons and a health word stop fitting on one line (they need about 570px). */
+  .topbar{flex-wrap:wrap;height:auto;gap:0;padding-top:17px}
+  .header-right{display:contents}
+  .brand{margin-right:auto}
+  .header-right>*{order:1}
+  .header-right>button:not(.health-button){margin-left:12px}
+  .topbar:after{content:'';order:2;flex-basis:100%}
+  .topbar nav{order:3;width:auto;flex:1 1 auto;min-width:0;height:48px;margin-top:8px}
+  .topbar .health-button{order:4;height:48px;margin:8px -8px 0 0;padding:0 8px}
+}
+/* An account that is out can't use its other limits until it's back: they recede with the hero and show no forecast. */
+.limit-row.muted .limit-track>span{background:var(--faint)}
+/* Touch: the card menu and usage refresh keep their look but take a 44px target, and the menu keeps clear of the plan
+   badge beside it, which opens billing. */
+@media(pointer:coarse){
+  .card-menu,.usage-refresh{position:relative}
+  .card-menu:before,.usage-refresh:before{content:'';position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%)}
+  .account-top>.small-badge+.card-menu{margin-left:4px}
+}
+/* Phones: a shorter card with nothing under 11px. The hero keeps "remaining", its foot line takes the reset countdown in
+   place of "N% used", and the facts share one line: the status first, then the renewal date (and extra usage, when on). */
+@media(max-width:490px){
+  .gateway .account-card{padding:16px 16px 14px}
+  .account-name{font-size:14px}
+  .account-top .small-badge{font-size:11px;padding:2px 8px}
+  /* The hero's label sits at the end of the figure's line. */
+  .account-hero{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;align-items:baseline;margin-top:12px}
+  .account-hero>:not(.quota-label,.quota-value){grid-column:1/-1}
+  .quota-label,.gateway .quota-label{grid-area:1/2;justify-self:end;text-align:right;margin:0;font-size:12px;display:block}
+  .quota-value{grid-area:1/1;font-size:38px;line-height:1.15;letter-spacing:-1.5px}
+  .quota-value .percent{font-size:19px;margin-left:2px}
+  .quota-value .remaining-word{display:inline;font-size:12px;margin-left:8px}
+  .quota-track{margin:8px 0 7px}
+  .quota-used{font-size:11px}
+  .quota-used:has(>.foot-reset)>.used-figure{display:none}
+  .quota-used>.foot-reset{display:block}
+  .quota-used:has(>.fc-back)>:is(.foot-reset,.used-figure){display:none}
+  .limit-rows{margin-top:12px;gap:10px}
+  .secondary-quota{font-size:12px}
+  .limit-row .secondary-quota{margin-bottom:4px}
+  .limit-row .secondary-quota>span:last-child,.limit-row .secondary-quota>.forecast{font-size:11px}
+  .account-resets{margin-top:12px}
+  .account-resets>span,.resets-button{font-size:12px}
+  .account-side>:has(+.account-bottom),.account-hero:has(+.account-side>.account-bottom:first-child)>:last-child{margin-bottom:14px}
+  .account-bottom{padding-top:12px;margin-top:0;align-items:center;gap:6px 14px}
+  .account-bottom>.account-state{order:-1;flex:0 1 auto;font-size:12px}
+  .account-bottom>.account-state>.usage-refresh{margin-left:2px}
+  .account-dates{flex:0 1 auto;margin-left:auto;gap:4px 14px;justify-content:flex-end}
+  .account-dates .reset-block{display:flex;align-items:baseline;gap:6px}
+  .account-dates .reset-block.allowance-reset{display:none}
+  .reset-block>span{font-size:12px;margin:0}
+  .reset-block strong{font-size:13px}
+  .account-route{margin-top:8px;padding-top:0;border-top:0}
+  .account-route label{font-size:12px}
+  .fast-usage,.quota-warning,.account-access,.access-result{font-size:12px}
+  /* The low-allowance banner keeps "back in" and drops the limit's name (it's in the figure's tooltip). */
+  .allowance-rows{grid-template-columns:minmax(0,max-content) repeat(2,max-content)}
+  .allowance-banner.out .allowance-rows{grid-template-columns:minmax(0,max-content) max-content}
+  .allowance-limit{display:none}
+  .allowance-verb{position:static;width:auto;height:auto;overflow:visible;clip:auto}
+}
+/* A Codex account that is out recedes like a Claude one. */
+.codex-card.is-out .quota-value{color:var(--faint)}
+.codex-card.is-out .quota-track>span:not(.pace-bar){background:var(--faint)}
+/* Failure reasons (Usage tab). Success rate's detail line: "{n} failed" opens the failed requests; "{m} recovered" is plain. */
+.metric-detail .fail-link{padding:0;border:0;background:none;font:inherit;color:var(--muted);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;cursor:pointer}
+.metric-detail .fail-link:hover{color:var(--text);text-decoration-color:currentColor}
+.metric-detail .fail-link:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:2px}
+@media(pointer:coarse){.metric-detail .fail-link{padding:10px 0;margin:-10px 0}}
+/* Reason picks: under the Requests heading while Failed only is on. One at a time, "All" first; a new range dims them. */
+.reason-picks{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 14px}
+.reason-picks button{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--muted);font-size:10px;white-space:nowrap}
+.reason-picks button b{font:400 10px var(--mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.reason-picks button:hover{color:var(--text);border-color:var(--muted)}
+.reason-picks button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.reason-picks button[aria-pressed=true]{color:var(--text);border-color:color-mix(in srgb,var(--blue) 70%,var(--line));background:color-mix(in srgb,var(--blue) 10%,var(--raised))}
+.reason-picks button[aria-pressed=true] b{color:var(--muted)}
+.reason-picks[aria-busy=true]{opacity:.45;animation:breathe 1.6s infinite}
+@media(max-width:760px){.reason-picks button{height:34px;font-size:11px}.reason-picks button b{font-size:11px}}
+/* Result column: the reason replaces "Failed". Light theme takes a darker red to read on white; a cancellation isn't a fault. */
+[data-theme=light] .outcome.failed{color:#b8452c}
+.outcome.cancelled{color:var(--muted)}
+/* A partial figure ("≥67.3%") is part of the value, not the card's label. */
+.metric-card strong span{font:inherit;color:inherit}
+/* Usage by account and Models: phones stack each row as the Requests list does (.stack-table above), the name first, then
+   each figure with its column's name in short numbers. */
+.num-short{display:none}
+@media(max-width:490px){
+  .stack-table .u-name{order:1;flex:1 1 0;white-space:normal;overflow-wrap:anywhere}
+  .stack-table .u-name .account-chip{display:flex;max-width:100%}
+  .stack-table .u-name .account-chip>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .stack-table .u-side{order:2}
+  .stack-table .u-fig{order:4;white-space:nowrap}
+  .stack-table .num-full{display:none}
+  .stack-table .num-short{display:inline}
+}

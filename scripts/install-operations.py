@@ -29,7 +29,7 @@ WATCH_USER = SITE_SETTINGS['desktop_user']
 USER_UNIT_DIR = Path(site_config.desktop(SITE_SETTINGS).pw_dir) / '.config/systemd/user'
 USER_UNITS = ('claude-usage.service', 'claude-usage.timer', 'claude-redeemer.service',
               'claude-keepalive.service', 'claude-keepalive.timer',
-              'claude-b-usage.service', 'claude-b-usage.timer')
+              'claude-b-usage.service', 'claude-b-usage.timer', 'nightly-tests.service', 'nightly-tests.timer')
 CLAUDE_STATE = Path(site_config.desktop(SITE_SETTINGS).pw_dir) / '.local/state/personal-codex-router'
 GUARD = Path('/etc/tailscale/host-guard.nft')
 # Conversation moves need the helper, its gateway_config module, both move units
@@ -38,21 +38,38 @@ MOVE_FILES = ('move-conversations.py', 'gateway_config.py', 'personal-codex-rout
               'personal-codex-router-move.service')
 MOVE_REQUESTS = Path('/run/personal-codex-router-move-request')
 UNITS = ('backup.service', 'backup.timer', 'dashboard.service', 'move.path', 'move.service', 'ops.service', 'ops.timer',
-         'preference.service', 'preference.timer', 'preview.service', 'url.service',
-         'url.socket', 'usage.service', 'usage.timer')
-SCRIPTS = ('site_config.py', 'collect-usage.py', 'collect-claude-usage.py', 'claude-redeemer.py', 'claude-token-keepalive.py', 'gateway_config.py', 'move-conversations.py', 'prefer-earliest-reset.py', 'router-backup.py',
-           'router-ops.py', 'router-preview.py', 'router-preview.mjs')
+         'preference.service', 'preference.timer', 'preview.service', 'preview-cert.service', 'preview-cert.timer', 'url.service',
+         'url.socket', 'usage.service', 'usage.timer', 'request-outcomes.service', 'request-outcomes.timer',
+         'provider-status.service', 'provider-status.timer',
+         'retention.service', 'retention.timer', 'release-check.service', 'release-check.timer')
+SCRIPTS = ('site_config.py', 'collect-usage.py', 'collect-request-outcomes.py', 'collect-claude-usage.py', 'collect-provider-status.py', 'claude-redeemer.py', 'claude-token-keepalive.py', 'gateway_config.py', 'move-conversations.py', 'prefer-earliest-reset.py', 'router-backup.py',
+           'router-ops.py', 'router-preview.py', 'router-preview.mjs', 'renew-preview-cert.py', 'retain-usage.py',
+           'check-gateway-release.py', 'run-tests.py', 'nightly-tests.py')
 CACHES = {'__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
 PREVIEW_BIND = None
+PREVIEW_TLS_HOSTNAME = None
+PREVIEW_BACKUPS = Path('/var/lib/personal-codex-router-backups/preview-deployments')
 # Ship a consistent backend with server.py, even over an older installation.
-T3_USAGE_FILES = ('server.py', 't3_usage.py', 'providers.py', 'usage_adapters.py', 'routing_policy.py', 'operations.py',
-                  'account_access.py', 'account_add.py', 'account_mutations.py', 'signin.py', 'credential_replace.py', 'request_deadline.py',
-                  'availability.py', 'reset_credits.py', 'fast_mode.py', 'usage_time.py')
+T3_USAGE_FILES = ('server.py', 'series.py', 't3_usage.py', 'providers.py', 'usage_adapters.py', 'quota_headers.py', 'subscriptions.py', 'routing_policy.py', 'operations.py', 'claude_warnings.py',
+                  'account_access.py', 'account_add.py', 'account_mutations.py', 'api_keys.py', 'signin.py', 'credential_replace.py', 'request_deadline.py',
+                  'availability.py', 'reset_credits.py', 'fast_mode.py', 'codex_catalog.py', 'usage_time.py', 'provider_status.py')
 T3_USAGE_BACKUPS = Path('/var/lib/personal-codex-router-backups/t3-usage-deployments')
 DISCONNECTED = Path('/var/lib/personal-codex-router/disconnected')
-ACCOUNT_ACCESS_FILES = ('t3_usage.py', 'providers.py', 'usage_adapters.py', 'account_access.py', 'account_add.py', 'account_mutations.py', 'signin.py', 'credential_replace.py', 'request_deadline.py', 'server.py',
-                        'availability.py', 'operations.py', 'routing_policy.py', 'static/index.html', 'static/app.js',
-                        'static/billing.js', 'static/style.css')
+PROVIDER_STATUS_USER = 'router-provider-status'
+ACCOUNT_ACCESS_FILES = ('series.py', 't3_usage.py', 'providers.py', 'usage_adapters.py', 'quota_headers.py', 'subscriptions.py', 'account_access.py', 'account_add.py', 'account_mutations.py', 'api_keys.py', 'signin.py', 'credential_replace.py', 'request_deadline.py', 'server.py',
+                        'availability.py', 'operations.py', 'claude_warnings.py', 'routing_policy.py', 'static/index.html', 'static/app.js',
+                        'static/billing.js', 'static/style.css', 'static/boards.js', 'static/boards.css',
+                        'static/charts.js', 'static/widgets.js', 'static/charts.css', 'provider_status.py',
+                        'fast_mode.py', 'codex_catalog.py')
+
+
+def preview_files():
+    return [(ROOT / 'scripts' / name, DEST / name, 0o755)
+            for name in ('router-preview.mjs', 'router-preview.py', 'renew-preview-cert.py')] + [
+        (ROOT / 'scripts' / ('personal-codex-router-' + suffix),
+         Path('/etc/systemd/system') / ('personal-codex-router-' + suffix), 0o644)
+        for suffix in ('preview.service', 'preview-cert.service', 'preview-cert.timer')] + [
+        (ROOT / 'scripts/router-preview.py', Path('/usr/local/bin/router-preview'), 0o755)]
 
 
 def install_files(claude_watch_only=False, account_access_only=False, t3_usage_only=False):
@@ -126,8 +143,8 @@ def pre_apply_backup(backup, files, claude_watch_only=False, account_access_only
         backup.sources = original_sources
 
 
-def command(*args):
-    return subprocess.run(args, capture_output=True, check=True, timeout=30).stdout.decode().strip()
+def command(*args, timeout=30):
+    return subprocess.run(args, capture_output=True, check=True, timeout=timeout).stdout.decode().strip()
 
 
 def version_fingerprint():
@@ -162,6 +179,21 @@ def prepare_disconnected_directory():
     os.chown(DISCONNECTED, proxy.pw_uid, proxy.pw_gid)
 
 
+def prepare_provider_status_user():
+    try:
+        user = pwd.getpwnam(PROVIDER_STATUS_USER)
+    except KeyError:
+        command('useradd', '--system', '--user-group', '--no-create-home',
+                '--home-dir', '/nonexistent', '--shell', '/usr/sbin/nologin', PROVIDER_STATUS_USER)
+        user = pwd.getpwnam(PROVIDER_STATUS_USER)
+    gateway = pwd.getpwnam('cliproxyapi')
+    if (user.pw_uid in (0, gateway.pw_uid) or user.pw_gid in (0, gateway.pw_gid) or
+            user.pw_dir != '/nonexistent' or user.pw_shell != '/usr/sbin/nologin' or
+            grp.getgrnam(PROVIDER_STATUS_USER).gr_gid != user.pw_gid or
+            set(os.getgrouplist(PROVIDER_STATUS_USER, user.pw_gid)).intersection({0, gateway.pw_gid})):
+        raise RuntimeError('Provider status user must be a dedicated unprivileged identity')
+
+
 def configure_site(site):
     global SITE_SETTINGS, WATCH_USER, USER_UNIT_DIR, CLAUDE_STATE
     SITE_SETTINGS = site
@@ -188,13 +220,14 @@ def render_unit(text):
 
 def device_preflight():
     """Verify identity and the complete firewall candidate before any install writes."""
-    global PREVIEW_BIND
+    global PREVIEW_BIND, PREVIEW_TLS_HOSTNAME
     devices = SITE_SETTINGS['devices']
     if not devices:
         PREVIEW_BIND = None
         return None
     ts = json.loads(command('tailscale', 'status', '--json'))
     own = ts.get('Self', {})
+    PREVIEW_TLS_HOSTNAME = own.get('DNSName', '').rstrip('.') or SITE_SETTINGS.get('tailscale_hostname')
     PREVIEW_BIND = next((ip for ip in own.get('TailscaleIPs', []) if ':' not in ip), None)
     if not PREVIEW_BIND or not own.get('UserID'):
         raise RuntimeError('Tailscale must be signed in with a local IPv4 address')
@@ -254,6 +287,7 @@ def write_previews():
         fcntl.flock(lock, fcntl.LOCK_EX)
         config = json.loads(CONFIG.read_text()) if CONFIG.exists() else {'base_port': 8400, 'previews': []}
         hostname = SITE_SETTINGS.get('tailscale_hostname', PREVIEW_BIND or 'localhost')
+        config['tls_hostname'] = PREVIEW_TLS_HOSTNAME or SITE_SETTINGS.get('tailscale_hostname', config.get('tls_hostname', config.get('dns')))
         config.update(bind=PREVIEW_BIND or '127.0.0.1', dns=hostname, hostname=hostname.split('.')[0],
                       devices=[{'name': d['name'], 'ips': [d['tailscale_ip']]} for d in SITE_SETTINGS['devices']])
         with tempfile.NamedTemporaryFile(mode='w', dir=CONFIG.parent, delete=False) as candidate:
@@ -333,11 +367,72 @@ def install_t3_usage(files):
                       'gateway_pid': before_gateway, 'codex_process_unchanged': True}))
 
 
+def require_preview_tls():
+    if SITE_SETTINGS['devices']:
+        unit = Path('/etc/systemd/system/personal-codex-router-preview.service')
+        if not unit.exists() or 'LoadCredential=preview.key:' not in unit.read_text():
+            raise RuntimeError('Run --preview-only --apply first to migrate the preview TLS credentials')
+
+
+def install_previews(apply=False):
+    """Upgrade previews, preserving registrations, firewall and other services."""
+    global PREVIEW_BIND
+    files = preview_files()
+    if not apply:
+        print('Back up and install preview helpers and TLS units only; preserve registrations and firewall; add the current TLS hostname.')
+        print('Issue first Tailscale certificate, enable weekly renewal, restart preview service only.')
+        for source, dest, mode in files:
+            print(f'Install {source.relative_to(ROOT)} -> {dest} ({mode:o})')
+        return
+    if os.geteuid() != 0:
+        raise RuntimeError('Run with sudo')
+    config = json.loads(CONFIG.read_text())
+    PREVIEW_BIND = site_config.tailscale_ip(config['bind'])
+    devices = [{'name': d['name'], 'tailscale_ip': ip} for d in config['devices'] for ip in d['ips']]
+    # Use the installed allowlist verbatim. No device, firewall or Tailscale mutations.
+    configure_site({**SITE_SETTINGS, 'devices': devices})
+    ts = json.loads(command('tailscale', 'status', '--json'))
+    hostname = ts.get('Self', {}).get('DNSName', '').rstrip('.')
+    if not hostname.endswith('.ts.net') or '.' not in hostname[:-7]:
+        raise RuntimeError('Preview TLS requires this machine full Tailscale DNS name')
+    if PREVIEW_BIND not in ts.get('Self', {}).get('TailscaleIPs', []):
+        raise RuntimeError('Preview bind address is not this Tailscale device')
+    if command('systemctl', 'is-active', 'tailscale-host-guard.service') != 'active':
+        raise RuntimeError('The existing host guard must remain active')
+    backup_dir = PREVIEW_BACKUPS
+    backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    spec = importlib.util.spec_from_file_location('preview_backup', ROOT / 'scripts/router-backup.py')
+    backup = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(backup)
+    backup.BACKUPS = backup_dir
+    backup.STATUS = backup_dir / 'status.json'
+    pre_apply_backup(backup, files + [(CONFIG, CONFIG, 0o644)], account_access_only=True)
+    with CONFIG.with_suffix('.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = json.loads(CONFIG.read_text())
+        current['tls_hostname'] = hostname
+        tmp = CONFIG.with_suffix('.installing')
+        tmp.write_text(json.dumps(current, indent=2) + '\n')
+        tmp.chmod(0o644)
+        tmp.replace(CONFIG)
+    for source, dest, mode in files:
+        install_file(source, dest, mode)
+    command('systemctl', 'daemon-reload')
+    # systemctl start waits for the oneshot, including its first certificate issue.
+    command('systemctl', 'start', 'personal-codex-router-preview-cert.service', timeout=190)
+    command('systemctl', 'enable', '--now', 'personal-codex-router-preview-cert.timer')
+    command('systemctl', 'enable', '--now', 'personal-codex-router-preview.service')
+    command('systemctl', 'restart', 'personal-codex-router-preview.service')
+    print(json.dumps({'deployed': True, 'scope': 'preview',
+                      'pre_deploy_snapshot': json.loads(backup.STATUS.read_text())['snapshot']}))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--site-config', type=Path, help='Site JSON to validate (and save as /etc/personal-codex-router/site.json on full apply)')
     scope = parser.add_mutually_exclusive_group()
+    scope.add_argument('--preview-only', action='store_true', help='Upgrade preview TLS only; preserve registrations, firewall and other services')
     scope.add_argument('--claude-watch-only', action='store_true',
                         help='Install watch collector/dashboard/B units; back up only replaced files and watch snapshots')
     scope.add_argument('--account-access-only', action='store_true',
@@ -347,6 +442,11 @@ def main():
     args = parser.parse_args()
     if not args.t3_usage_only:
         configure_site(site_config.load(args.site_config, repo=ROOT))
+    if args.preview_only:
+        if args.site_config:
+            raise RuntimeError('Preview-only installs preserve the installed config')
+        install_previews(args.apply)
+        return
     if args.site_config and args.apply and (args.account_access_only or args.claude_watch_only or args.t3_usage_only):
         raise RuntimeError('Site config changes require a full install')
     if args.apply and (args.account_access_only or args.claude_watch_only) and not site_config.SITE.exists():
@@ -390,6 +490,13 @@ def main():
         return
     if not args.apply:
         print('Will back up current runtime/settings; install backup/health timers and dashboard changes.')
+        print('Install and enable/start personal-codex-router-provider-status.timer (public HTTPS feeds every five minutes).')
+        print('Enable daily verified raw usage retention (90 days, private usage-archive; permanent hourly history).')
+        print('Enable weekly anonymous GitHub release checks; notices only, never auto-upgrade.')
+        print('Enable nightly source tests through heavy (systemd --user); retain 14 logs and notify only on failure.')
+        print(f'Create dedicated system user {PROVIDER_STATUS_USER} (no home, no login).')
+        print('The collector preserves /run/personal-codex-router-provider-status '
+              '(0755) with a public status.json (0644); systemd manages the directory.')
         print('Enable device-restricted previews.' if SITE_SETTINGS['devices'] else 'Loopback-only dashboard; device proxy stays off.')
         print('Restart personal-codex-router-dashboard.service and personal-codex-router-preview.service after installing files.')
         print('Enable personal-codex-router-move.path to accept dashboard conversation-move requests; '
@@ -409,6 +516,8 @@ def main():
         return
     if os.geteuid() != 0:
         raise RuntimeError('Run with sudo')
+    if args.account_access_only or args.claude_watch_only:
+        require_preview_tls()
     before_gateway = command('systemctl', 'show', '-p', 'MainPID', '--value', 'cliproxyapi')
     if before_gateway in ('', '0'):
         raise RuntimeError('Start cliproxyapi.service before installing operations')
@@ -458,6 +567,7 @@ def main():
                           'claude-watch-deployment-backup.json' if args.claude_watch_only else 'backup.json')
     saved = json.loads(backup_status.read_text())['snapshot']
     if full_install:
+        prepare_provider_status_user()
         write_site()
     if not args.account_access_only:
         prepare_watch_paths(watch_user)
@@ -507,6 +617,7 @@ def main():
         user_command(watch_user, 'disable', '--now', 'personal-codex-router-claude-b-usage.timer',
                      'personal-codex-router-claude-b-usage.service')
     user_command(watch_user, 'enable', '--now', 'personal-codex-router-claude-keepalive.timer')
+    user_command(watch_user, 'enable', '--now', 'personal-codex-router-nightly-tests.timer')
     user_command(watch_user, 'enable', '--now', 'personal-codex-router-claude-redeemer.service')
     user_command(watch_user, 'restart', 'personal-codex-router-claude-redeemer.service')
     # Create the state directories before starting the dashboard's sandbox.
@@ -515,13 +626,19 @@ def main():
         path.mkdir(mode=0o700, exist_ok=True)
         os.chown(path, proxy.pw_uid, proxy.pw_gid)
     command('systemctl', 'enable', '--now', 'personal-codex-router-usage.timer',
+            'personal-codex-router-request-outcomes.timer',
+            'personal-codex-router-retention.timer', 'personal-codex-router-release-check.timer',
+            'personal-codex-router-provider-status.timer',
             'personal-codex-router-preference.timer', 'personal-codex-router-dashboard.service',
             'personal-codex-router-url.socket', 'personal-codex-router-backup.timer',
             'personal-codex-router-ops.timer', 'personal-codex-router-move.path')
     if SITE_SETTINGS['devices']:
+        command('systemctl', 'start', 'personal-codex-router-preview-cert.service', timeout=190)
+        command('systemctl', 'enable', '--now', 'personal-codex-router-preview-cert.timer')
         command('systemctl', 'enable', '--now', 'personal-codex-router-preview.service')
     else:
-        command('systemctl', 'disable', '--now', 'personal-codex-router-preview.service')
+        command('systemctl', 'disable', '--now', 'personal-codex-router-preview-cert.timer',
+                'personal-codex-router-preview.service')
     command('systemctl', 'restart', 'personal-codex-router-dashboard.service',
             *(['personal-codex-router-preview.service'] if SITE_SETTINGS['devices'] else []))
     if before_gateway != command('systemctl', 'show', '-p', 'MainPID', '--value', 'cliproxyapi') or before_codex != version_fingerprint():

@@ -18,37 +18,41 @@ func TestRewrite(t *testing.T) {
 		for _, allow := range []bool{false, true} {
 			for _, supports := range []bool{false, true} {
 				for _, mapping := range []bool{false, true} {
-					raw := []byte(`{"model":"x","input":[],"other":9007199254740993}`)
-					if value != "" {
-						raw = []byte(`{"service_tier":` + string(mustJSON(value)) + `,"other":9007199254740993}`)
-					}
-					out, err := rewrite(raw, accountPolicy{AllowFast: flag(allow), SupportsUltrafast: supports}, mapping)
-					if err != nil {
-						t.Fatal(err)
-					}
-					expected := any(value)
-					if value == "" {
-						expected = "absent"
-					}
-					if !allow && (value == "fast" || value == "priority" || value == "ultrafast" || value == " Fast ") {
-						expected = "absent"
-					}
-					if allow && value == "ultrafast" && mapping && !supports {
-						expected = "priority"
-					}
-					var obj map[string]json.RawMessage
-					_ = json.Unmarshal(out, &obj)
-					actual := any("absent")
-					if raw, found := obj["service_tier"]; found {
-						if err := json.Unmarshal(raw, &actual); err != nil {
+					for _, call := range []struct{ model, source string }{{"", ""}, {"gpt-6.1-sol", "openai-response"}, {"gpt-6.1-sol", "claude"}} {
+						raw := []byte(`{"model":"x","input":[],"other":9007199254740993}`)
+						if value != "" {
+							raw = []byte(`{"service_tier":` + string(mustJSON(value)) + `,"other":9007199254740993}`)
+						}
+						// Schema 1 entries ignore the model, source format and any allowlist.
+						policy := accountPolicy{AllowFast: flag(allow), SupportsUltrafast: supports, Level: "turbo", UltrafastModels: []string{"gpt-6.1-sol"}}
+						out, err := rewrite(raw, policy, mapping, call.model, call.source)
+						if err != nil {
 							t.Fatal(err)
 						}
-					}
-					if actual != expected {
-						t.Fatalf("value=%q allow=%v support=%v mapping=%v: %s", value, allow, supports, mapping, out)
-					}
-					if string(obj["other"]) != "9007199254740993" {
-						t.Fatalf("unrelated number changed: %s", out)
+						expected := any(value)
+						if value == "" {
+							expected = "absent"
+						}
+						if !allow && (value == "fast" || value == "priority" || value == "ultrafast" || value == " Fast ") {
+							expected = "absent"
+						}
+						if allow && value == "ultrafast" && mapping && !supports {
+							expected = "priority"
+						}
+						var obj map[string]json.RawMessage
+						_ = json.Unmarshal(out, &obj)
+						actual := any("absent")
+						if raw, found := obj["service_tier"]; found {
+							if err := json.Unmarshal(raw, &actual); err != nil {
+								t.Fatal(err)
+							}
+						}
+						if actual != expected {
+							t.Fatalf("value=%q allow=%v support=%v mapping=%v: %s", value, allow, supports, mapping, out)
+						}
+						if string(obj["other"]) != "9007199254740993" {
+							t.Fatalf("unrelated number changed: %s", out)
+						}
 					}
 				}
 			}
@@ -97,12 +101,14 @@ func TestPolicyReload(t *testing.T) {
 }
 func TestInvalidAndMissingTier(t *testing.T) {
 	for _, raw := range []string{`{"service_tier":null}`, `{"service_tier":3}`, `{"input":[]}`} {
-		out, err := rewrite([]byte(raw), accountPolicy{}, true)
-		if err != nil || string(out) != raw {
-			t.Fatalf("changed %s", raw)
+		for _, level := range []string{"", "normal", "fast", "ultrafast"} {
+			out, err := rewrite([]byte(raw), accountPolicy{Level: level, UltrafastModels: []string{"m"}}, true, "m", "openai-response")
+			if err != nil || string(out) != raw {
+				t.Fatalf("changed %s at level %q", raw, level)
+			}
 		}
 	}
-	if _, err := rewrite([]byte(`broken`), accountPolicy{}, false); err == nil {
+	if _, err := rewrite([]byte(`broken`), accountPolicy{}, false, "", ""); err == nil {
 		t.Fatal("invalid JSON accepted")
 	}
 }
@@ -118,7 +124,7 @@ func BenchmarkPolicyUnchanged(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		p, cfg := lookupPolicy(meta)
-		_, _ = rewrite(raw, p, cfg.MapUnsupportedUltrafast)
+		_, _ = rewrite(raw, p, cfg.MapUnsupportedUltrafast, "gpt-5.5", "openai-response")
 	}
 }
 
@@ -141,7 +147,7 @@ func TestStatusLifecycle(t *testing.T) {
 	if err := json.Unmarshal(raw, &first); err != nil {
 		t.Fatal(err)
 	}
-	if first.Plugin != "fast-mode-policy" || first.Version != version || first.PID != os.Getpid() || !first.MapUnsupportedUltrafast {
+	if first.Plugin != "fast-mode-policy" || first.Version != version || first.PID != os.Getpid() || !first.MapUnsupportedUltrafast || first.PolicySchema != 2 {
 		t.Fatalf("status: %+v", first)
 	}
 	if _, err := time.Parse(time.RFC3339, first.LoadedAt); err != nil {
@@ -203,7 +209,7 @@ func TestPolicyDefaultsAndIndexNoMerge(t *testing.T) {
 		t.Fatal("index entry must not merge filename fields")
 	}
 	raw := []byte(`{"service_tier":"ultrafast"}`)
-	out, err := rewrite(raw, p, true)
+	out, err := rewrite(raw, p, true, "", "")
 	if err != nil || tier(out) != "priority" {
 		t.Fatal("unknown supports defaults false")
 	}
@@ -353,5 +359,227 @@ func TestAllPluginLogsExcludeUntrustedData(t *testing.T) {
 	}
 	if len(logs) < 9 {
 		t.Fatalf("expected decision, warning, policy and operation error logs: %v", logs)
+	}
+}
+
+func tierValue(t *testing.T, body []byte) any {
+	t.Helper()
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(body, &obj); err != nil {
+		t.Fatal(err)
+	}
+	raw, found := obj["service_tier"]
+	if !found {
+		return "absent"
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
+func TestLevelMatrix(t *testing.T) {
+	allowed := []string{"GPT-6.1-Sol", " gpt-6-astra "}
+	sources := []string{"openai-response", "openai", "OpenAI-Response", "claude", "gemini", "interactions", "codex", ""}
+	for _, level := range []string{"normal", "fast", "ultrafast", " UltraFast "} {
+		for _, value := range []any{nil, "fast", "priority", "ultrafast", " Ultrafast ", " Fast ", "default", "auto", "future-tier", 3.0} {
+			for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra", ""} {
+				for _, source := range sources {
+					for _, mapping := range []bool{false, true} {
+						raw := []byte(`{"input":[],"other":9007199254740993}`)
+						if value != nil {
+							raw = []byte(`{"service_tier":` + string(mustJSON(value)) + `,"other":9007199254740993}`)
+						}
+						policy := accountPolicy{Level: level, UltrafastModels: allowed, AllowFast: flag(false), SupportsUltrafast: true}
+						out, err := rewrite(raw, policy, mapping, model, source)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var want any = value
+						if value == nil {
+							want = "absent"
+						}
+						label, _ := value.(string)
+						requested := strings.ToLower(strings.TrimSpace(label))
+						eligible := (model == "gpt-6.1-sol" || model == "gpt-6-astra") &&
+							(strings.EqualFold(source, "openai-response") || source == "openai")
+						if requested == "fast" || requested == "priority" || requested == "ultrafast" {
+							switch strings.ToLower(strings.TrimSpace(level)) {
+							case "normal":
+								want = "absent"
+							case "fast":
+								if requested == "ultrafast" {
+									want = "priority"
+								}
+							case "ultrafast":
+								if requested == "ultrafast" && !eligible {
+									want = "priority"
+								} else if requested != "ultrafast" && eligible {
+									want = "ultrafast"
+								}
+							}
+						}
+						if got := tierValue(t, out); got != want {
+							t.Fatalf("level=%q value=%v model=%q source=%q mapping=%v: got %v want %v (%s)", level, value, model, source, mapping, got, want, out)
+						}
+						if !strings.Contains(string(out), "9007199254740993") {
+							t.Fatalf("unrelated number changed: %s", out)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestLevelResolution(t *testing.T) {
+	for _, test := range []struct {
+		policy accountPolicy
+		want   string
+	}{
+		{accountPolicy{Level: "normal", AllowFast: flag(true)}, "normal"},
+		{accountPolicy{Level: "FAST", AllowFast: flag(false)}, "fast"},
+		{accountPolicy{Level: "ultrafast"}, "ultrafast"},
+		{accountPolicy{Level: "turbo", AllowFast: flag(false)}, ""},
+		{accountPolicy{AllowFast: flag(true)}, ""},
+		{accountPolicy{}, ""},
+	} {
+		if got := test.policy.level(); got != test.want {
+			t.Fatalf("%+v: level %q, want %q", test.policy, got, test.want)
+		}
+	}
+	// Without a valid level, allow_fast false still removes the tier.
+	out, _ := rewrite([]byte(`{"service_tier":"priority"}`), accountPolicy{Level: "turbo", AllowFast: flag(false)}, true, "", "")
+	if tierValue(t, out) != "absent" {
+		t.Fatal("v1 fallback ignored allow_fast false")
+	}
+}
+
+func TestModelNormalization(t *testing.T) {
+	for in, want := range map[string]string{
+		"gpt-6.1-sol":                 "gpt-6.1-sol",
+		" GPT-6.1-Sol ":               "gpt-6.1-sol",
+		"gpt-6.1-sol(high)":           "gpt-6.1-sol",
+		"gpt-6.1-sol (xhigh)":         "gpt-6.1-sol",
+		"codex/gpt-6.1-sol":           "gpt-6.1-sol",
+		"team/codex/gpt-6.1-sol(low)": "gpt-6.1-sol",
+		"gpt-6.1-sol-mini":            "gpt-6.1-sol-mini",
+		"":                            "",
+		"   ":                         "",
+		"(high)":                      "",
+		"prefix/":                     "",
+	} {
+		if got := normalizeModel(in); got != want {
+			t.Fatalf("normalizeModel(%q) = %q, want %q", in, got, want)
+		}
+	}
+	p := accountPolicy{Level: "ultrafast", UltrafastModels: []string{"gpt-6.1-sol"}}
+	if p.allowsUltrafast("") || p.allowsUltrafast("gpt-6.1-sol-mini") || p.allowsUltrafast("gpt-6.1") || !p.allowsUltrafast("gpt-6.1-sol") {
+		t.Fatal("allowlist must match exact normalized slugs only")
+	}
+	if (accountPolicy{Level: "ultrafast", UltrafastModels: []string{""}}).allowsUltrafast("") {
+		t.Fatal("empty model must never be allowed")
+	}
+	for _, test := range []struct{ model, body, want string }{
+		{"codex/gpt-6.1-sol(high)", `{"model":"other"}`, "gpt-6.1-sol"},
+		{"", `{"model":"GPT-6-Astra(xhigh)"}`, "gpt-6-astra"},
+		{" ", `{"model":"gpt-6-astra"}`, "gpt-6-astra"},
+		{"", `{"model":7}`, ""},
+		{"", `{}`, ""},
+		{"", `broken`, ""},
+	} {
+		if got := requestModel(test.model, []byte(test.body)); got != test.want {
+			t.Fatalf("requestModel(%q, %s) = %q, want %q", test.model, test.body, got, test.want)
+		}
+	}
+}
+
+func TestInterceptorAppliesSchema2Policy(t *testing.T) {
+	dir := t.TempDir()
+	cfg := pluginConfig{PolicyPath: filepath.Join(dir, "policy.json"), StatusPath: filepath.Join(dir, "status.json"), MapUnsupportedUltrafast: true}
+	if err := configure(cfg); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = removeOwnStatus(cfg.StatusPath, state.loadedAt) })
+	state.warned = make(map[string]bool)
+	write := func(policy string) {
+		t.Helper()
+		if err := os.WriteFile(cfg.PolicyPath, []byte(policy), 0600); err != nil {
+			t.Fatal(err)
+		}
+		state.Lock()
+		state.info = nil
+		state.Unlock()
+	}
+	call := func(model, source, body string) any {
+		t.Helper()
+		req := pluginapi.RequestInterceptRequest{ToFormat: "codex", SourceFormat: source, Model: model, Body: []byte(body),
+			Metadata: map[string]any{"selected_auth_index": "0123456789abcdef"}}
+		result, err := dispatch(pluginabi.MethodRequestInterceptAfter, mustJSON(req))
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := result.(pluginapi.RequestInterceptResponse)
+		if response.Body == nil {
+			return tierValue(t, []byte(body))
+		}
+		return tierValue(t, response.Body)
+	}
+	write(`{"version":2,"accounts":{"0123456789abcdef":{"level":"ultrafast","ultrafast_models":["gpt-6.1-sol"],"allow_fast":true,"supports_ultrafast":true}}}`)
+	for _, test := range []struct {
+		model, source, body string
+		want                any
+	}{
+		{"gpt-6.1-sol(high)", "openai-response", `{"service_tier":"priority"}`, "ultrafast"},
+		{"", "openai", `{"model":"codex/gpt-6.1-sol","service_tier":"fast"}`, "ultrafast"},
+		{"gpt-6.1-sol", "claude", `{"service_tier":"priority"}`, "priority"},
+		{"gpt-6.1-sol", "claude", `{"service_tier":"ultrafast"}`, "priority"},
+		{"gpt-6.1-terra", "openai-response", `{"service_tier":"priority"}`, "priority"},
+		{"gpt-6.1-terra", "openai-response", `{"service_tier":"ultrafast"}`, "priority"},
+		{"gpt-6.1-sol", "openai-response", `{"service_tier":"ultrafast"}`, "ultrafast"},
+		{"gpt-6.1-sol", "openai-response", `{"input":[]}`, "absent"},
+		{"", "openai-response", `{"service_tier":"priority"}`, "priority"},
+	} {
+		if got := call(test.model, test.source, test.body); got != test.want {
+			t.Fatalf("%+v: got %v", test, got)
+		}
+	}
+	// Index entries take precedence; v1 entries keep their old behaviour.
+	write(`{"version":1,"accounts":{"0123456789abcdef":{"allow_fast":true,"supports_ultrafast":true}}}`)
+	if got := call("gpt-6.1-terra", "claude", `{"service_tier":"ultrafast"}`); got != "ultrafast" {
+		t.Fatalf("v1 supports_ultrafast changed: %v", got)
+	}
+	write(`{"version":2,"accounts":{"0123456789abcdef":{"level":"normal","allow_fast":false}}}`)
+	if got := call("gpt-6.1-sol", "openai-response", `{"service_tier":"ultrafast"}`); got != "absent" {
+		t.Fatalf("normal kept a tier: %v", got)
+	}
+	// A malformed schema 2 file falls back to the default: fast, ultrafast mapped to priority.
+	for _, test := range []struct{ name, entry string }{
+		{"numeric-model", `{"level":"ultrafast","ultrafast_models":[1]}`},
+		{"null-level", `{"level":null,"supports_ultrafast":true,"ultrafast_models":["gpt-6.1-sol"]}`},
+		{"numeric-level", `{"level":1,"supports_ultrafast":true}`},
+		{"boolean-level", `{"level":true,"supports_ultrafast":true}`},
+		{"object-level", `{"level":{},"supports_ultrafast":true}`},
+		{"array-level", `{"level":[],"supports_ultrafast":true}`},
+		{"null-model", `{"level":"ultrafast","supports_ultrafast":true,"ultrafast_models":["gpt-6.1-sol",null]}`},
+		{"boolean-model", `{"level":"ultrafast","ultrafast_models":["gpt-6.1-sol",true]}`},
+		{"object-model", `{"level":"ultrafast","ultrafast_models":["gpt-6.1-sol",{}]}`},
+		{"array-model", `{"level":"ultrafast","ultrafast_models":["gpt-6.1-sol",[]]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			write(`{"version":2,"accounts":{"0123456789abcdef":` + test.entry + `}}`)
+			for _, model := range []string{"gpt-6.1-sol", "gpt-6.1-terra"} {
+				for _, requested := range []string{"priority", "ultrafast"} {
+					if got := call(model, "openai-response", `{"service_tier":"`+requested+`"}`); got != "priority" {
+						t.Errorf("malformed policy: model=%q tier=%q got %v, want priority", model, requested, got)
+					}
+				}
+			}
+		})
+	}
+	_ = os.Remove(cfg.PolicyPath)
+	if got := call("gpt-6.1-sol", "openai-response", `{"service_tier":"ultrafast"}`); got != "priority" {
+		t.Fatalf("missing policy kept ultrafast: %v", got)
 	}
 }

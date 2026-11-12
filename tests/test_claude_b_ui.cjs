@@ -10,9 +10,9 @@ const document = {documentElement: {dataset: {}}, querySelectorAll: () => [], ge
   if (!elements.has(id)) elements.set(id, {addEventListener() {}});
   return elements.get(id);
 }};
-const context = vm.createContext({document, Date: FakeDate, localStorage: {getItem: () => null}});
+const context = vm.createContext({document, fitStatus() {}, Date: FakeDate, localStorage: {getItem: () => null}});
 const source = fs.readFileSync(path.join(__dirname, '../dashboard/static/app.js'), 'utf8');
-vm.runInContext(source.slice(0, source.indexOf('function renderChart(')), context);
+vm.runInContext(source.slice(0, source.indexOf('function table(')), context);
 const windows = [
   {kind: 'five_hour', label: '5-hour limit', used: 4, remaining: 96, resets_at: clock / 1000 + 14000, seconds: 18000},
   {kind: 'seven_day', label: 'Weekly · all models', used: 16, remaining: 84, resets_at: clock / 1000 + 302400, seconds: 604800},
@@ -44,7 +44,7 @@ assert.equal(elements.get('claude-account-count').textContent, '1 / 1');
 for (const status of ['missing_token', 'error', 'unavailable']) {
   const errorHtml = render([{...b, email: 'alternate@example.test', status,
     checked_at: new FakeDate(clock - 3600000).toISOString(), attempted_at: b.checked_at, error: status}]);
-  assert.match(errorHtml, status === 'missing_token' ? /Sign-in token missing/ : /Unavailable/);
+  assert.match(errorHtml, status === 'missing_token' ? /Sign in required/ : /Unavailable/);
   assert.match(errorHtml, /watch-state-down/);
   assert.match(errorHtml, /last known/);
   assert.match(errorHtml, /Last attempt/);
@@ -57,10 +57,12 @@ for (const status of ['missing_token', 'error', 'unavailable']) {
 }
 
 assert.match(bHtml, /<span title="Claude B">Claude B<\/span>/);
-assert.match(bHtml, /class="small-badge">Pro<\/span>/);
+assert.match(bHtml, /<a class="small-badge plan-badge" href="https:\/\/claude\.ai\/settings\/billing"[^>]* aria-label="Pro · Billing">Pro<svg/);
 assert.match(bHtml, /84<span class="percent">%<\/span>/);
-assert.match(bHtml, /5-hour limit<\/span><span>96% remaining/);
-assert.match(bHtml, /class="pace-bar/);
+// The five-hour bar shows pace as the weekly hero does, against its own five hours.
+assert.match(bHtml, /title="[^"]*· 78% of the 5 hours left · 96% of the allowance left"><div class="secondary-quota"><span>5-hour limit<\/span><span>96% remaining/);
+assert.match(bHtml, /<div class="limit-track has-pace" aria-hidden="true"><span style="width:96%"><\/span><i class="pace-bar" style="width:77.78%" aria-hidden="true"><\/i><\/div>/);
+assert.match(bHtml, /quota-track has-pace/);
 assert.doesNotMatch(bHtml, /Extra usage|data-reset-open|Resets <span>|Auto-use/);
 const unknown = render([{...b, windows: windows.map(w => ({...w, used: null, remaining: null}))}]);
 assert.match(unknown, /Waiting for usage data/);
@@ -71,13 +73,13 @@ for (const kind of ['five_hour', 'seven_day']) {
   const partial = {...measured, windows: measured.windows.map(w => w.kind === kind
     ? {...w, measured_at: new FakeDate(clock - 901000).toISOString()} : w)};
   const partialHtml = render([partial]);
-  assert.match(partialHtml, /Stale · updated 15m ago|last known/);
-  assert.doesNotMatch(partialHtml, /pace-bar/);
+  assert.doesNotMatch(partialHtml, /Stale · updated 15m ago|last known/);
+  assert.match(partialHtml, /quota-track has-pace/);
 }
-assert.match(render([measured]), /pace-bar/);
+assert.match(render([measured]), /quota-track has-pace/);
 for (const value of [null, 'bad']) {
   assert.doesNotMatch(render([{...measured, windows: measured.windows.map(w => w.kind === 'seven_day'
-    ? {...w, measured_at: value} : w)}]), /pace-bar/);
+    ? {...w, measured_at: value} : w)}]), /quota-track has-pace/);
 }
 for (const kind of ['five_hour', 'seven_day']) {
   for (const offset of [0, -1]) {
@@ -87,7 +89,10 @@ for (const kind of ['five_hour', 'seven_day']) {
     if (kind === 'seven_day') {
       assert.match(dueHtml, /Waiting for usage data/);
       assert.doesNotMatch(dueHtml, /pace-bar|aria-valuenow/);
-    } else assert.match(dueHtml, /5-hour limit<\/span><span>—<\/span>/);
+    } else {
+      assert.match(dueHtml, /5-hour limit<\/span><span>—<\/span>/);
+      assert.doesNotMatch(dueHtml, /limit-track has-pace/);
+    }
     assert.equal(due.windows.find(w => w.kind === kind).used, kind === 'five_hour' ? 4 : 16);
   }
 }
@@ -95,9 +100,9 @@ for (const kind of ['five_hour', 'seven_day']) {
 assert.equal(render([{...a, windows: windows.map(w => ({...w, measured_at: null}))}]), before);
 const expiresOnPage = {...measured, windows: measured.windows.map(w => w.kind === 'seven_day'
   ? {...w, resets_at: clock / 1000 + 1} : w)};
-assert.match(render([expiresOnPage]), /pace-bar/);
+assert.match(render([expiresOnPage]), /quota-track has-pace/);
 clock += 1000;
-assert.doesNotMatch(render([expiresOnPage]), /pace-bar|aria-valuenow/);
+assert.doesNotMatch(render([expiresOnPage]), /quota-track has-pace|aria-valuenow/);
 assert.match(render([expiresOnPage]), /Waiting for usage data/);
 // Gateway windows expire between polls even though their watch-specific flag is false.
 {
@@ -106,7 +111,7 @@ assert.match(render([expiresOnPage]), /Waiting for usage data/);
       usage_source: 'gateway', measured_at: new FakeDate(clock).toISOString(), resets_at: clock / 1000 + 1}))};
   const original = JSON.stringify(gateway);
   assert.match(render([gateway]), /84<span class="percent">%<\/span>/);
-  assert.match(render([gateway]), /5-hour limit<\/span><span>96% remaining/);
+  assert.match(render([gateway]), /of the 5 hours left · 96% of the allowance left"><div class="secondary-quota"><span>5-hour limit<\/span><span>96% remaining/);
   clock += 1000;
   for (const offset of [0, 1000]) {
     clock += offset;
@@ -117,8 +122,8 @@ assert.match(render([expiresOnPage]), /Waiting for usage data/);
   }
   assert.equal(JSON.stringify(gateway), original);
 }
-clock += 901000;
+clock = windows[0].resets_at * 1000;
 const stale = render([b]);
 assert.match(stale, /last known/);
 assert.doesNotMatch(stale, /pace-bar/);
-console.log('Claude B UI: A unchanged, oldest-window freshness, full refresh, due resets, pace, unknowns and stale state passed.');
+console.log('Claude B UI: A unchanged, per-window reset freshness, full refresh, due resets, pace, unknowns and stale state passed.');

@@ -22,6 +22,128 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class UsageCollectionTests(unittest.TestCase):
+    def test_hourly_migration_preserves_null_groups_sums_and_legacy_dates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'usage.sqlite3'
+            with contextlib.closing(collector.connect(db)) as con, con:
+                con.execute('DROP TABLE usage_hourly')
+                for provider, account, model, stamp, latency, read in (
+                        (None, None, None, '2026-10-03 03:00:00', None, None),
+                        ('', None, None, '2026-10-03T03:05:00Z', 1.5, 0),
+                        ('codex', '', '', '2026-10-03T03:00:00Z', None, None),
+                        ('claude', '0', '0', 'invalid', None, None)):
+                    con.execute('''INSERT INTO usage
+                        (provider,auth_index,model,timestamp,collected_at,latency_ms,cache_read_tokens)
+                        VALUES (?,?,?,?,'collected',?,?)''', (provider, account, model, stamp, latency, read))
+                original = con.execute('SELECT * FROM usage ORDER BY id').fetchall()
+            for _ in range(2):
+                with contextlib.closing(collector.connect(db)) as con:
+                    self.assertEqual(con.execute('SELECT * FROM usage ORDER BY id').fetchall(), original)
+                    self.assertEqual(con.execute('''SELECT provider,hour,auth_index,model,requests,
+                        failed,total_tokens,latency_ms,latency_ms_count,cache_read_tokens,
+                        cache_read_tokens_count,cache_creation_tokens,cache_creation_tokens_count
+                        FROM usage_hourly ORDER BY provider,auth_index''').fetchall(), [
+                            ('claude', None, '0', '0', 1, None, None, None, 0, None, 0, None, 0),
+                            ('codex', '2026-10-03T03:00:00Z', None, None, 2, None, None, 1.5, 1, 0, 1, None, 0),
+                            ('codex', '2026-10-03T03:00:00Z', '', '', 1, None, None, None, 0, None, 0, None, 0)])
+
+    def test_interrupted_rollup_backfill_is_atomic_and_retryable(self):
+        real_connect = sqlite3.connect
+
+        class Interrupted(sqlite3.Connection):
+            def execute(self, sql, parameters=()):
+                if sql.startswith('INSERT INTO usage_hourly'):
+                    raise sqlite3.OperationalError('interrupted backfill')
+                return super().execute(sql, parameters)
+
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'usage.sqlite3'
+            with contextlib.closing(collector.connect(db)) as con, con:
+                con.execute('DROP TABLE usage_hourly')
+                con.execute("INSERT INTO usage (timestamp,collected_at) VALUES ('invalid','old')")
+            with patch.object(collector.sqlite3, 'connect',
+                              side_effect=lambda *a, **kw: real_connect(*a, **kw, factory=Interrupted)):
+                with self.assertRaisesRegex(sqlite3.OperationalError, 'interrupted backfill'):
+                    collector.connect(db)
+            with contextlib.closing(real_connect(db)) as con:
+                self.assertFalse(con.execute("SELECT 1 FROM sqlite_master WHERE name='usage_hourly'").fetchall())
+            with contextlib.closing(collector.connect(db)) as con:
+                self.assertEqual(con.execute('SELECT requests,hour FROM usage_hourly').fetchall(), [(1, None)])
+
+    def test_replay_upserts_atomically_excludes_quarantine_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db, spool = Path(directory) / 'usage.sqlite3', Path(directory) / 'batch.json'
+            records = [dict(timestamp='2026-10-03T03:00:00Z', model='m', auth_index='a'),
+                       dict(timestamp='2026-10-03T03:01:00Z', model='m', auth_index='a', provider='',
+                            failed=True, latency_ms=2.5, tokens={'input_tokens':4, 'cache_read_tokens':0}),
+                       dict(timestamp='invalid', provider='claude'), 'quarantined']
+            spool.write_text(json.dumps(records))
+            with contextlib.closing(collector.connect(db)) as con:
+                with patch.object(Path, 'unlink', side_effect=OSError('after commit')):
+                    with self.assertRaises(OSError):
+                        collector.replay_spool(con, spool)
+                self.assertEqual(collector.replay_spool(con, spool), (0, 0, 0))
+                self.assertEqual(con.execute('SELECT count(*) FROM usage_quarantine').fetchone()[0], 1)
+                self.assertEqual(con.execute('''SELECT provider,hour,requests,failed,latency_ms,
+                    latency_ms_count,input_tokens,total_tokens,cache_read_tokens,
+                    cache_read_tokens_count,cache_creation_tokens_count
+                    FROM usage_hourly ORDER BY provider''').fetchall(), [
+                        ('claude', None, 1, 0, None, 0, None, None, None, 0, 0),
+                        ('codex', '2026-10-03T03:00:00Z', 2, 1, 2.5, 1, 4, None, 0, 1, 0)])
+                # A subsequent NULL observation must not erase an earlier sum.
+                spool.write_text(json.dumps([records[0], records[2]]))
+                renamed = spool.with_name('second.json')
+                spool.rename(renamed)
+                self.assertEqual(collector.replay_spool(con, renamed), (2, 0, 0))
+                self.assertEqual(con.execute("SELECT requests,latency_ms,latency_ms_count FROM usage_hourly WHERE provider='codex'").fetchone(), (3, 2.5, 1))
+                self.assertEqual(con.execute("SELECT count(*),sum(requests) FROM usage_hourly WHERE hour IS NULL").fetchone(), (1, 2))
+
+    def test_rollup_failure_rolls_back_usage_and_preserves_spool(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db, spool = Path(directory) / 'usage.sqlite3', Path(directory) / 'batch.json'
+            spool.write_text('[{"timestamp":"2026-10-03T03:00:00Z"}]')
+            with contextlib.closing(collector.connect(db)) as con:
+                con.execute('''CREATE TRIGGER reject_rollup BEFORE INSERT ON usage_hourly
+                    BEGIN SELECT RAISE(FAIL, 'rollup failure'); END''')
+                con.commit()
+                with self.assertRaisesRegex(sqlite3.IntegrityError, 'rollup failure'):
+                    collector.replay_spool(con, spool)
+                for table in ('usage', 'usage_hourly', 'usage_quarantine', 'usage_batches'):
+                    self.assertEqual(con.execute('SELECT count(*) FROM ' + table).fetchone()[0], 0)
+                self.assertTrue(spool.exists())
+                con.execute('DROP TRIGGER reject_rollup')
+                self.assertEqual(collector.replay_spool(con, spool), (1, 0, 0))
+
+    def test_failed_request_index_migration_is_additive_repeatable_and_maintained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'usage.sqlite3'
+            with contextlib.closing(collector.connect(db)) as con, con:
+                for name in ('usage_failed_by_request_time', 'usage_failed_by_provider_request_time'):
+                    con.execute('DROP INDEX ' + name)
+                con.executemany('INSERT INTO usage (collected_at,timestamp,request_time,provider,failed) '
+                                'VALUES (?,?,?,?,?)',
+                                [('old', '2026-10-03T00:00:00Z', '2026-10-03T00:00:00.000000000Z', provider, failed)
+                                 for provider, failed in [('claude', 1), ('codex', 0), ('', 2), (None, -1), ('codex', None)]])
+                old_rows = con.execute('SELECT * FROM usage ORDER BY id').fetchall()
+            for _ in range(2):
+                with contextlib.closing(collector.connect(db)) as con:
+                    self.assertEqual(con.execute('SELECT * FROM usage ORDER BY id').fetchall(), old_rows)
+                    indexes = {r[1]: r for r in con.execute('PRAGMA index_list(usage)')}
+                    for name in ('usage_failed_by_request_time', 'usage_failed_by_provider_request_time'):
+                        self.assertEqual(indexes[name][4], 1, 'failed-only index must be partial')
+                        sql = con.execute('SELECT sql FROM sqlite_master WHERE name=?', (name,)).fetchone()[0]
+                        self.assertTrue(sql.endswith('WHERE failed'))
+                        self.assertEqual(con.execute('SELECT id FROM usage INDEXED BY ' + name +
+                                                     ' WHERE failed ORDER BY id').fetchall(), [(1,), (3,), (4,)])
+            spool = Path(directory) / 'failed-batch.json'
+            spool.write_text(json.dumps([dict(timestamp='2026-10-04T00:00:00Z', provider='claude', failed=True),
+                                         dict(timestamp='2026-10-04T00:00:01Z', provider='codex', failed=False)]))
+            with contextlib.closing(collector.connect(db)) as con:
+                self.assertEqual(collector.replay_spool(con, spool), (2, 0, 0))
+                for name in ('usage_failed_by_request_time', 'usage_failed_by_provider_request_time'):
+                    self.assertEqual(con.execute('SELECT id FROM usage INDEXED BY ' + name +
+                                                 ' WHERE failed ORDER BY id').fetchall(), [(1,), (3,), (4,), (6,)])
+
     def test_unreported_served_tiers_remain_unknown_through_spool_replay(self):
         records = [{}, {'service_tier':'priority'},
                    {'service_tier':'ultrafast', 'response_service_tier':None, 'failed':True},

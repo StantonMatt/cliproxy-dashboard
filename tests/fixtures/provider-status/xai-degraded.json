@@ -1,0 +1,42 @@
+{
+  "updated_at": "2026-10-31T12:00:00Z",
+  "overall": {
+    "status": "available"
+  },
+  "products": [
+    {
+      "id": "grok",
+      "name": "Grok",
+      "status": "available",
+      "components": [
+        {
+          "id": "grok-com",
+          "name": "grok.com",
+          "status": "available"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "name": "API",
+      "status": "available",
+      "components": [
+        {
+          "id": "api-global",
+          "name": "Global (api.x.ai)",
+          "status": "available"
+        },
+        {
+          "id": "api-us",
+          "name": "US (us.api.x.ai)",
+          "status": "disruption"
+        },
+        {
+          "id": "api-eu-west-1",
+          "name": "EU (eu-west-1.api.x.ai)",
+          "status": "available"
+        }
+      ]
+    }
+  ]
+}

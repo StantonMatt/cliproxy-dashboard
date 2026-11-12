@@ -9,7 +9,7 @@ import stat
 import time
 from urllib.parse import urlencode
 
-from account_add import AccountError, TESTED_GATEWAYS
+from account_add import AccountError, confirmation_text, gateway_compat
 import account_access
 import credential_replace
 import routing_policy
@@ -26,7 +26,14 @@ def resolve(rows, key, auth_index):
 
 
 def binding(row):
-    return tuple(row.get(k) for k in ('name', 'auth_index', 'type', 'email', 'path', 'source', 'runtime_only'))
+    return tuple(row.get(k) for k in ('name', 'auth_index', 'type', 'email', 'label', 'path', 'source', 'runtime_only'))
+
+
+def confirm_disconnect(record, confirm_text):
+    expected = confirmation_text(record)
+    if (not isinstance(confirm_text, str) or not isinstance(expected, str)
+            or not expected.strip() or confirm_text.strip().casefold() != expected.strip().casefold()):
+        raise AccountError('confirm_mismatch', 'Type the confirmation text to disconnect this account.')
 
 
 def credential_source(record):
@@ -150,12 +157,14 @@ class AccountMutations:
     def __init__(self, call, lifecycle_lock, changed, ready):
         self.call, self.lock, self.changed, self.ready = call, lifecycle_lock, changed, ready
 
-    def apply(self, key, auth_index, enabled=None, disconnect=False, deadline=None):
+    def apply(self, key, auth_index, enabled=None, disconnect=False, deadline=None, confirm_text=None):
         deadline = deadline or RequestDeadline()
         call = deadline.wrap(self.call)
         with deadline.lock(self.lock):
             rows = call('/auth-files').get('files', [])
             record = resolve(rows, key, auth_index)
+            if disconnect:
+                confirm_disconnect(record, confirm_text)
             provider = record.get('type')
             if not isinstance(provider, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', provider):
                 raise AccountError('account_changed', 'The account provider is unavailable.', 409)
@@ -168,7 +177,8 @@ class AccountMutations:
                 if binding(record) != binding(current):
                     raise AccountError('account_changed', 'The account changed. Refresh and try again.', 409)
                 if disconnect:
-                    if getattr(call('/config'), 'version', None) not in TESTED_GATEWAYS:
+                    confirm_disconnect(current, confirm_text)
+                    if not gateway_compat(getattr(call('/config'), 'version', None))['supported']:
                         raise AccountError('disconnect_unsafe',
                             'Safe disconnect is unavailable on this gateway version.', 409)
                     last_ready = not self.ready(rows, provider, key, call)

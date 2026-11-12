@@ -32,7 +32,7 @@ PLUGIN_DIR = Path('/opt/personal-codex-router/plugins')
 POLICY = '/var/lib/personal-codex-router/fast-mode-policy.json'
 STATUS = Path('/var/lib/cliproxyapi/fast-mode-plugin-status.json')
 BACKUPS = Path('/var/lib/personal-codex-router-backups/fast-mode-plugin')
-VERSION = '0.1.2'
+VERSION = '0.2.0'
 DEACTIVATION_UNCONFIRMED = 3
 PUBLIC_KEYS = ('enabled', 'priority', 'policy_path', 'status_path',
                'map_unsupported_ultrafast', 'audit')
@@ -753,7 +753,7 @@ def backup_config(original, candidate, path, *, chown=None, fchown=None, stat_pa
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--library', type=Path, help='already-built fast-mode-policy-v0.1.2.so')
+    parser.add_argument('--library', type=Path, help='already-built fast-mode-policy-v0.2.0.so')
     parser.add_argument('--config', type=Path, default=CONFIG, help='alternate path allowed only with --dry-run')
     parser.add_argument('--dry-run', action='store_true')
     actions = parser.add_mutually_exclusive_group()

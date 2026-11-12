@@ -1,0 +1,426 @@
+/* Board widgets drawn by charts.js and widgets.js. Everything uses style.css tokens (--surface, --line, --muted, family
+   colours), so light and dark come for free. Widgets lay out by their own width (container queries on .rc), not the window's. */
+
+/* ---------- widget root and card ---------- */
+.rc{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;container-type:inline-size}
+.rc-card{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:22px 25px}
+.rc-card.tight{padding:18px 20px}
+.rc-card.rc-chart{min-height:204px}
+.rc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-height:14px}
+.rc-head-main{min-width:0}
+/* --rc-tools (widgets.js) keeps the title clear of the board's range chip and ⋯ menu in the widget's corner */
+.rc-head,.rc-stat-head{padding-right:var(--rc-tools,0)}
+.rc-eyebrow-row{display:flex;align-items:center;gap:9px;min-width:0}
+.rc-title{text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-cap{font-size:10px;color:var(--faint);margin:4px 0 0}
+.rc-cap:empty{display:none}
+.rc-head-side{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.rc-head-side:empty{display:none}
+.rc-body{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;margin-top:16px}
+.rc-chart .rc-body{margin-top:20px;min-height:var(--rc-body-min,0)}
+.rc-refetch{opacity:.45;transition:opacity .2s}
+.rc-wrap{white-space:normal!important}
+/* the dashboard's global svg rule (20px icons, stroked) must not reach data graphics */
+.rc-plot svg,.rc-spark svg,.rc-tl svg,.rc-donut svg,.rc-ring svg,svg.rc-thumb{stroke:none;stroke-width:1;fill:none}
+
+/* ---------- states ---------- */
+.rc-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;color:var(--muted);font-size:12px;padding:20px 8px;min-height:120px}
+.rc-state svg{width:18px;height:18px}
+.rc-state.err svg{color:var(--danger)}
+.rc-state .resets-button{color:var(--text)}
+.rc-state.loading{animation:breathe 2s infinite}
+.rc-state.row{flex:0 0 auto;flex-direction:row;flex-wrap:wrap;justify-content:flex-start;gap:8px 10px;min-height:0;padding:12px 0 0;font-size:11px;text-align:left}
+.rc-state.row>span{flex:1 1 110px;min-width:0}
+.rc-state.row svg{width:15px;height:15px;flex-shrink:0}
+.rc-state.row .resets-button{padding:5px 9px;white-space:nowrap}
+.rc-sk{display:block;background:var(--raised);border-radius:4px;animation:breathe 2s infinite}
+.rc-stat .rc-state,.rc-retry .rc-state,.rc-pulse-card .rc-state,.rc-notes-card .rc-state,.rc-health-card .rc-state{min-height:70px}
+
+/* ---------- time charts ---------- */
+.rc-plot{position:relative;flex:1;min-width:0;min-height:var(--rc-plot-min,120px)}
+.rc-plot>svg{position:absolute;left:0;top:0;display:block;overflow:visible;-webkit-tap-highlight-color:transparent}
+.rc-plot>svg:focus{outline:none}
+.rc-plot>svg:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:4px}
+.rc-plot text{font-family:var(--mono);font-size:9px;fill:var(--faint)}
+.rc-plot .tk-y{text-anchor:end}
+.rc-plot .grid{stroke:var(--line-soft);stroke-width:1;shape-rendering:crispEdges}
+.rc-plot .base{stroke:var(--line);stroke-width:1;shape-rendering:crispEdges}
+.rc-plot .xhair{stroke:var(--muted);stroke-width:1;shape-rendering:crispEdges}
+.rc-plot .sep{fill:none;stroke:var(--surface);stroke-width:2;stroke-linejoin:round}
+.rc-plot .ghost-cap{stroke:var(--muted);stroke-width:2;stroke-linecap:round}
+.rc-plot .ghost-line{fill:none;stroke:var(--faint);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.rc-plot [data-i]{transition:opacity .12s}
+.rc-plot [data-i].dim{opacity:.32}
+.rc-plot .hit{cursor:default}
+.rc-chart:not(.rc-preview) .rc-plot svg [data-k],.rc-pulse-card .rc-plot svg [data-k]{cursor:pointer}
+
+/* tooltip: one per chart, the dashboard's .state-pop look; flips left near the right edge (charts.js) */
+.rc-tip{position:absolute;z-index:25;pointer-events:none;min-width:168px;max-width:min(260px,100%);padding:9px 12px 10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 44px #0008;font-size:11px;line-height:1.5;color:var(--muted)}
+[data-theme=light] .rc-tip{box-shadow:0 14px 40px #1621351f}
+.rc-tip.pinned{pointer-events:auto}
+.rc-tip .tt-h{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:var(--muted);margin-bottom:6px}
+.rc-tip .tt-prevh{color:var(--faint)}
+.rc-tip .tt-tot{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid var(--line-soft);padding-bottom:5px;margin-bottom:4px}
+.rc-tip .tt-tot>span:last-child{display:flex;align-items:baseline}
+.rc-tip .tt-tot b{font:600 13px var(--mono);color:var(--text)}
+.rc-tip .tt-r{display:grid;grid-template-columns:12px auto minmax(0,1fr) auto;align-items:center;column-gap:8px;line-height:1.75}
+.rc-tip .tt-r i{width:12px;height:2px;border-radius:1px}
+.rc-tip .tt-r b{font:500 11px var(--mono);color:var(--text);text-align:right;min-width:42px;white-space:nowrap}
+.rc-tip .tt-r span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-tip em{font:normal 10px var(--mono);color:var(--faint);margin-right:8px;white-space:nowrap}
+.rc-tip .tt-r em{margin:0 0 0 8px}
+.rc-tip .tt-r em:empty{display:none}
+.rc-tip .tt-f{margin-top:6px;padding-top:6px;border-top:1px solid var(--line-soft);font-size:10px;color:var(--faint)}
+.rc-tip .tt-f:after{content:' →'}
+.rc-tip .tt-see{display:flex;align-items:center;justify-content:center;width:100%;min-height:36px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--raised);color:var(--text);font-size:12px;font-weight:600}
+
+/* legend: today's legend under the chart, with buttons */
+.rc-legend{margin-top:16px}
+.rc-legend .rc-lgi{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;padding:2px 0;border:0;background:none;color:var(--muted);font:inherit;text-align:left;cursor:pointer}
+.rc-legend .rc-lgi:hover{color:var(--text)}
+.rc-legend .rc-lgi:focus-visible,.rc-legend .rc-showall:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:3px}
+.rc-legend .rc-lgi.static{cursor:default}
+.rc-legend .rc-lgi.static:hover{color:var(--muted)}
+.rc-legend .rc-lgi>span{display:block;max-width:26ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-legend .rc-lgi i,.rc-legend .legend-group .rc-lgi i{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.rc-legend .rc-lgi i.ln,.rc-legend .legend-group .rc-lgi i.ln{width:12px;height:2px;border-radius:1px}
+.rc-legend .rc-lgi[aria-pressed=false]{opacity:.42}
+.rc-legend .rc-lgi[aria-pressed=false] i{background:transparent!important;box-shadow:inset 0 0 0 1.5px var(--faint)}
+.rc-legend .rc-showall{border:0;background:none;padding:2px 0;color:var(--blue);font:inherit;cursor:pointer}
+@media(pointer:coarse){.rc-legend .rc-lgi,.rc-legend .rc-showall{min-height:32px}}
+
+/* ---------- stat tile, retry recovery ---------- */
+.rc-stat,.rc-retry{flex:1;display:flex;flex-direction:column;position:relative;min-width:0}
+.rc-stat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-width:0}
+.rc-stat-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-stat .rc-body,.rc-retry .rc-body{margin-top:0}
+.rc-stat strong.rc-none{color:var(--faint)}
+.metric-card .rc-delta-row{margin-top:8px}
+.metric-card .rc-delta{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px 3px;font:10px var(--mono);color:var(--muted);white-space:nowrap}
+.metric-card .rc-delta svg{width:11px;height:11px}
+.metric-card .rc-delta.good{color:var(--mint)}
+.metric-card .rc-delta.bad{color:var(--danger)}
+.metric-card .rc-delta small{color:var(--faint);font-size:inherit;margin-left:3px}
+@container (max-width:210px){.metric-card .rc-delta small{flex-basis:100%;margin-left:0}}
+.rc-spark-slot{display:block;margin-top:auto;padding-top:12px;width:100%;height:42px}
+.rc-spark svg{display:block;overflow:visible}
+.rc-seg{display:flex;gap:2px;height:8px;margin:14px 0 10px}
+.rc-seg span{border-radius:4px;min-width:0}
+
+/* ---------- allowance gauge ---------- */
+.rc-gauge{flex:1;display:flex;align-items:center;gap:18px}
+.rc-ring{position:relative;width:112px;height:112px;flex-shrink:0}
+.rc-ring svg{width:112px;height:112px;transform:rotate(-90deg);overflow:visible}
+.rc-ring .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.rc-ring .val b{font:400 26px var(--mono);letter-spacing:-1px;line-height:1}
+.rc-ring .val b small{font-size:13px;margin-left:1px}
+.rc-ring .val span{font-size:9px;color:var(--muted);margin-top:4px}
+.rc-ring .val b.none,.rc-big.none{color:var(--faint)}
+.rc-ginfo{display:flex;flex-direction:column;gap:9px;min-width:0;font-size:11px}
+.rc-ginfo .gi-l{display:block;font-size:9px;color:var(--faint);margin-bottom:1px}
+.rc-ginfo b{font:500 11px var(--mono)}
+.rc-who{display:flex;align-items:center;gap:7px;min-width:0}
+.rc-who .provider-icon{width:22px;height:22px;border-radius:7px;flex-shrink:0}
+.rc-who .provider-icon svg{width:13px;height:13px}
+.rc-who .provider-icon .monogram{font-size:11px;font-weight:700}
+.rc-who b{font:650 12px var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rc-fc{font-size:11px;color:var(--muted)}
+.rc-fc.warn{color:var(--amber)}
+.rc-fc.bad{color:var(--danger)}
+.rc-gbar{flex:1;display:flex;flex-direction:column;justify-content:flex-start}
+.rc-big{font:400 40px var(--mono);letter-spacing:-1.5px;line-height:1.1;margin-top:12px;white-space:nowrap}
+.rc-big small{font-size:18px;margin-left:2px}
+.rc-big span{font:10px var(--font);color:var(--muted);letter-spacing:0;margin-left:8px}
+.rc-gtrack{position:relative;height:8px;border-radius:4px;background:var(--track);margin:12px 0 8px}
+.rc-gtrack>span{position:absolute;left:0;top:0;bottom:0;border-radius:4px;max-width:100%}
+.rc-gtrack>.rc-pace{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--text);opacity:.55;border-radius:1px}
+.rc-grow{display:flex;justify-content:space-between;gap:12px;font-size:10px;color:var(--muted)}
+.rc-grow+.rc-grow{margin-top:8px}
+.rc-grow b{font:500 10px var(--mono);color:var(--text);white-space:nowrap}
+.rc-grow .rc-fc{font-size:10px}
+@container (max-width:290px){.rc-gauge{flex-direction:column;align-items:flex-start;gap:14px}}
+
+/* ---------- reset timeline ---------- */
+.rc-tl{flex:1;min-width:0}
+.rc-tl svg{display:block;overflow:visible}
+.rc-tl text{font-family:var(--mono);font-size:9px;fill:var(--faint)}
+.rc-tl .lane-name{font-family:var(--font);font-size:11px;font-weight:600;fill:var(--text)}
+.rc-tl .lane-sub{font-family:var(--font);font-size:9.5px;font-weight:400;fill:var(--muted)}
+.rc-tl .day{stroke:var(--line-soft);stroke-width:1;shape-rendering:crispEdges}
+.rc-tl .now{stroke:var(--blue);stroke-width:1.5}
+.rc-tl .now-t{fill:var(--blue)}
+.rc-tl .when{fill:var(--muted)}
+.rc-tl .when.bad{fill:var(--danger)}
+.rc-tl-key{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:10px;color:var(--muted)}
+.rc-tl-key span{display:flex;align-items:center;gap:6px}
+.rc-tl-key i{display:inline-block;width:14px;height:4px;border-radius:2px;background:var(--muted)}
+.rc-tl-key i.out{height:8px;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--danger) 70%,transparent) 0 1.5px,transparent 1.5px 4px);border:1px solid color-mix(in srgb,var(--danger) 50%,transparent)}
+.rc-tl-key i.dry{height:8px;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--amber) 75%,transparent) 0 1.5px,transparent 1.5px 4px);border:1px solid color-mix(in srgb,var(--amber) 55%,transparent)}
+.rc-tl-key i.dot{width:9px;height:9px;border-radius:50%;background:var(--text);box-shadow:0 0 0 2px var(--surface)}
+
+/* ---------- breakdown ---------- */
+.rc-donut-wrap{flex:1;display:flex;align-items:center;gap:22px;min-width:0}
+.rc-donut{position:relative;width:132px;height:132px;flex-shrink:0}
+.rc-donut svg{width:132px;height:132px;overflow:visible}
+.rc-donut .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.rc-donut .val b{font:400 20px var(--mono);letter-spacing:-.6px}
+.rc-donut .val span{font-size:9px;color:var(--muted)}
+.rc-donut [data-n],.rc-blist [data-n]{transition:opacity .12s}
+.rc-donut-wrap .dim{opacity:.35}
+.rc-blist{display:flex;flex-direction:column;gap:7px;min-width:0;flex:1;max-width:360px;font-size:11px}
+.rc-blist>div{display:grid;grid-template-columns:8px minmax(0,1fr) auto auto;align-items:center;gap:8px}
+.rc-blist i{width:8px;height:8px;border-radius:2px}
+.rc-blist .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:10px var(--mono);color:var(--muted)}
+.rc-blist b{font:500 10px var(--mono);text-align:right;white-space:nowrap}
+.rc-blist small{font:10px var(--mono);color:var(--faint);text-align:right;min-width:34px;white-space:nowrap}
+@container (max-width:360px){.rc-donut-wrap{flex-direction:column;align-items:stretch;gap:16px}.rc-donut{align-self:center}}
+/* one grid for every row, so the name column fits the longest name (up to 46%) and the bars line up */
+.rc-ranked{flex:1;display:grid;grid-template-columns:fit-content(46%) minmax(0,1fr) auto;align-content:start;align-items:center;gap:11px 12px}
+.rc-ranked>div{display:contents}
+.rc-ranked .n{font:10px var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-ranked .trk{height:10px;min-width:0}
+.rc-ranked .bar{display:block;height:10px;border-radius:0 3px 3px 0;min-width:2px}
+.rc-ranked b{font:500 10px var(--mono);text-align:right;white-space:nowrap;min-width:40px}
+.rc-tree{position:relative;flex:1;min-height:180px}
+.rc-tree>div{position:absolute;border-radius:5px;padding:7px 8px;overflow:hidden;display:flex;flex-direction:column;font:10px var(--mono);line-height:1.35}
+.rc-tree>div b{font-weight:500;font-size:12px}
+.rc-tree>div span{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- heatmaps ---------- */
+.rc-heat-grid{display:grid;grid-template-columns:24px minmax(0,1fr);gap:3px 8px;align-items:center}
+.rc-heat-grid .rl{font:9px var(--mono);color:var(--faint)}
+.rc-heat-grid .cells{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px}
+.rc-heat-grid .cells i{aspect-ratio:1.35;border-radius:3px;background:var(--raised);min-width:0}
+.rc-heat-grid .cells i.none,.rc-cal-grid .cells i.none{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.rc-heat-grid .cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));font:9px var(--mono);color:var(--faint)}
+.rc-heat-key{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:12px;font-size:10px;color:var(--faint)}
+.rc-heat-key i{width:12px;height:9px;border-radius:2px}
+.rc-heat-key i:first-of-type{box-shadow:inset 0 0 0 1px var(--line-soft)}
+@container (max-width:420px){.rc-heat-grid .cells{gap:2px}.rc-heat-grid .cells i{border-radius:2px;aspect-ratio:.9}}
+.rc-cal-grid{display:grid;grid-template-columns:18px minmax(0,1fr);gap:3px 7px;max-width:420px}
+.rc-cal-grid .months{display:grid;gap:3px;font:9px var(--mono);color:var(--faint)}
+.rc-cal-grid .months span{white-space:nowrap;overflow:visible}
+.rc-cal-grid .rl{display:grid;grid-template-rows:repeat(7,minmax(0,1fr));gap:3px;font:9px var(--mono);color:var(--faint)}
+.rc-cal-grid .rl span{display:flex;align-items:center}
+.rc-cal-grid .cells{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,auto);gap:3px}
+.rc-cal-grid .cells i{aspect-ratio:1;border-radius:3px;background:var(--raised);min-width:0}
+.rc-cal-grid .cells i.future{background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft)}
+.rc-cal-grid .cells i.today{box-shadow:0 0 0 1.5px var(--text)}
+
+/* ---------- live pulse ---------- */
+.rc-pulse-card .rc-body{margin-top:12px}
+.rc-pulse-top{display:flex;align-items:baseline;gap:8px}
+.rc-pulse-top b{font:400 33px var(--mono);letter-spacing:-1.2px;line-height:1.1}
+.rc-pulse-top b.none{color:var(--faint)}
+.rc-pulse-top span{font-size:11px;color:var(--muted)}
+.rc-pulse-sub{font-size:10px;color:var(--faint);margin-top:2px}
+.rc-pulse-plot{margin-top:auto;padding-top:12px;display:flex;flex-direction:column}
+.rc-pulse-plot .rc-plot{min-height:var(--rc-plot-min,78px);flex:0 0 auto}
+.rc-pulse-empty{flex:1;display:flex;align-items:center;justify-content:center;min-height:70px;color:var(--muted);font-size:12px}
+.rc-live{width:6px;height:6px;border-radius:50%;background:var(--mint);display:inline-block;box-shadow:0 0 0 0 color-mix(in srgb,var(--mint) 60%,transparent);animation:rc-live 2s infinite}
+@keyframes rc-live{70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+/* ---------- health ---------- */
+.rc-health-card .rc-body{margin-top:10px}
+.rc-hl{display:flex;flex-direction:column}
+.rc-hl>div{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:3px 12px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:11px}
+.rc-hl>div:last-child{border-bottom:0;padding-bottom:0}
+.rc-hl span{display:flex;align-items:center;gap:8px;flex:0 0 auto;max-width:100%}
+.rc-hl span i{width:6px;height:6px;border-radius:50%;background:var(--mint);flex-shrink:0}
+.rc-hl span i.warn{background:var(--amber)}
+.rc-hl span i.down{background:var(--danger)}
+.rc-hl b{font:400 10px var(--mono);color:var(--muted);white-space:nowrap;margin-left:auto;text-align:right}
+.rc-hl b.warn{color:var(--amber)}
+.rc-hl b.down{color:var(--danger)}
+
+/* ---------- notes ---------- */
+.rc-notes-card .rc-body{margin-top:12px}
+.rc-note{display:block;flex:1;width:100%;min-height:60px;margin:0;padding:0;border:0;background:transparent;resize:none;overflow:hidden;font:14px/1.65 'IBM Plex Serif',Georgia,'Liberation Serif',serif;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}
+.rc-note:focus{outline:none}
+.rc-note:focus-visible{outline:2px solid var(--blue);outline-offset:6px;border-radius:2px}
+.rc-note::placeholder{color:var(--faint)}
+div.rc-note:empty:before{content:attr(data-placeholder);color:var(--faint)}
+.rc-note-meta{font-size:10px;color:var(--faint);margin-top:12px}
+.rc-note-meta.err{color:var(--danger)}
+
+/* ---------- settings preview (boards.css caps its height) ---------- */
+.rc-preview.rc-card,.preview-host .rc-card{padding:14px 16px;min-height:0}
+.preview-host .rc-chart .rc-body,.preview-host .rc-body{margin-top:12px}
+.preview-host .rc-legend{margin-top:10px}
+.preview-host .rc-stat .rc-body,.preview-host .rc-retry .rc-body{margin-top:0}
+
+/* ---------- picker previews ---------- */
+svg.rc-thumb{display:block;width:100%;height:100%}
+
+/* ---------- fixed heights ----------
+   A widget with a fixed height (boards.js puts data-height="<rows>" on its frame, 57n − 34 px tall) fills that box and never
+   makes it taller; Auto keeps the natural sizes above. Its root measures the box, so the container queries below read the
+   height left for content (52 px less while customizing). Plots, rings, the donut and heatmap rows size to the box; lanes,
+   notes and tables scroll inside with a fade at the end while more continues (a scroll-driven mask: no overflow, no fade). */
+@property --rc-fade{syntax:'<length>';inherits:false;initial-value:0px}
+@keyframes rc-fade{0%,80%{--rc-fade:var(--rc-fade-max,34px)}100%{--rc-fade:0px}}
+.w[data-height]:not([data-height=auto]) .rc{container-type:size}
+.w[data-height]:not([data-height=auto]) :is(.rc-card,.metric-card,.rc-body,.rc-state,.rc-pulse-empty,.rc-tree){min-height:0}
+/* content that still doesn't fit (customizing takes 52 px; a long value at the minimum) is cut with the same fade. Charts and
+   the pulse keep overflow visible in view mode for their tooltips. */
+.w[data-height]:not([data-height=auto]) .rc:not(.rc-w-chart,.rc-w-pulse),.w.edit[data-height]:not([data-height=auto]) .rc{--rc-fade-max:20px;overflow:hidden;mask-image:linear-gradient(#000 calc(100% - var(--rc-fade)),transparent);animation:rc-fade linear both;animation-timeline:scroll(self block)}
+.w[data-height]:not([data-height=auto]) :is(.rc-tl,.rc-note,.rc-ranked,.table-wrap){--rc-fade-max:34px;overflow-y:auto;scrollbar-width:thin;mask-image:linear-gradient(#000 calc(100% - var(--rc-fade)),transparent);animation:rc-fade linear both;animation-timeline:scroll(self block)}
+/* usage chart: the plot is the box minus the title and legend; below 6 rows the legend keeps one line (View as table has all) */
+.w[data-height]:not([data-height=auto]) .rc-chart .rc-body,.w[data-height]:not([data-height=auto]) .rc-plot{flex:1 1 0;min-height:0}
+.w[data-height]:not([data-height=auto]) .rc-legend{flex-shrink:0}
+.w:is([data-height="3"],[data-height="4"],[data-height="5"]) .rc-chart .rc-legend{flex-wrap:nowrap;overflow:hidden;mask-image:linear-gradient(90deg,#000 calc(100% - var(--rc-fade)),transparent);animation:rc-fade linear both;animation-timeline:scroll(self inline)}
+.w:is([data-height="3"],[data-height="4"],[data-height="5"]) .rc-chart .rc-legend>*{flex-wrap:nowrap;flex-shrink:0}
+@container (max-height:190px){.rc-chart .rc-cap,.rc-break-card .rc-cap{display:none}.rc-chart .rc-body{margin-top:14px}.rc-chart .rc-legend{margin-top:10px}}
+/* stat: value and change at 3 rows; from 4 the sparkline uses up to 120 px. Retry keeps its number and note at the top. */
+.w[data-height]:not([data-height=auto]) .rc-spark-slot{flex:1 1 0;height:auto;min-height:0;max-height:132px;margin-top:0;overflow:hidden}
+@container (max-height:160px){.rc-spark-slot{display:none}.metric-card:is(.rc-stat,.rc-retry){padding:18px 23px}.metric-card:is(.rc-stat,.rc-retry) strong{margin-top:8px}.rc-retry .rc-seg{margin:10px 0 6px}}
+/* the number grows with a tall box, 28 → 44 px (the box's height and width both bound it) */
+.w[data-height]:not([data-height=auto]) .metric-card:is(.rc-stat,.rc-retry) strong{font-size:clamp(28px,min(10cqh,9cqw),44px)}
+/* allowance gauge: the ring scales 84-240 px with the pair centred in spare width; the bar keeps its bar, number at the top
+   (growing to 56 px), bar and labels at the bottom */
+.w[data-height]:not([data-height=auto]) .rc-gauge-card .rc-body{container-type:size}
+.w[data-height]:not([data-height=auto]) .rc-gauge{flex-direction:row;align-items:center;justify-content:safe center;gap:clamp(18px,4cqw,40px);--dial:clamp(var(--dial-lo,84px),min(100cqh,100cqw - 150px),240px)}
+.w[data-height]:not([data-height=auto]) .rc-ring{width:var(--dial);height:var(--dial)}
+.w[data-height]:not([data-height=auto]) .rc-ring svg{width:100%;height:100%}
+.w[data-height]:not([data-height=auto]) .rc-ring .val b{font-size:min(calc(var(--dial) * .232),50px)}
+.w[data-height]:not([data-height=auto]) .rc-ring .val b small{font-size:.5em}
+.w[data-height]:not([data-height=auto]) .rc-ring .val span{font-size:clamp(9px,calc(var(--dial) * .05),12px)}
+.w[data-height]:not([data-height=auto]) .rc-big{margin-bottom:12px}
+.w[data-height]:not([data-height=auto]) .rc-gtrack{margin-top:auto}
+@container (min-height:230px){.w[data-height]:not([data-height=auto]) .rc-big{font-size:clamp(40px,min(14cqh,10cqw),56px)}}
+@container (min-width:420px) and (min-height:200px){.w[data-height]:not([data-height=auto]) .rc-ginfo{gap:12px;font-size:12px}.w[data-height]:not([data-height=auto]) .rc-ginfo b{font-size:12px}.w[data-height]:not([data-height=auto]) .rc-ginfo .gi-l{font-size:10px}.w[data-height]:not([data-height=auto]) .rc-who b{font-size:14px}.w[data-height]:not([data-height=auto]) .rc-fc{font-size:12px}}
+@container (max-width:310px) and (min-height:230px){.w[data-height]:not([data-height=auto]) .rc-gauge{flex-direction:column;align-items:flex-start;gap:14px;--dial:clamp(var(--dial-lo,84px),min(100cqh - 110px,100cqw),200px)}}
+@container (max-height:150px){.rc-big{font-size:34px;margin-top:6px}.w[data-height]:not([data-height=auto]) .rc-big{margin-bottom:8px}.rc-gtrack{margin-bottom:6px}.rc-grow+.rc-grow{margin-top:5px}}
+/* while customizing, the ring and donut may shrink past their view-mode minimum to stay whole */
+.w.edit[data-height]:not([data-height=auto]){--dial-lo:56px}
+/* live pulse: number at the top, the bars fill the rest (when very short, the bars win over the hour line and legend) */
+.w[data-height]:not([data-height=auto]) :is(.rc-pulse-plot,.rc-pulse-plot .rc-plot){flex:1 1 0;min-height:0}
+@container (max-height:160px){.rc-pulse-sub,.rc-pulse-card .rc-legend{display:none}}
+/* accounts: the cards fill the box. A taller card keeps its facts and routing at the bottom and centres the allowance in the
+   space above them; a wide (two-column) card centres both columns. A box too short for the full cards condenses them
+   instead (data-density below), so nothing scrolls or clips. Popovers (Ultrafast, card menu, state) are in the top layer. */
+.w-accounts[data-height]:not([data-height=auto]) .w-body{container-name:acc-body}
+@container card (width < 620px){.w-accounts[data-height]:not([data-height=auto]) .account-body:before{content:'';margin-bottom:auto}}
+/* the figure grows 52 → 70 px from 10 rows, unless the widget is too narrow for two cards side by side and they stack */
+.w-accounts[data-height]:not([data-height=auto],[data-density=compact]) .quota-value{--qv-lo:52px}
+@media(min-width:1450px){.w-accounts[data-height]:not([data-height=auto],[data-density]) .quota-value{--qv-lo:58px}}
+@container acc-body (width >= 516px){@container card (width < 620px){.w-accounts[data-height]:not([data-height=auto],[data-density=compact]) .quota-value{font-size:clamp(var(--qv-lo),calc(22px + var(--rows,10) * 3px),70px)}}}
+@container card (width < 620px){.w-accounts[data-height]:not([data-height=auto],[data-density=compact]) .account-grid:not(:has(>.account-card~.account-card)) .quota-value{font-size:clamp(var(--qv-lo),calc(22px + var(--rows,10) * 3px),70px)}}
+.w-accounts[data-height]:not([data-height=auto],[data-density=compact]) .quota-value .percent{font-size:calc(25px + (1em - var(--qv-lo)) * .48)}
+@container card (min-width:620px){.w-accounts[data-height]:not([data-height=auto]) .account-body{align-content:safe center}}
+/* accounts in a capped box that can't hold the full cards (fitAccounts in boards.js). The same card, denser, with every fact:
+   snug only tightens the spacing (and keeps the figure at 52 px on wide screens); compact also sets the figure on its label's line, puts each fact's label beside its value
+   ("Allowance resets" reads "Resets": the figure's label names the allowance) and slims the controls. While a routing
+   confirmation is open it takes the routing row's place, so it needs little more room than the row. */
+.w-accounts[data-density] .account-card{padding:18px 18px 16px}
+.w-accounts[data-density] .quota-label{margin-top:16px}
+.w-accounts[data-density=snug] .quota-value{font-size:52px}
+.w-accounts[data-density] .quota-track{margin:11px 0 7px}
+.w-accounts[data-density] .limit-rows{margin-top:12px;gap:9px}
+.w-accounts[data-density] .account-resets{margin-top:12px}
+.w-accounts[data-density] :is(.account-side>:has(+.account-bottom),.account-hero:has(+.account-side>.account-bottom:first-child)>:last-child){margin-bottom:12px}
+.w-accounts[data-density] .account-bottom{padding-top:12px;row-gap:8px}
+.w-accounts[data-density] .account-route{margin-top:9px;padding-top:9px}
+.w-accounts[data-density=compact] .account-card{padding:14px 16px 12px}
+.w-accounts[data-density=compact] .account-hero{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;align-items:baseline;margin-top:8px}
+.w-accounts[data-density=compact] .account-hero>:not(.quota-label,.quota-value){grid-column:1/-1}
+.w-accounts[data-density=compact] .quota-label{grid-area:1/2;justify-self:end;margin:0;text-align:right}
+.w-accounts[data-density=compact] .quota-value{grid-area:1/1;font-size:34px;line-height:1.15;letter-spacing:-1.2px}
+.w-accounts[data-density=compact] .quota-value .percent{font-size:17px;margin-left:2px}
+.w-accounts[data-density=compact] .quota-value .remaining-word{margin-left:8px}
+.w-accounts[data-density=compact] .quota-track{margin:6px 0 6px}
+.w-accounts[data-density=compact] .limit-rows{margin-top:10px;gap:7px}
+.w-accounts[data-density=compact] .limit-row .secondary-quota{margin-bottom:4px}
+.w-accounts[data-density=compact] .account-resets{margin-top:10px}
+.w-accounts[data-density=compact] .resets-button{padding:4px 9px;font-size:10px}
+.w-accounts[data-density=compact] :is(.account-side>:has(+.account-bottom),.account-hero:has(+.account-side>.account-bottom:first-child)>:last-child){margin-bottom:10px}
+.w-accounts[data-density=compact] .account-bottom{padding-top:9px;gap:5px 14px}
+.w-accounts[data-density=compact] .account-dates{gap:3px 14px}
+.w-accounts[data-density=compact] .account-dates .reset-block{display:flex;align-items:baseline;gap:5px}
+.w-accounts[data-density=compact] .reset-block>span{margin:0}
+.w-accounts[data-density=compact] .allowance-reset>span{font-size:0}
+.w-accounts[data-density=compact] .allowance-reset>span:after{content:'Resets' / '';font-size:9px}
+.w-accounts[data-density=compact] .account-bottom>.account-state{min-height:18px}
+.w-accounts[data-density=compact] .account-route{margin-top:7px;padding-top:7px}
+.w:is(.fixed-height,.mixed-auto).w-accounts .account-route:has(~.route-confirm){display:none}
+.w:is(.fixed-height,.mixed-auto).w-accounts .account-route:has(~.route-confirm)~.route-confirm{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.w-accounts[data-density] .account-route:has(~.route-confirm)~.route-confirm{margin-top:9px;padding-top:9px}
+.w-accounts[data-density=compact] .account-route:has(~.route-confirm)~.route-confirm{margin-top:7px;padding-top:7px}
+.w-accounts[data-density=compact] .route-confirm .reset-primary,.w-accounts[data-density=compact] .route-confirm .reset-cancel{padding-block:4px}
+/* tokens & cache: number at the top, the cache track at the bottom */
+.w-tokens[data-height]:not([data-height=auto]) .activity-card{min-height:0;display:flex;flex-direction:column}
+.w-tokens[data-height]:not([data-height=auto]) .token-detail{margin-bottom:14px}
+.w-tokens[data-height]:not([data-height=auto]) .token-track{margin-top:auto}
+/* breakdown: the donut scales 96-340 px beside its list (the pair centred in spare width) or, in a tall narrow box, above it.
+   A big box sets the list at 12 px. Ranked bars thicken (10 → 18 px) and space out (up to 30 px), centred in the box. */
+.w[data-height]:not([data-height=auto]) .rc-break-card .rc-body{container-type:size}
+.w[data-height]:not([data-height=auto]) .rc-donut-wrap{flex-direction:row;align-items:center;justify-content:safe center;gap:clamp(22px,5cqw,56px);--dial:clamp(var(--dial-lo,96px),min(100cqh,100cqw - 190px,52cqw),340px)}
+.w[data-height]:not([data-height=auto]) .rc-donut{width:var(--dial);height:var(--dial)}
+.w[data-height]:not([data-height=auto]) .rc-donut svg{width:100%;height:100%}
+.w[data-height]:not([data-height=auto]) .rc-donut .val b{font-size:min(calc(var(--dial) * .152),44px)}
+.w[data-height]:not([data-height=auto]) .rc-donut .val span{font-size:clamp(9px,calc(var(--dial) * .036),12px)}
+@container ((max-width:310px) or (orientation:portrait)) and (min-height:260px){.w[data-height]:not([data-height=auto]) .rc-donut-wrap{flex-direction:column;align-items:stretch;gap:20px;--dial:clamp(var(--dial-lo,96px),min(100cqh - var(--rc-n,6) * 20px - 20px,100cqw),300px)}.w[data-height]:not([data-height=auto]) .rc-blist{flex:0 0 auto;max-width:none}}
+@container (min-width:600px) and (min-height:280px){.w[data-height]:not([data-height=auto]) .rc-blist{gap:11px;max-width:420px}.w[data-height]:not([data-height=auto]) .rc-blist>div{grid-template-columns:10px minmax(0,1fr) auto auto;gap:12px}.w[data-height]:not([data-height=auto]) .rc-blist i{width:10px;height:10px}.w[data-height]:not([data-height=auto]) .rc-blist :is(.n,b,small){font-size:12px}.w[data-height]:not([data-height=auto]) .rc-blist small{min-width:40px}}
+@container (max-height:130px){.rc-blist{gap:3px}}
+.w[data-height]:not([data-height=auto]) .rc-ranked{flex:1 1 0;min-height:0;align-content:safe center;--bar:clamp(10px,100cqh / var(--rc-n,5) * .3,18px);row-gap:clamp(4px,(100cqh - var(--rc-n,5) * max(13px,var(--bar))) / max(1,var(--rc-n,5) - 1),30px)}
+.w[data-height]:not([data-height=auto]) .rc-ranked :is(.trk,.bar){height:var(--bar)}
+@container (min-width:600px) and (min-height:280px){.w[data-height]:not([data-height=auto]) .rc-ranked{column-gap:16px}.w[data-height]:not([data-height=auto]) .rc-ranked :is(.n,b){font-size:12px}}
+.w[data-height]:not([data-height=auto]) .rc-tree{flex:1 1 0}
+/* heatmaps: rows share the height up to a cell cap (week × hour: 1.3× the cell's width, 28-52 px; calendar: square,
+   32-48 px), then the grid and key centre in the box. The calendar's key lines up with the grid's right edge. */
+.w[data-height]:not([data-height=auto]) .rc-heat-host{flex:1 1 0;display:flex;flex-direction:column;justify-content:safe center;min-height:0;--cell-max:clamp(28px,(100cqw - 153px) / 24 * 1.3,52px)}
+.w[data-height]:not([data-height=auto]) .rc-heat-grid{flex:1 1 0;min-height:0;max-height:calc(7 * var(--cell-max) + 7 * 3px + 12px);grid-template-rows:repeat(7,minmax(0,1fr)) auto}
+.w[data-height]:not([data-height=auto]) .rc-heat-grid .cells{height:100%;grid-template-rows:minmax(0,1fr)}
+.w[data-height]:not([data-height=auto]) .rc-heat-grid .cells i{aspect-ratio:auto;height:100%;max-height:var(--cell-max)}
+.w[data-height]:not([data-height=auto]) .rc-cal{container-type:size}
+.w[data-height]:not([data-height=auto]) .rc-cal>*{--cal-w:max(420px,min(calc(25px + (100cqh - 36px) * 1.857),calc(25px + 13 * 51px)));--cal-cell:clamp(32px,(min(100cqw,var(--cal-w)) - 61px) / 13,48px)}
+.w[data-height]:not([data-height=auto]) .rc-cal-grid{flex:1 1 0;min-height:0;max-height:calc(7 * var(--cal-cell) + 7 * 3px + 12px);grid-template-rows:auto minmax(0,1fr);max-width:var(--cal-w)}
+.w[data-height]:not([data-height=auto]) .rc-cal .rc-heat-key{max-width:var(--cal-w)}
+.w[data-height]:not([data-height=auto]) .rc-cal-grid .cells{grid-template-rows:repeat(7,minmax(0,1fr))}
+.w[data-height]:not([data-height=auto]) .rc-cal-grid .cells i{aspect-ratio:auto;max-height:var(--cal-cell)}
+/* reset timeline: lanes compress 36 → 28 px (charts.js), then scroll; taller boxes space them out up to 48 px */
+.w[data-height]:not([data-height=auto]) .rc-tl-card .rc-body{max-height:var(--rc-tl-natural,none)}
+.w[data-height]:not([data-height=auto]) .rc-tl{flex:1 1 0;min-height:0}
+.w.w-timeline:is([data-height="3"],[data-height="4"],[data-height="5"]) .rc-tl-key{display:none}
+/* health: the five checks tighten at 4 rows; taller, they stay at the top */
+@container (max-height:236px){.rc-hl>div{padding:4px 0}}
+/* notes: the text takes the box and scrolls inside */
+.w[data-height]:not([data-height=auto]) .rc-note{flex:1 1 0;height:auto!important}
+/* tables: the header stays, rows fill the box and scroll inside */
+.w:is(.w-requests,.w-usage-accounts,.w-usage-models)[data-height]:not([data-height=auto]) section.requests{flex:1 1 0;display:flex;flex-direction:column;min-height:0}
+.w:is(.w-requests,.w-usage-accounts,.w-usage-models)[data-height]:not([data-height=auto]) .table-wrap{flex:1 1 0}
+.w:is(.w-requests,.w-usage-accounts,.w-usage-models)[data-height]:not([data-height=auto]) thead th{position:sticky;top:0;z-index:1;background:var(--surface);box-shadow:inset 0 -1px 0 var(--line)}
+
+/* ---------- phones ---------- */
+@media(max-width:760px){
+  .rc-card{padding:18px}
+  .rc-card.tight{padding:18px}
+  .rc-ring,.rc-ring svg{width:96px;height:96px}
+  .rc-gauge{gap:14px}
+  .rc-donut,.rc-donut svg{width:112px;height:112px}
+  .rc-ranked{column-gap:10px}
+  .rc-ranked .n,.rc-ranked b,.rc-blist .n,.rc-blist b,.rc-blist small,.rc-grow,.rc-grow b,.rc-tl-key,.rc-legend,.rc-note-meta,.rc-hl b,.metric-card .rc-delta,.rc-cap{font-size:11px}
+  .rc-title{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.rc-live,.rc-state.loading,.rc-sk{animation:none}.rc-refetch,.rc-plot [data-i]{transition:none}}
+/* Shared legend layout now belongs to the chart widget. */
+.rc-legend{display:flex;flex-flow:row wrap;gap:8px 26px;font-size:10px;color:var(--muted)}
+.rc-legend .legend-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;min-width:0;max-width:100%}
+.rc-legend .legend-group b{font-weight:600;color:var(--faint)}
+@media(max-width:490px){.rc-legend{gap:8px 20px;font-size:11px}.rc-legend .rc-lgi>span{max-width:100%}}
+.rc-note-meta.err{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.rc-legend .legend-group.codex b{color:var(--codex)}
+.rc-legend .legend-group.claude b{color:var(--claude)}
+.rc-legend .legend-group.xai b{color:var(--xai)}
+.rc-legend .legend-group.gemini b{color:var(--gemini)}
+.rc-legend .legend-group.meta b{color:var(--meta)}
+.rc-legend .legend-group.antigravity b{color:var(--antigravity)}
+.rc-legend .legend-group.kimi b{color:var(--kimi)}
+.rc-legend .legend-group.devin b{color:var(--devin)}
+.rc-legend .legend-group.compat b{color:var(--compat)}
+.rc-legend .legend-group.other b{color:var(--blue)}
+
+.rc-tip{width:max-content;max-width:min(340px,100%)}
+.rc-tip .tt-tot>span:last-child{gap:14px}
+.rc-tip .tt-tot em{margin:0;min-width:42px;text-align:right}
+.rc-tip .tt-r em{min-width:42px;text-align:right}

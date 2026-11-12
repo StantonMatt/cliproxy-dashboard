@@ -68,7 +68,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(item, {'enabled': True, 'priority': 100,
                                'policy_path': installer.POLICY, 'status_path': str(installer.STATUS),
                                'map_unsupported_ultrafast': True, 'audit': False,
-                               'store': {'version': '0.1.2'}})
+                               'store': {'version': installer.VERSION}})
 
     def test_existing_plugins_disable_and_idempotence(self):
         existing = CONFIG + b'''plugins:
@@ -188,7 +188,7 @@ other-setting: true
                 if len(polls) == 1:
                     log = log.replace('plugin_id=fast-mode-policy', 'plugin_id=other')
                 if len(polls) == 2:
-                    log = log.replace('version=0.1.2', 'version=9.9.9')
+                    log = log.replace(f'version={installer.VERSION}', 'version=9.9.9')
                 return 'config successfully reloaded\n' + log
             self.assertEqual(self.reload_offline(path, CONFIG, candidate, journal, timeout=1), 0)
             self.assertEqual(len(polls), 3)
@@ -443,7 +443,8 @@ other-setting: true
                       'map_unsupported_ultrafast': True, 'audit': False}
             status.write_text(json.dumps(marker))
             prefix = '[host.go:408] pluginhost: plugin hot reloaded '
-            suffix = 'plugin_id=fast-mode-policy active_version=0.1.2 active_path=/tmp/new-plugin/linux/amd64/fast-mode-policy-v0.1.2.so'
+            suffix = (f'plugin_id=fast-mode-policy active_version={installer.VERSION} '
+                      f'active_path=/tmp/new-plugin/linux/amd64/fast-mode-policy-v{installer.VERSION}.so')
             polls = []
 
             def journal(*args):
@@ -464,7 +465,7 @@ other-setting: true
                     patch.object(installer.time, 'sleep'):
                 installer.verified_reload(path, original, candidate, 999, snapshot, timeout=1)
             self.assertEqual(len(polls), 3)
-            for log in (prefix + suffix.replace('active_version=0.1.2', 'active_version=0.1.1'),
+            for log in (prefix + suffix.replace(f'active_version={installer.VERSION}', 'active_version=0.1.1'),
                         prefix.replace('plugin hot reloaded', 'plugin unloaded') + suffix, prefix + 'active_path="unfinished'):
                 self.assertFalse(installer.verify_host_event(log, cfg, replacement=True))
 

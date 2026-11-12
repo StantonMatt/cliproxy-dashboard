@@ -59,7 +59,11 @@ import (
 )
 
 // The ABI is in-process; recover here, since a panic cannot cross the C boundary safely.
-const version = "0.1.2"
+const version = "0.2.0"
+
+// policySchema is the newest policy file schema this library enforces. The
+// dashboard offers the ultrafast level only when a live status reports 2.
+const policySchema = 2
 
 var hostAPI *C.cliproxy_host_api
 var state = struct {
@@ -78,10 +82,105 @@ type pluginConfig struct {
 	MapUnsupportedUltrafast bool   `yaml:"map_unsupported_ultrafast"`
 	Audit                   bool   `yaml:"audit"` // Validated auth index and tier labels only.
 }
+
+// Schema 2 adds level and ultrafast_models. A valid level wins; otherwise the
+// v1 fields apply exactly as in 0.1.x. The dashboard also writes the v1 fields
+// so an older library still enforces a sensible policy after a rollback.
 type accountPolicy struct {
-	AllowFast         *bool `json:"allow_fast"`
-	SupportsUltrafast bool  `json:"supports_ultrafast"`
+	AllowFast         *bool    `json:"allow_fast"`
+	SupportsUltrafast bool     `json:"supports_ultrafast"`
+	Level             string   `json:"level"`
+	UltrafastModels   []string `json:"ultrafast_models"`
 }
+
+func (p *accountPolicy) UnmarshalJSON(raw []byte) error {
+	type plain accountPolicy
+	var next plain
+	if err := json.Unmarshal(raw, &next); err != nil {
+		return err
+	}
+	// Go accepts null for strings and string-slice elements as zero values.
+	// Reject those explicitly, while absent fields retain schema 1 behavior.
+	var fields struct {
+		Level           json.RawMessage   `json:"level"`
+		UltrafastModels []json.RawMessage `json:"ultrafast_models"`
+	}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if bytes.Equal(bytes.TrimSpace(fields.Level), []byte("null")) {
+		return fmt.Errorf("policy level must be a string")
+	}
+	for _, model := range fields.UltrafastModels {
+		if bytes.Equal(bytes.TrimSpace(model), []byte("null")) {
+			return fmt.Errorf("policy ultrafast model must be a string")
+		}
+	}
+	*p = accountPolicy(next)
+	return nil
+}
+
+// level returns normal, fast or ultrafast for a schema 2 entry, or "" when the
+// entry has no valid level and the v1 rules apply.
+func (p accountPolicy) level() string {
+	switch level := strings.ToLower(strings.TrimSpace(p.Level)); level {
+	case "normal", "fast", "ultrafast":
+		return level
+	}
+	return ""
+}
+
+// allowsUltrafast reports whether the normalized model is on this account's
+// ultrafast allowlist. Unknown or empty models are never allowed.
+func (p accountPolicy) allowsUltrafast(model string) bool {
+	if model == "" {
+		return false
+	}
+	for _, allowed := range p.UltrafastModels {
+		if normalizeModel(allowed) == model {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeModel lowercases a model name and strips a trailing thinking suffix
+// such as "(high)" and any "prefix/" so it matches catalog slugs exactly.
+func normalizeModel(model string) string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if strings.HasSuffix(model, ")") {
+		if i := strings.LastIndex(model, "("); i >= 0 {
+			model = strings.TrimSpace(model[:i])
+		}
+	}
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		model = model[i+1:]
+	}
+	return strings.TrimSpace(model)
+}
+
+// Only these client formats' Codex translators forward "ultrafast" upstream;
+// the Claude, Gemini and Interactions translators drop it.
+func passesUltrafast(sourceFormat string) bool {
+	switch strings.ToLower(strings.TrimSpace(sourceFormat)) {
+	case "openai-response", "openai":
+		return true
+	}
+	return false
+}
+
+func requestModel(model string, body []byte) string {
+	if strings.TrimSpace(model) == "" {
+		var obj struct {
+			Model any `json:"model"`
+		}
+		if json.Unmarshal(body, &obj) == nil {
+			model, _ = obj.Model.(string)
+		}
+	}
+	return normalizeModel(model)
+}
+
 type policyFile struct {
 	Accounts map[string]accountPolicy `json:"accounts"` // keyed by gateway auth_index
 	Files    map[string]accountPolicy `json:"files"`    // keyed by auth file basename; index takes precedence
@@ -251,12 +350,17 @@ func handleMethod(method string, raw []byte) (any, error) {
 		}
 		warnWebsocket(req.Metadata, strings.EqualFold(req.Headers.Get("Upgrade"), "websocket"), req.RequestID)
 		policy, cfg := lookupPolicy(req.Metadata)
-		body, err := rewrite(req.Body, policy, cfg.MapUnsupportedUltrafast)
+		model := requestModel(req.Model, req.Body)
+		body, err := rewrite(req.Body, policy, cfg.MapUnsupportedUltrafast, model, req.SourceFormat)
 		if err != nil {
 			return nil, err
 		}
 		if cfg.Audit {
-			hostLog("info", "fast-mode-policy decision", map[string]any{"auth_index": auditAuthIndex(req.Metadata["selected_auth_index"]), "input_tier": tier(req.Body), "output_tier": tier(body)})
+			level := policy.level()
+			if level == "" {
+				level = "v1"
+			}
+			hostLog("info", "fast-mode-policy decision", map[string]any{"auth_index": auditAuthIndex(req.Metadata["selected_auth_index"]), "level": level, "ultrafast_model": policy.allowsUltrafast(model), "input_tier": tier(req.Body), "output_tier": tier(body)})
 		}
 		if bytes.Equal(body, req.Body) {
 			return pluginapi.RequestInterceptResponse{}, nil
@@ -306,7 +410,10 @@ func lookupPolicy(meta map[string]any) (accountPolicy, pluginConfig) {
 	}
 	return accountPolicy{}, state.cfg
 }
-func rewrite(body []byte, p accountPolicy, mapUltra bool) ([]byte, error) {
+
+// rewrite edits only fast, priority and ultrafast tiers. It never adds a tier:
+// an absent tier stays absent. model must already be normalized.
+func rewrite(body []byte, p accountPolicy, mapUltra bool, model, sourceFormat string) ([]byte, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(body, &obj); err != nil {
 		return nil, err
@@ -318,7 +425,35 @@ func rewrite(body []byte, p accountPolicy, mapUltra bool) ([]byte, error) {
 	if json.Unmarshal(obj["service_tier"], &value) != nil {
 		return body, nil
 	}
-	switch strings.ToLower(strings.TrimSpace(value)) {
+	requested := strings.ToLower(strings.TrimSpace(value))
+	if requested != "fast" && requested != "priority" && requested != "ultrafast" {
+		return body, nil
+	}
+	switch p.level() {
+	case "normal":
+		return sjson.DeleteBytes(body, "service_tier")
+	case "fast":
+		if requested == "ultrafast" {
+			return sjson.SetBytes(body, "service_tier", "priority")
+		}
+		return body, nil
+	case "ultrafast":
+		// Upgrades are allowlist-only and fail closed: an upstream plan or model
+		// rejection would cool the model down for 12 hours.
+		eligible := p.allowsUltrafast(model) && passesUltrafast(sourceFormat)
+		if requested == "ultrafast" {
+			if eligible {
+				return body, nil
+			}
+			return sjson.SetBytes(body, "service_tier", "priority")
+		}
+		if eligible {
+			return sjson.SetBytes(body, "service_tier", "ultrafast")
+		}
+		return body, nil
+	}
+	// Schema 1 entries, unknown accounts and a missing or malformed policy.
+	switch requested {
 	case "fast", "priority", "ultrafast":
 		if p.AllowFast != nil && !*p.AllowFast {
 			return sjson.DeleteBytes(body, "service_tier")
@@ -447,10 +582,11 @@ type pluginStatus struct {
 	PolicyPath              string `json:"policy_path"`
 	MapUnsupportedUltrafast bool   `json:"map_unsupported_ultrafast"`
 	Audit                   bool   `json:"audit"`
+	PolicySchema            int    `json:"policy_schema"`
 }
 
 func writeStatus(cfg pluginConfig, loadedAt string) error {
-	raw, err := json.Marshal(pluginStatus{"fast-mode-policy", version, os.Getpid(), loadedAt, cfg.PolicyPath, cfg.MapUnsupportedUltrafast, cfg.Audit})
+	raw, err := json.Marshal(pluginStatus{"fast-mode-policy", version, os.Getpid(), loadedAt, cfg.PolicyPath, cfg.MapUnsupportedUltrafast, cfg.Audit, policySchema})
 	if err != nil {
 		return err
 	}

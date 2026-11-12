@@ -2,13 +2,27 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from fixture_safety import handler
+from fixture_safety import handler, isolate
 
 
 class FixtureSafetyTests(unittest.TestCase):
+    def test_watch_snapshots_are_isolated_before_gateway_polling(self):
+        dashboard = str(Path(__file__).resolve().parents[1] / 'dashboard')
+        sys.path.insert(0, dashboard)
+        self.addCleanup(sys.path.remove, dashboard)
+        import server
+        with tempfile.TemporaryDirectory() as directory:
+            app = SimpleNamespace(routing_policy=SimpleNamespace(),
+                                  signin=SimpleNamespace(credential_replace=SimpleNamespace()))
+            isolate(app, Path(directory))
+            self.assertEqual(app.CLAUDE_USAGE, Path(directory) / 'claude.json')
+            with patch.object(server, 'CLAUDE_USAGE', app.CLAUDE_USAGE):
+                self.assertEqual(server.watch_accounts(), [])
+
     def test_all_unmocked_mutations_are_rejected_before_production_handlers(self):
         base = type('Base', (), {'do_POST': Mock(side_effect=AssertionError('Production handler invoked')),
                                 'send': Mock()})
@@ -65,6 +79,8 @@ class Server:
             assert account['windows'] == []
             assert account['billing']['confirmed'] is True
             self.gateway.runtime['access_token'] = self.gateway.tokens['access_token']
+            # Credential renewal invalidates scheduled quota polling in production.
+            self.state.usage_cache.due_now(self.gateway.row)
             self.state._fetch_locked()
             account = self.state.snapshot()['accounts'][0]
             assert account['auth_state'] == 'authenticated'

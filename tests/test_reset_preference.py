@@ -39,14 +39,14 @@ class PreferenceTests(unittest.TestCase):
         for mode in ['weekly', 'short', 'unavailable']:
             data = fixture(); b = data['gateway']['accounts'][1]
             if mode == 'weekly': b['windows'][0]['remaining'] = 0
-            elif mode == 'short': b['windows'].append({'seconds': 18000, 'remaining': 0})
+            elif mode == 'short': b['windows'].append({'seconds': 18000, 'remaining': 0, 'resets_at': NOW + 1000})
             else: b['active'] = False
             self.assertEqual(app.choose(data, NOW)['preferred_email'], A)
 
     def test_uncertain_or_expired_observations_never_change_preference(self):
         for mode in ['stale', 'missing', 'error', 'expired', 'invalid']:
             data = fixture(); b = data['gateway']['accounts'][1]
-            if mode == 'stale': b['quota_checked_at'] = app.stamp(NOW - 181)
+            if mode == 'stale': b['quota_checked_at'] = app.stamp(NOW + 1)
             elif mode == 'missing': b['windows'] = []
             elif mode == 'error': b['quota_error'] = 'Unavailable'
             elif mode == 'expired': b['windows'][0]['resets_at'] = NOW - 1

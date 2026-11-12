@@ -30,8 +30,10 @@ assert.equal(generic.size,1);
 const card=generic.get('xai').innerHTML;
 assert.match(card,/data-account-key="xai-0.json"/);
 assert.match(card,/Ready to route/);
-// Without the add catalog there is no card menu; the only control is the gateway routing switch the account reports.
-assert.doesNotMatch(card,/<button|<select|Resets|Billing|Sign in|fast mode/);
+// Without the add catalog there is no card menu; the only control is the gateway routing switch the account reports
+// (the state pill is a button only to open its popover).
+assert.equal((card.match(/<button type="button" class="state-text"/g) || []).length,2);
+assert.doesNotMatch(card.replace(/<button type="button" class="state-text"/g,''),/<button|<select|Resets|Billing|Sign in|fast mode/);
 assert.equal((card.match(/<input [^>]*data-generic-route="xai:xai-0.json"[^>]*checked/g) || []).length,1);
 // Layout: each section grows by its account count; xAI takes the monochrome accent and its own mark.
 assert.equal(nodes.get('codex-accounts').style['--n'],'1');assert.equal(nodes.get('watch-section').style['--n'],'3');
@@ -39,18 +41,21 @@ assert.equal(generic.get('xai').style['--n'],'2');
 assert.match(generic.get('xai').className,/^gateway generic-gateway xai-gateway$/);
 assert.match(card,/<use href="#xai"\/>/);assert.match(card,/All accounts ready/);assert.match(card,/<strong>2 \/ 2<\/strong>/);
 assert.equal((card.match(/class="account-card generic-card xai-card"/g) || []).length,2);
-// Basic card: requests today with success, today's hours, last request; unnamed accounts read "<Provider> account", numbered.
+// Basic card: requests today with success and the last request (no per-hour chart); unnamed accounts read "<Provider> account", numbered.
 assert.match(card,/<span title="xai account">xai account<\/span>/);assert.match(card,/<span title="xai account 2">xai account 2<\/span>/);
 assert.match(card,/<div class="quota-value">12<span class="remaining-word">75% success<\/span>/);
-assert.equal((card.match(/<div class="hour-bars"[^>]*>(.*?)<\/div>/)[1].match(/<span/g) || []).length,24);
-assert.match(card,/<span style="height:100.0%" title="00:00 · 8 requests"><\/span>/);
+assert.doesNotMatch(card,/hour-chart|hour-bars|hour-axis|Requests by hour/);
 assert.match(card,/<span>Last request<\/span><strong>4m ago<\/strong>/);
 const signin=c.genericCard(c.fixture.providers[2],{...x2,availability:{state:'auth_required'}},c.fixture.gateway);
 assert.match(signin,/generic-card xai-card is-off/);assert.match(signin,/Sign in required/);assert.doesNotMatch(signin,/<button|Ready to route/);
-assert.equal(c.providerAccent({id:'kimi',accent:'neutral'}),'other');
-assert.match(c.providerIcon({id:'kimi',name:'kimi'}),/<span class="monogram" aria-hidden="true">K<\/span>/);
-assert.equal(vm.runInContext("[gatewayRow('xai'),gatewayRow('kimi'),gatewayRow(undefined),gatewayRow('claude')].join()",c),'xai-row,other-row,codex-row,claude-row');
-assert.ok(['var(--xai)','var(--xai-2)','#b4b7bd','#7d8087'].includes(c.seriesColor(c.series('xai','xai-0'))));
+// Catalog providers and API-key channels have their own theme and mark; unknown ones are neutral with their initial.
+for(const [id,accent] of [['kimi','kimi'],['kimi-ai','kimi'],['antigravity','antigravity'],['devin','devin'],['meta','meta'],['xai','xai'],
+  ['claude-api-key','claude'],['codex-api-key','codex'],['gemini-api-key','gemini'],['xai-api-key','xai'],['openai-compatibility','compat'],['mystery','other']])
+  assert.equal(c.providerAccent({id,accent:'neutral'}),accent,id);
+assert.match(c.providerIcon({id:'kimi-ai',name:'Kimi'}),/<use href="#kimi"\/>/);
+assert.match(c.providerIcon({id:'mystery',name:'mystery'}),/<span class="monogram" aria-hidden="true">M<\/span>/);
+assert.equal(vm.runInContext("[gatewayRow('xai'),gatewayRow('mystery'),gatewayRow(undefined),gatewayRow('claude')].join()",c),'xai-row,other-row,codex-row,claude-row');
+assert.equal(c.seriesColor(c.series('xai','xai-0')),'var(--xai)');assert.equal(c.seriesColor(c.series('xai','xai-1')),'var(--xai-2)');
 assert.match(nodes.get('claude-routing-mode').innerHTML,/<option value="claude-2.json">Prefer third@example.test/);
 assert.equal(JSON.stringify(c.routingPayload('claude-2.json','claude')),JSON.stringify({mode:'preferred-account',preferred_key:'claude-2.json'}));
 assert.doesNotMatch(nodes.get('routing-all-mode').innerHTML,/second@example.test|third@example.test/);

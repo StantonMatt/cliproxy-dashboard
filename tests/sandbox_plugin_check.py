@@ -73,7 +73,7 @@ def main():
                'requests': {'proxy-url': f'http://127.0.0.1:{server.server_port}'},
                'plugins': {'enabled': True, 'dir': str(args.library.parent), 'configs': {
                    'fast-mode-policy': {'enabled': True, 'priority': 100, 'policy_path': str(root / 'policy.json'),
-                                        'status_path': str(root / 'status.json'), 'store': {'version': '0.1.2'},
+                                        'status_path': str(root / 'status.json'), 'store': {'version': '0.2.0'},
                                         'map_unsupported_ultrafast': False, 'audit': True}}}}
         sudo('tee', root / 'config.yaml', input=json.dumps(cfg))
         sudo('tee', root / 'policy.json', input=json.dumps({'version': 1, 'files': {}}))
@@ -106,7 +106,7 @@ def main():
             raise AssertionError('No live plugin marker in gateway sandbox')
         actual = properties(unit)
         assert actual == expected, {'expected': expected, 'actual': actual}
-        assert marker['plugin'] == 'fast-mode-policy' and marker['version'] == '0.1.2'
+        assert marker['plugin'] == 'fast-mode-policy' and marker['version'] == '0.2.0'
         maps = sudo('cat', f'/proc/{pid}/maps')
         shadow = sorted({line.split()[-1] for line in maps.splitlines()
                          if '/cliproxy-pluginhost/' in line and '.so' in line})

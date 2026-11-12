@@ -299,7 +299,7 @@ class Experiment:
         save(root / 'policy.json', {'version': 1, 'updated_at': '2026-10-27T00:00:00Z', 'files': {'account-A.json': {'allow_fast': False}, 'account-B.json': {'allow_fast': True}}})
         artifacts = root / 'plugins/linux/amd64'
         artifacts.mkdir(parents=True)
-        shutil.copyfile(self.args.library, artifacts / 'fast-mode-policy-v0.1.2.so')
+        shutil.copyfile(self.args.library, artifacts / 'fast-mode-policy-v0.2.0.so')
         self.cfg = yaml.safe_load((ROOT / 'tests/fixtures/config-v8-nested.yaml').read_text())
         self.cfg['server'].update(host='127.0.0.1', port=self.port)
         self.cfg['management'].update({'secret-key': 'synthetic-management', 'disable-control-panel': True, 'disable-auto-update-panel': True})
@@ -309,7 +309,7 @@ class Experiment:
         self.cfg['routing'].update({'strategy': 'fill-first', 'force-model-prefix': False})
         self.cfg['observability']['usage']['usage-statistics-enabled'] = True
         self.cfg['upstream'] = {'codex': {'response-steering': self.steering}}
-        self.cfg['plugins'] = {'enabled': True, 'dir': str(root / 'plugins'), 'configs': {'fast-mode-policy': {'enabled': True, 'priority': 100, 'policy_path': str(root / 'policy.json'), 'status_path': str(root / 'status.json'), 'store': {'version': '0.1.2'}, 'map_unsupported_ultrafast': False, 'audit': True}}}
+        self.cfg['plugins'] = {'enabled': True, 'dir': str(root / 'plugins'), 'configs': {'fast-mode-policy': {'enabled': True, 'priority': 100, 'policy_path': str(root / 'policy.json'), 'status_path': str(root / 'status.json'), 'store': {'version': '0.2.0'}, 'map_unsupported_ultrafast': False, 'audit': True}}}
         self.config = root / 'config.yaml'
         self.config.write_text(yaml.safe_dump(self.cfg))
         self.env = {'PATH': os.environ['PATH'], 'HOME': str(root), 'LANG': 'C.UTF-8', 'SSL_CERT_FILE': str(cert), 'SSL_CERT_DIR': str(root), 'HTTP_PROXY': proxy, 'HTTPS_PROXY': proxy, 'ALL_PROXY': proxy, 'NO_PROXY': '127.0.0.1,localhost', 'TMPDIR': str(root)}
@@ -545,7 +545,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check-only', action='store_true')
     parser.add_argument('--binary', type=Path)
-    parser.add_argument('--library', type=Path, default=Path('/opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.1.2.so'))
+    parser.add_argument('--library', type=Path, default=Path('/opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.2.0.so'))
     parser.add_argument('--codex', type=Path, default=Path('/home/user/.local/bin/codex'))
     parser.add_argument('--skip-native', action='store_true', help='Explicitly omit native warmup acceptance; record why externally')
     parser.add_argument('--scratch', type=Path, default=Path('~/.cache/agent-scratch/personal-codex-router/websockets/implementation-20261027').expanduser())

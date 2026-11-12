@@ -5,6 +5,7 @@ import importlib.util
 import io
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -202,7 +203,10 @@ class PublicExportTests(unittest.TestCase):
         self.assertFalse(result)
         spec = importlib.util.spec_from_file_location('exported_exporter', out / script)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # Keep this fixture archive-only: importing the exported script must not
+        # add a pyc whose folded scanner constants look like private identifiers.
+        with patch.object(sys, 'dont_write_bytecode', True):
+            spec.loader.exec_module(module)
         self.assertTrue(all(source == target for source, target in module.REPLACEMENTS))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertFalse(module.scan(out))

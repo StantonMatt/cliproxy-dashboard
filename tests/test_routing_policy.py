@@ -175,6 +175,19 @@ class RoutingTests(unittest.TestCase):
              'windows':[{'seconds':604800,'remaining':remaining,'resets_at':now+reset}]}
             for e,remaining,reset in ((A,a,20000),(B,b,10000))]}}
 
+    def test_aged_exhausted_quota_deferral_preserves_routing_until_expiry(self):
+        now = 1700000000
+        data = self.quota_overview(a=0)
+        first = data['gateway']['accounts'][0]
+        first.update(quota_checked_at=policy.stamp(now - 1800), fresh_until=policy.stamp(now + 60))
+        data['gateway'] = policy.observations(data['gateway'])['gateway']
+        candidates, excluded = policy.eligible_accounts(data, now)
+        self.assertEqual(set(candidates), {B})
+        self.assertEqual(excluded, {A: 'no remaining allowance'})
+        data['gateway']['checked_at'] = policy.stamp(now + 10000)
+        with self.assertRaises(policy.DataHold):
+            policy.eligible_accounts(data, now + 10000)
+
     def test_higher_quota_wins_regardless_of_reset_order_and_ties_are_neutral(self):
         selected={'mode':'highest-remaining-quota'}
         for a,b,winner in [(92,86,A),(40,90,B),(50,50,None),(100,100,None)]:
@@ -187,7 +200,7 @@ class RoutingTests(unittest.TestCase):
         for reason in ('weekly','short','inactive'):
             data=self.quota_overview();account=data['gateway']['accounts'][0]
             if reason=='weekly':account['windows'][0]['remaining']=0
-            elif reason=='short':account['windows'].append({'seconds':18000,'remaining':0})
+            elif reason=='short':account['windows'].append({'seconds':18000,'remaining':0,'resets_at':1700010000})
             else:account['active']=False
             with self.subTest(reason=reason):
                 self.assertEqual(policy.selected_plan({'mode':'highest-remaining-quota'},data,1700000000)['preferred_email'],B)
@@ -197,7 +210,7 @@ class RoutingTests(unittest.TestCase):
     def test_uncertain_quota_holds_priorities_and_saves_selection_and_status(self):
         for reason in ('stale','quota-error','missing-week','missing-reset','expired-reset','offline','pair',None,True,-1,101,float('nan')):
             data=self.quota_overview();account=data['gateway']['accounts'][0]
-            if reason=='stale':account['quota_checked_at']=policy.stamp(1700000000-181)
+            if reason=='stale':account['quota_checked_at']=policy.stamp(1700000000+1)
             elif reason=='quota-error':account['quota_error']='Unavailable'
             elif reason=='missing-week':account['windows']=[]
             elif reason=='missing-reset':del account['windows'][0]['resets_at']
@@ -241,7 +254,7 @@ class RoutingTests(unittest.TestCase):
             for reason in ('weekly','short','inactive'):
                 data=self.free_overview();account=data['gateway']['accounts'][0]
                 if reason=='weekly':account['windows'][0]['remaining']=0
-                elif reason=='short':account['windows'].append({'seconds':18000,'remaining':0})
+                elif reason=='short':account['windows'].append({'seconds':18000,'remaining':0,'resets_at':1700010000})
                 else:account['active']=False
                 with self.subTest(mode=mode,reason=reason):
                     plan=policy.selected_plan({'mode':mode},data,1700000000,current=A)
@@ -296,7 +309,7 @@ class RoutingTests(unittest.TestCase):
         for remaining,used in ((99,1),(None,1),(None,None)):
             data=self.unused_free_overview()
             data['gateway']['accounts'][1]['windows'][0].update(remaining=remaining,used=used)
-            with self.subTest(remaining=remaining,used=used),self.assertRaisesRegex(policy.DataHold,'reset time is not reported'):
+            with self.subTest(remaining=remaining,used=used),self.assertRaisesRegex(policy.DataHold,'stale quota data|reset time is not reported'):
                 policy.selected_plan({'mode':'earliest-weekly-reset'},data,now)
 
     def test_preferred_account_with_free_usage_window_sets_priorities(self):
@@ -367,7 +380,7 @@ class RoutingTests(unittest.TestCase):
         now=1700000000
         data=self.quota_overview(1,0)
         account=data['gateway']['accounts'][0]
-        account['quota_checked_at']=policy.stamp(now-181)
+        account['quota_checked_at']=policy.stamp(now+1)
         exhausted=data['gateway']['accounts'][1]
         exhausted['availability']={'state':'quota_exhausted','scope':'account'}
         overview=policy.observations(data['gateway'])
@@ -395,7 +408,7 @@ class RoutingTests(unittest.TestCase):
                 data=self.current_overview(now)
                 account=data['gateway']['accounts'][1 if failure=='stale' else 0]
                 if failure=='stale':
-                    account['quota_checked_at']=policy.stamp(now-181)
+                    account['quota_checked_at']=policy.stamp(now+1)
                     reason='stale quota data for alternate@example.test'
                 else:
                     account.update(quota_error='PRIVATE_ERROR',auth_state='unknown')
@@ -524,7 +537,7 @@ class RoutingTests(unittest.TestCase):
             policy.reconcile(self.quota_overview(20,90),{'mode':'highest-remaining-quota'},fail,self.root)
         self.assertEqual([r['priority'] for r in self.rows],[100,100])
         data=self.current_overview(1700000001)
-        data['gateway']['accounts'][0]['quota_checked_at']=policy.stamp(1699999810)
+        data['gateway']['accounts'][0]['quota_checked_at']=policy.stamp(1700000002)
         with patch.object(policy.time,'time',return_value=1700000001):
             result=policy.reconcile(data,call=self.api,state_dir=self.root)
         self.assertEqual([r['priority'] for r in self.rows],[0,100])

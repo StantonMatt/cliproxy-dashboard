@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -33,6 +34,10 @@ class ClaudeBUsageTests(unittest.TestCase):
                 'five_hour': {'utilization': .04, 'resetsAt': self.now + 14000},
                 'seven_day': {'utilization': .16, 'resetsAt': self.now + 300000}}}}
         self.windows = collector.parse_rate_limit_events(json.dumps(self.event))
+        # Daily reads normally add up to an hour of jitter; tests pin it unless they check it.
+        jitter = patch.object(collector.random, 'uniform', return_value=0)
+        jitter.start()
+        self.addCleanup(jitter.stop)
 
     def collect(self, now=None):
         return collector.collect_b(self.token, self.snapshot, self.now if now is None else now)
@@ -77,76 +82,85 @@ class ClaudeBUsageTests(unittest.TestCase):
         timeout = int(next(line.split('=')[1] for line in unit.splitlines() if line.startswith('TimeoutStartSec=')))
         self.assertGreater(timeout, 110)
 
-    def test_fable_probes_are_hourly_and_haiku_preserves_measurement(self):
+    def test_fable_is_probed_only_while_unknown_or_past_its_reset(self):
         def probe(token, model='haiku', timeout=90):
-            if model == 'claude-fable-5-1':
+            if model == 'claude-fable-5-2':
                 state = json.loads(self.snapshot.read_text())
                 self.assertEqual(state['fable_probe_attempted_at'], collector.stamp(at))
-                return self.fable_windows()
+                return self.fable_windows(at + 200000)
             return self.windows
 
         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
                 patch.object(collector, 'probe_usage', side_effect=probe) as cli:
-            for at in (self.now, self.now + 300, self.now + 3300, self.now + 3600):
+            for at in (self.now, self.now + 86400, self.now + 172800, self.now + 200060):
                 result = self.collect(at)
-                model = result['windows'][-1]
-                measured = self.now if at < self.now + 3600 else at
-                self.assertEqual((model['kind'], model['model'], model['used']), ('weekly_model', 'Fable', 13))
-                self.assertEqual(model['measured_at'], collector.stamp(measured))
-                self.assertEqual(collector.b_snapshot(self.snapshot, at)['windows'][-1], model)
                 self.assertEqual(result['checked_at'], collector.stamp(at))
+                model = result['windows'][-1]
+                self.assertEqual((model['kind'], model['model'], model['used']), ('weekly_model', 'Fable', 13))
+                self.assertEqual(model['measured_at'], collector.stamp(self.now if at < self.now + 200000 else at))
+                self.assertEqual(collector.b_snapshot(self.snapshot, at)['windows'][-1], model)
+        # Haiku keeps a known Fable measurement; Fable is asked for again once its reset passes.
         self.assertEqual([call.kwargs.get('model', 'haiku') for call in cli.call_args_list],
-                         ['claude-fable-5-1', 'haiku', 'haiku', 'claude-fable-5-1'])
+                         ['claude-fable-5-2', 'haiku', 'haiku', 'claude-fable-5-2'])
 
-    def test_expired_fable_window_clears_during_haiku_poll_without_early_retry(self):
+    def test_fable_reset_triggers_one_read_just_after_it_passes(self):
         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
                 patch.object(collector, 'probe_usage', return_value=self.fable_windows(self.now + 300)):
-            self.collect()
-        with patch.object(collector, 'fetch_usage') as fetch, \
-                patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
-            result = self.collect(self.now + 300)
-        fetch.assert_not_called()
-        cli.assert_called_once_with(self.token.read_text().strip(), timeout=90)
-        self.assertIsNone(result['windows'][-1]['used'])
-        self.assertIsNone(result['windows'][-1]['remaining'])
-        self.assertEqual(result['windows'][-1]['measured_at'], collector.stamp(self.now))
-        self.assertEqual(result['fable_probe_attempted_at'], collector.stamp(self.now))
-
-    def test_existing_unexpired_fable_window_seeds_initial_hourly_budget(self):
-        previous = self.seed_known_usage()
-        previous.update(endpoint_next_attempt_at=collector.stamp(self.now + 7200))
-        previous['windows'].append({**self.fable_windows(self.now + 300)[-1],
-                                    'measured_at': collector.stamp(self.now - 100)})
-        self.snapshot.write_text(json.dumps(previous))
-        with patch.object(collector, 'fetch_usage') as fetch, \
-                patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
             result = self.collect()
-            cli.assert_called_once_with(self.token.read_text().strip(), timeout=90)
-            self.assertIsNone(result['fable_probe_attempted_at'])
-            # No Fable attempt was made; the expired cached window no longer defers one.
+        self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now + 360))
+        with patch.object(collector, 'fetch_usage', side_effect=URLError('private')) as fetch, \
+                patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
             result = self.collect(self.now + 300)
-            self.assertEqual(cli.call_args.kwargs, {'model': 'claude-fable-5-1', 'timeout': 90})
-            self.assertEqual(result['fable_probe_attempted_at'], collector.stamp(self.now + 300))
+            fetch.assert_not_called()
+            cli.assert_not_called()
             self.assertIsNone(result['windows'][-1]['used'])
-        fetch.assert_not_called()
+            self.assertEqual(result['windows'][-1]['measured_at'], collector.stamp(self.now))
+            result = self.collect(self.now + 360)
+            fetch.assert_called_once()
+        cli.assert_called_once_with(self.token.read_text().strip(), model='claude-fable-5-2', timeout=90)
+        self.assertEqual(result['fable_probe_attempted_at'], collector.stamp(self.now + 360))
+        self.assertEqual(result['checked_at'], collector.stamp(self.now + 360))
+        # With the Fable window still unknown, the next read is daily rather than repeated.
+        self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now + 360 + 86400))
 
-    def test_fable_failure_falls_back_to_haiku_and_waits_an_hour_even_without_window(self):
+    def test_due_read_skips_deferred_endpoint_and_probes_once(self):
+        for fable_reset in (self.now + 300, self.now, None):
+            with self.subTest(fable_reset=fable_reset):
+                previous = self.seed_known_usage()
+                previous.update(cli_next_attempt_at=collector.stamp(self.now),
+                                endpoint_next_attempt_at=collector.stamp(self.now + 7200))
+                if fable_reset is not None:
+                    previous['windows'].append({**self.fable_windows(fable_reset)[-1],
+                                                'measured_at': collector.stamp(self.now - 100)})
+                self.snapshot.write_text(json.dumps(previous))
+                with patch.object(collector, 'fetch_usage') as fetch, \
+                        patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
+                    result = self.collect()
+                fetch.assert_not_called()
+                self.assertEqual([call.kwargs.get('model', 'haiku') for call in cli.call_args_list],
+                                 ['haiku'] if fable_reset == self.now + 300 else ['claude-fable-5-2'])
+                self.assertEqual((result['status'], result['source']), ('ok', 'cli'))
+                self.assertEqual(collector.epoch(result['endpoint_next_attempt_at']),
+                                 max(self.now + 7200, collector.epoch(result['cli_next_attempt_at'])))
+
+    def test_fable_failure_falls_back_to_haiku_within_one_attempt(self):
         for failure in (collector.UsageResponseError('cli_timeout'),
                         collector.UsageResponseError('no_usage_data'), OSError('private')):
             with self.subTest(failure=type(failure).__name__):
                 self.snapshot.unlink(missing_ok=True)
                 def probe(token, model='haiku', timeout=90):
-                    if model == 'claude-fable-5-1':
+                    if model == 'claude-fable-5-2':
                         raise failure
                     return self.windows
                 with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
                         patch.object(collector, 'probe_usage', side_effect=probe) as cli:
-                    for offset in (0, 300, 3300, 3600):
+                    for offset in (0, 300, 3600, 86399, 86400):
                         result = self.collect(self.now + offset)
                         self.assertEqual((result['status'], result['source'], result['error']), ('ok', 'cli', None))
                     self.assertEqual([call.kwargs.get('model', 'haiku') for call in cli.call_args_list],
-                                     ['claude-fable-5-1', 'haiku', 'haiku', 'haiku', 'claude-fable-5-1', 'haiku'])
-                self.assertEqual(result['fable_probe_attempted_at'], collector.stamp(self.now + 3600))
+                                     ['claude-fable-5-2', 'haiku', 'claude-fable-5-2', 'haiku'])
+                self.assertEqual(result['fable_probe_attempted_at'], collector.stamp(self.now + 86400))
+                self.assertEqual(result['checked_at'], collector.stamp(self.now + 86400))
 
     def test_rejected_fable_cli_with_telemetry_still_falls_back_to_haiku(self):
         event = json.loads(json.dumps(self.event))
@@ -158,7 +172,7 @@ class ClaudeBUsageTests(unittest.TestCase):
                     SimpleNamespace(stdout=json.dumps(self.event).encode(), returncode=0)]) as run:
             result = self.collect()
         self.assertEqual([call.args[0][call.args[0].index('--model') + 1] for call in run.call_args_list],
-                         ['claude-fable-5-1', 'haiku'])
+                         ['claude-fable-5-2', 'haiku'])
         self.assertEqual((result['status'], result['source'], result['error']), ('ok', 'cli', None))
         self.assertEqual(result['windows'][-1]['used'], 100)
         self.assertEqual(result['windows'][-1]['measured_at'], collector.stamp(self.now))
@@ -174,17 +188,22 @@ class ClaudeBUsageTests(unittest.TestCase):
         model = next(row for row in result['windows'] if row['kind'] == 'weekly_model')
         self.assertEqual((model['model'], model['label'], model['used']), ('Fable', 'Weekly · Fable', 13))
         self.assertEqual(model['measured_at'], collector.stamp(self.now))
+        self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now + 10060))
         def rate_limited(token):
             raise HTTPError(collector.ENDPOINT, 429, '', {'Retry-After': '7200'}, None)
-        for offset in (3600, 7200, 10000, 10300):
-            with patch.object(collector, 'fetch_usage', side_effect=rate_limited), \
-                    patch.object(collector, 'probe_usage', return_value=self.windows):
+        with patch.object(collector, 'fetch_usage', side_effect=rate_limited) as fetch, \
+                patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
+            for offset in (3600, 7200, 10000, 10060):
                 result = self.collect(self.now + offset)
-            retained = next(row for row in result['windows'] if row['kind'] == 'weekly_model')
-            self.assertEqual(retained['measured_at'], model['measured_at'])
-            self.assertEqual(retained['used'], 13 if offset < 10000 else None)
-            self.assertEqual(collector.b_snapshot(self.snapshot, self.now + offset)['windows'][-1], retained)
-            self.assertEqual(result['checked_at'], collector.stamp(self.now + offset))
+                retained = next(row for row in result['windows'] if row['kind'] == 'weekly_model')
+                self.assertEqual(retained['measured_at'], model['measured_at'])
+                self.assertEqual(retained['used'], 13 if offset < 10000 else None)
+                self.assertEqual(collector.b_snapshot(self.snapshot, self.now + offset)['windows'][-1], retained)
+                self.assertEqual(result['checked_at'], collector.stamp(self.now + (offset if offset == 10060 else 0)))
+                self.assertEqual(fetch.call_count, int(offset == 10060))
+        self.assertEqual(cli.call_args.kwargs, {'model': 'claude-fable-5-2', 'timeout': 90})
+        self.assertEqual(result['endpoint_error'], 'http_429')
+        self.assertEqual(result['endpoint_next_attempt_at'], collector.stamp(self.now + 10060 + 86400))
 
     def test_cli_fable_bucket_is_parsed_and_refreshed_independently(self):
         event = json.loads(json.dumps(self.event))
@@ -216,11 +235,12 @@ class ClaudeBUsageTests(unittest.TestCase):
         event = json.loads(json.dumps(self.event))
         event['rate_limit_info']['unifiedWindows']['seven_day_overage_included'] = {'utilization': .14}
         windows = collector.parse_rate_limit_events(json.dumps(event))
-        with patch.object(collector, 'fetch_usage'), patch.object(collector, 'probe_usage', return_value=windows):
-            result = self.collect(self.now + 900)
+        with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
+                patch.object(collector, 'probe_usage', return_value=windows):
+            result = self.collect(self.now + 86400)
         self.assertEqual(len(result['windows']), 3)
         self.assertAlmostEqual(result['windows'][-1]['used'], 14)
-        self.assertEqual(result['windows'][-1]['measured_at'], collector.stamp(self.now + 900))
+        self.assertEqual(result['windows'][-1]['measured_at'], collector.stamp(self.now + 86400))
 
     def test_optional_model_window_does_not_age_primary_success_or_force_cli_probe(self):
         previous = self.seed_known_usage()
@@ -243,7 +263,7 @@ class ClaudeBUsageTests(unittest.TestCase):
                    'resets_at': self.now + 10000, 'measured_at': collector.stamp(self.now - 100)}]
         for value in (None, True, -1, '13', float('nan'), float('inf')):
             with self.subTest(value=value):
-                payload = {'five_hour': {'utilization': 4}, 'limits': [
+                payload = {'seven_day': {'utilization': 4}, 'limits': [
                     {'kind': 'weekly_scoped', 'percent': value, 'scope': {'model': {'display_name': 'Fable'}}}]}
                 rows, _ = collector.parse_usage(payload, for_b=True)
                 result = collector.b_windows(rows, cached, measured_at=self.now)
@@ -317,8 +337,9 @@ class ClaudeBUsageTests(unittest.TestCase):
                     for key in ('checked_at', 'usage_checked_at', 'source'):
                         self.assertEqual(state[key], previous[key])
                     self.assertEqual(state['endpoint_error'], 'no_usage_data')
+                    # A failed read's retry is durable before the fallback dispatch.
                     self.assertEqual(collector.epoch(state['endpoint_next_attempt_at']), self.now + 3600)
-                    self.assertEqual(collector.epoch(state['cli_next_attempt_at']), self.now + collector.CLI_PROBE_INTERVAL)
+                    self.assertEqual(collector.epoch(state['cli_next_attempt_at']), self.now + 3600)
                     return self.windows
 
                 with patch.object(collector, 'fetch_usage', return_value=payload), \
@@ -328,10 +349,11 @@ class ClaudeBUsageTests(unittest.TestCase):
                 self.assertEqual((result['status'], result['source']), ('ok', 'cli'))
                 self.assertEqual(result['checked_at'], collector.stamp(self.now))
                 self.assertEqual(result['usage_checked_at'], previous['usage_checked_at'])
+                self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now + 86400))
 
     def test_unusable_endpoint_and_cli_retain_values_success_times_and_budgets(self):
         previous = self.seed_known_usage()
-        with patch.object(collector, 'fetch_usage', return_value={'seven_day_sonnet': {'utilization': 30}}), \
+        with patch.object(collector, 'fetch_usage', return_value={'seven_day_sonnet': {'utilization': 30}}) as fetch, \
                 patch.object(collector, 'probe_usage', return_value=[]) as cli:
             result = self.collect()
             self.assertEqual((result['status'], result['error'], result['endpoint_error']),
@@ -339,12 +361,17 @@ class ClaudeBUsageTests(unittest.TestCase):
             self.assertEqual(result['windows'][:2], previous['windows'])
             for key in ('checked_at', 'usage_checked_at', 'source'):
                 self.assertEqual(result[key], previous[key])
-            self.collect(self.now + collector.CLI_PROBE_INTERVAL - 1)
-            self.assertEqual(cli.call_count, 2)
-        self.assertEqual(collector.epoch(result['endpoint_next_attempt_at']), self.now + 3600)
-        self.assertEqual(collector.epoch(result['cli_next_attempt_at']), self.now + collector.CLI_PROBE_INTERVAL)
+            self.assertEqual(result['consecutive_failures'], 1)
+            for field in ('endpoint_next_attempt_at', 'cli_next_attempt_at'):
+                self.assertEqual(collector.epoch(result[field]), self.now + 3600)
+            self.collect(self.now + 3599)
+            self.assertEqual((fetch.call_count, cli.call_count), (1, 2))
+            result = self.collect(self.now + 3600)
+            self.assertEqual((fetch.call_count, cli.call_count), (2, 4))
+        self.assertEqual(result['consecutive_failures'], 2)
+        self.assertEqual(collector.epoch(result['cli_next_attempt_at']), self.now + 3600 + 7200)
 
-    def test_partial_sources_preserve_missing_or_malformed_other_window(self):
+    def test_partial_sources_require_weekly_and_reject_malformed_reported_five_hour(self):
         for source in ('usage', 'cli'):
             for kind in ('five_hour', 'seven_day'):
                 other = 'seven_day' if kind == 'five_hour' else 'five_hour'
@@ -359,28 +386,30 @@ class ClaudeBUsageTests(unittest.TestCase):
                             rows.append({'kind': other, 'used': invalid, 'resets_at': reset})
                         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')
                                           if source == 'cli' else None, return_value=payload), \
-                                patch.object(collector, 'probe_usage', return_value=rows) as cli:
+                                patch.object(collector, 'probe_usage', return_value=rows):
                             result = self.collect()
-                        self.assertEqual((result['status'], result['source']), ('ok', source))
-                        selected = next(row for row in result['windows'] if row['kind'] == kind)
-                        self.assertEqual((selected['used'], selected['remaining'], selected['resets_at']), (0, 100, reset))
-                        self.assertEqual(next(row for row in result['windows'] if row['kind'] == other),
-                                         next(row for row in previous['windows'] if row['kind'] == other))
-                        self.assertEqual(selected['measured_at'], collector.stamp(self.now))
-                        self.assertEqual(result['checked_at'], previous['checked_at'])
-                        self.assertEqual(cli.call_count, int(source == 'cli'))
+                        if kind == 'seven_day' and invalid == 'absent':
+                            self.assertEqual((result['status'], result['source']), ('ok', source))
+                            self.assertEqual([row['kind'] for row in result['windows']], ['seven_day'])
+                            self.assertEqual(result['windows'][0]['measured_at'], collector.stamp(self.now))
+                            self.assertEqual(result['checked_at'], collector.stamp(self.now))
+                        else:
+                            self.assertEqual((result['status'], result['error']), ('error', 'no_usage_data'))
+                            self.assertEqual(result['checked_at'], previous['checked_at'])
 
-    def test_repeated_partial_samples_age_oldest_window_and_do_not_suppress_probe(self):
+    def test_repeated_five_hour_only_samples_never_count_as_success(self):
         previous = self.seed_known_usage()
         partial = {'five_hour': {'utilization': 5, 'resets_at': collector.stamp(self.now + 14000)}}
         with patch.object(collector, 'fetch_usage', return_value=partial), \
                 patch.object(collector, 'probe_usage', return_value=[{'kind': 'five_hour', 'used': 6}]) as cli:
             result = self.collect()
+            self.assertEqual(result['status'], 'error')
             self.assertEqual(result['checked_at'], previous['checked_at'])
-            result = self.collect(self.now + 300)
-            cli.assert_called_once()
+            result = self.collect(self.now + 3600)
+            self.assertEqual(cli.call_count, 4)
+            self.assertEqual(result['status'], 'error')
             self.assertEqual(result['checked_at'], previous['checked_at'])
-            self.assertEqual(result['windows'][0]['measured_at'], collector.stamp(self.now + 300))
+            self.assertEqual(result['windows'][0]['measured_at'], collector.stamp(self.now + 3600))
             self.assertEqual(result['windows'][1]['measured_at'], previous['checked_at'])
             self.assertEqual(collector.b_snapshot(self.snapshot)['checked_at'], previous['checked_at'])
 
@@ -437,6 +466,9 @@ class ClaudeBUsageTests(unittest.TestCase):
                                           if source == 'cli' else lambda token: finish_request({other: {'utilization': 5}})), \
                             patch.object(collector, 'probe_usage', side_effect=lambda token, model='haiku', timeout=90: finish_request([{'kind': other, 'used': 5}])):
                         result = collector.collect_b(self.token, self.snapshot)
+                    if kind == 'five_hour':
+                        self.assertNotIn('five_hour', [w['kind'] for w in result['windows']])
+                        continue
                     retained = next(w for w in result['windows'] if w['kind'] == kind)
                     self.assertIsNone(retained['used'])
                     self.assertEqual(retained['measured_at'], previous['checked_at'])
@@ -446,7 +478,8 @@ class ClaudeBUsageTests(unittest.TestCase):
     def test_initial_partial_sample_cannot_date_an_unmeasured_window(self):
         with patch.object(collector, 'fetch_usage', return_value={'five_hour': {'utilization': 4}}):
             result = self.collect()
-        self.assertIsNone(result['windows'][1]['measured_at'])
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual([w['kind'] for w in result['windows']], ['five_hour'])
         self.assertIsNone(result['checked_at'])
         self.assertEqual(collector.b_snapshot(self.snapshot)['windows'][0]['measured_at'], collector.stamp(self.now))
 
@@ -504,7 +537,7 @@ class ClaudeBUsageTests(unittest.TestCase):
     def test_invalid_cached_primary_windows_do_not_suppress_probe(self):
         self.snapshot.write_text(json.dumps({'windows': [{'kind': 'five_hour', 'used': -1},
             {'kind': 'seven_day_sonnet', 'used': 30}], 'status': 'ok', 'source': 'usage',
-            'usage_checked_at': collector.stamp(self.now),
+            'usage_checked_at': collector.stamp(self.now), 'cli_next_attempt_at': collector.stamp(self.now),
             'endpoint_next_attempt_at': collector.stamp(self.now + 3600)}))
         with patch.object(collector, 'fetch_usage') as fetch, \
                 patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
@@ -527,7 +560,7 @@ class ClaudeBUsageTests(unittest.TestCase):
             self.assertEqual(result['windows'], self.measured_windows(self.now))
             self.assertEqual((result['id'], result['label'], result['plan'], result['status'], result['source']),
                              ('claude-b', 'Claude B', None, 'ok', 'usage'))
-            for offset in (300, 899):
+            for offset in (300, 899, 14000, 86399):
                 self.assertEqual(self.collect(self.now + offset)['checked_at'], result['checked_at'])
             self.assertEqual(fetch.call_count, 1)
             probe.assert_not_called()
@@ -544,62 +577,72 @@ class ClaudeBUsageTests(unittest.TestCase):
         def endpoint(token):
             state = json.loads(self.snapshot.read_text())
             self.assertEqual(collector.epoch(state['endpoint_next_attempt_at']), self.now + 3600)
+            self.assertEqual(collector.epoch(state['cli_next_attempt_at']), self.now + 3600)
             raise HTTPError(collector.ENDPOINT, 429, '', {'Retry-After': '7200'}, None)
 
         def probe(token, model='haiku', timeout=90):
             state = json.loads(self.snapshot.read_text())
-            self.assertEqual(collector.epoch(state['cli_next_attempt_at']), self.now + collector.CLI_PROBE_INTERVAL)
+            self.assertEqual(collector.epoch(state['cli_next_attempt_at']), self.now + 3600)
+            self.assertEqual(collector.epoch(state['endpoint_next_attempt_at']), self.now + 7200)
             return self.windows
 
-        with patch.object(collector, 'fetch_usage', side_effect=endpoint) as fetch, \
-                patch.object(collector, 'probe_usage', side_effect=probe) as cli:
+        with patch.object(collector, 'fetch_usage', side_effect=endpoint), \
+                patch.object(collector, 'probe_usage', side_effect=probe):
             result = self.collect()
         self.assertEqual(result['endpoint_error'], 'http_429')
-        self.assertEqual(collector.epoch(result['endpoint_next_attempt_at']), self.now + 7200)
+        self.assertEqual(collector.epoch(result['provider_retry_at']), self.now + 7200)
         self.assertEqual((result['status'], result['source']), ('ok', 'cli'))
+        # A successful fallback reading moves the next read to tomorrow.
+        for field in ('endpoint_next_attempt_at', 'cli_next_attempt_at'):
+            self.assertEqual(collector.epoch(result[field]), self.now + 86400)
         with patch.object(collector, 'fetch_usage') as fetch, \
                 patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
-            for offset in (1, collector.CLI_PROBE_INTERVAL - 1):
+            for offset in (1, 240, 3600, 7200, 86399):
                 self.assertEqual(self.collect(self.now + offset)['checked_at'], result['checked_at'])
             cli.assert_not_called()
-            self.collect(self.now + collector.CLI_PROBE_INTERVAL)
-            self.assertEqual(cli.call_count, 1)
-            self.collect(self.now + 3600)
-            self.assertEqual(cli.call_count, 2)
             fetch.assert_not_called()
         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')) as fetch, \
-                patch.object(collector, 'probe_usage', return_value=self.windows):
-            self.collect(self.now + 7200)
-            fetch.assert_called_once()
-
-    def test_hourly_attempt_including_errors_and_endpoint_data_aging(self):
-        with patch.object(collector, 'fetch_usage', return_value={'seven_day': {'utilization': 10}}) as fetch, \
                 patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
-            self.collect()
-            cli.assert_not_called()
-            self.collect(self.now + collector.CLI_PROBE_INTERVAL)
-            self.collect(self.now + 2 * collector.CLI_PROBE_INTERVAL - 1)
-            self.assertEqual(cli.call_count, 1)
-            self.collect(self.now + 2 * collector.CLI_PROBE_INTERVAL)
-            self.assertEqual(cli.call_count, 2)
-            self.assertEqual(fetch.call_count, 1)
-            self.collect(self.now + 3600)
-            self.assertEqual(fetch.call_count, 2)
-            self.assertEqual(cli.call_count, 2)
+            self.collect(self.now + 86400)
+            fetch.assert_called_once()
+            cli.assert_called_once()
 
-    def test_failed_probe_keeps_values_and_timestamp_and_throttles(self):
+    def test_daily_read_after_success_with_up_to_an_hour_of_jitter(self):
+        with patch.object(collector.random, 'uniform', return_value=1800) as jitter, \
+                patch.object(collector, 'fetch_usage', return_value={'seven_day': {'utilization': 10}}) as fetch, \
+                patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
+            result = self.collect()
+            jitter.assert_called_with(0, 3600)
+            for field in ('endpoint_next_attempt_at', 'cli_next_attempt_at'):
+                self.assertEqual(collector.epoch(result[field]), self.now + 86400 + 1800)
+            for offset in (240, 900, 3600, 86400, 88199):
+                self.assertEqual(self.collect(self.now + offset)['status'], 'ok')
+            self.assertEqual(fetch.call_count, 1)
+            self.collect(self.now + 88200)
+            self.assertEqual(fetch.call_count, 2)
+            cli.assert_not_called()
+
+    def test_failed_read_never_probes_on_a_short_cadence(self):
         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
                 patch.object(collector, 'probe_usage', return_value=self.windows):
             success = self.collect()
-        with patch.object(collector, 'fetch_usage') as fetch, \
+        start = self.now + 86400
+        with patch.object(collector, 'fetch_usage', side_effect=URLError('private')) as fetch, \
                 patch.object(collector, 'probe_usage', side_effect=collector.UsageResponseError('cli_timeout')) as cli:
-            failed = self.collect(self.now + collector.CLI_PROBE_INTERVAL)
+            failed = self.collect(start)
             self.assertEqual((failed['status'], failed['error']), ('error', 'cli_timeout'))
-            self.assertEqual(failed['windows'], success['windows'])
+            # The five-hour reset passed overnight; the weekly value and both measurement times are kept.
+            self.assertEqual(failed['windows'][1], success['windows'][1])
+            self.assertEqual([row['measured_at'] for row in failed['windows']],
+                             [row['measured_at'] for row in success['windows']])
             self.assertEqual(failed['checked_at'], success['checked_at'])
-            self.collect(self.now + 2 * collector.CLI_PROBE_INTERVAL - 1)
-            self.assertEqual(cli.call_count, 1)
-            fetch.assert_not_called()
+            self.assertEqual(cli.call_count, 2)
+            # Five-minute timer runs, including the old 240-second cadence, make no requests.
+            for offset in range(240, 3600, 240):
+                self.assertEqual(self.collect(start + offset)['error'], 'cli_timeout')
+            self.assertEqual((fetch.call_count, cli.call_count), (1, 2))
+            self.collect(start + 3600)
+            self.assertEqual((fetch.call_count, cli.call_count), (2, 4))
 
     def test_missing_empty_malformed_token_never_requests_and_preserves_budgets(self):
         with patch.object(collector, 'fetch_usage') as fetch, patch.object(collector, 'probe_usage') as cli:
@@ -611,8 +654,8 @@ class ClaudeBUsageTests(unittest.TestCase):
                 result = self.collect()
                 self.assertEqual((result['status'], result['error']), ('missing_token', 'missing_token'))
                 self.assertIsNone(result['endpoint_next_attempt_at'])
-                self.assertIsNone(result['cli_next_attempt_at'])
-                self.assertEqual([row['used'] for row in result['windows']], [None, None])
+                self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now))
+                self.assertEqual(result['windows'], [])
             fetch.assert_not_called()
             cli.assert_not_called()
         self.token.write_text('private-test-token\n')
@@ -620,15 +663,32 @@ class ClaudeBUsageTests(unittest.TestCase):
                 patch.object(collector, 'probe_usage', return_value=self.windows):
             self.assertEqual(self.collect()['status'], 'ok')
 
+    def test_restored_token_reads_without_waiting_for_the_old_schedule(self):
+        with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
+                patch.object(collector, 'probe_usage', return_value=self.windows):
+            self.assertEqual(self.collect()['status'], 'ok')
+        self.token.write_text('')
+        self.assertEqual(self.collect(self.now + 600)['status'], 'missing_token')
+        self.token.write_text('private-test-token\n')
+        with patch.object(collector, 'fetch_usage', side_effect=URLError('private')), \
+                patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
+            self.assertEqual(self.collect(self.now + 900)['status'], 'ok')
+            cli.assert_called_once()
+
     def test_retry_after_dates_invalid_and_short_values(self):
         date = dt.datetime.fromtimestamp(self.now + 7200, dt.timezone.utc)
         self.assertEqual(collector.retry_after(date.strftime('%a, %d %b %Y %H:%M:%S GMT'), self.now), self.now + 7200)
         for value in (None, 'private', '-2', 'nan', 'inf'):
             self.assertEqual(collector.retry_after(value, self.now), self.now)
-        with patch.object(collector, 'fetch_usage', side_effect=HTTPError(
-                collector.ENDPOINT, 429, '', {'Retry-After': '30'}, None)), \
-                patch.object(collector, 'probe_usage', return_value=self.windows):
-            self.assertEqual(collector.epoch(self.collect()['endpoint_next_attempt_at']), self.now + 3600)
+        # A short Retry-After is kept as the provider deadline; the 429 still defers the endpoint an hour.
+        for probe, expected in ((self.windows, 86400), (collector.UsageResponseError('cli_timeout'), 3600)):
+            self.snapshot.unlink(missing_ok=True)
+            with patch.object(collector, 'fetch_usage', side_effect=HTTPError(
+                    collector.ENDPOINT, 429, '', {'Retry-After': '30'}, None)), \
+                    patch.object(collector, 'probe_usage', side_effect=[probe, probe]):
+                result = self.collect()
+            self.assertEqual(collector.epoch(result['provider_retry_at']), self.now + 30)
+            self.assertEqual(collector.epoch(result['endpoint_next_attempt_at']), self.now + expected)
 
     def test_event_fractions_unknowns_limits_and_other_output(self):
         self.assertEqual([row['used'] for row in self.windows], [4, 16])
@@ -639,8 +699,9 @@ class ClaudeBUsageTests(unittest.TestCase):
             collector.parse_rate_limit_events(json.dumps(event))
         event['rate_limit_info'].update(utilization=1.2)
         result = collector.parse_rate_limit_events('\n'.join(('not json', 'null',
-            json.dumps({'type': 'assistant', 'message': {'text': 'private'}}), json.dumps(event))))
-        self.assertEqual([row['used'] for row in result], [100, None])
+            json.dumps({'type': 'assistant', 'message': {'text': 'private'}}),
+            json.dumps({'type':'rate_limit_event','rate_limit_info':{'rateLimitType':'seven_day','utilization':.1}}), json.dumps(event))))
+        self.assertEqual([row['used'] for row in result], [100, 10])
         for value in (True, -1, '0.2', None):
             event['rate_limit_info']['utilization'] = value
             with self.assertRaisesRegex(collector.UsageResponseError, 'no_usage_data'):
@@ -668,11 +729,11 @@ class ClaudeBUsageTests(unittest.TestCase):
             self.assertEqual(kwargs['timeout'], 90)
             self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
             self.assertEqual(kwargs['stderr'], subprocess.DEVNULL)
-            return SimpleNamespace(stdout=output, returncode=0 if model == 'claude-fable-5-1' else 1)
+            return SimpleNamespace(stdout=output, returncode=0 if model == 'claude-fable-5-2' else 1)
         with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'private', 'HTTPS_PROXY': 'private',
                                     'CLAUDE_CODE_API_BASE_URL': 'private', 'CLAUDE_CONFIG_DIR': 'private'}), \
                 patch.object(collector.subprocess, 'run', side_effect=run):
-            for model in ('haiku', 'claude-fable-5-1'):
+            for model in ('haiku', 'claude-fable-5-2'):
                 with self.subTest(model=model):
                     self.assertEqual(collector.probe_usage('private-test-token', model=model), self.windows)
         with patch.object(collector.subprocess, 'run', side_effect=subprocess.TimeoutExpired('private', 90)):
@@ -683,9 +744,111 @@ class ClaudeBUsageTests(unittest.TestCase):
                 with self.assertRaisesRegex(collector.UsageResponseError, 'parse'):
                     collector.probe_usage('private-test-token')
 
+    def test_failed_reads_after_429_back_off_to_a_day(self):
+        def rate_limited(token):
+            raise HTTPError(collector.ENDPOINT, 429, '', {'Retry-After': '30'}, None)
+        at = self.now
+        with patch.object(collector, 'fetch_usage', side_effect=rate_limited) as fetch, \
+                patch.object(collector, 'probe_usage', side_effect=collector.UsageResponseError('cli_timeout')) as cli:
+            for count, expected in enumerate((3600, 7200, 14400, 28800, 57600, 86400, 86400), 1):
+                result = self.collect(at)
+                self.assertEqual((result['status'], result['endpoint_error']), ('error', 'http_429'))
+                self.assertEqual(result['consecutive_failures'], count)
+                self.assertEqual(collector.epoch(result['provider_retry_at']), at + 30)
+                due = collector.epoch(result['cli_next_attempt_at'])
+                self.assertEqual(due - at, expected)
+                self.assertEqual(collector.epoch(result['endpoint_next_attempt_at']), due)
+                self.collect(due - 1)
+                self.assertEqual((fetch.call_count, cli.call_count), (count, 2 * count))
+                at = due
+        with patch.object(collector, 'fetch_usage', return_value={'seven_day': {'utilization': 10}}):
+            result = self.collect(at)
+        self.assertEqual((result['status'], result['consecutive_failures']), ('ok', 0))
+        self.assertIsNone(result['provider_retry_at'])
+        self.assertEqual(collector.epoch(result['cli_next_attempt_at']), at + 86400)
+
+    def test_read_once_just_after_an_exhausted_reset(self):
+        payload = {'five_hour': {'utilization': 100, 'resets_at': collector.stamp(self.now + 20000)},
+                   'seven_day': {'utilization': 40, 'resets_at': collector.stamp(self.now + 300000)}}
+        with patch.object(collector, 'fetch_usage', return_value=payload) as fetch, \
+                patch.object(collector, 'probe_usage') as cli:
+            result = self.collect()
+            # Not capped to an hour: one read just after the reset, like account A.
+            self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now + 20060))
+            self.assertEqual(result['fresh_until'], collector.stamp(self.now + 20360))
+            for offset in (3600, 7200, 20059):
+                self.collect(self.now + offset)
+            fetch.assert_called_once()
+            self.collect(self.now + 20060)
+            self.assertEqual(fetch.call_count, 2)
+            cli.assert_not_called()
+
+    def test_exhausted_cli_telemetry_schedules_read_but_keeps_429_endpoint_minimum(self):
+        exhausted = collector.parse_rate_limit_events(json.dumps({'type': 'rate_limit_event', 'rate_limit_info': {
+            'unifiedWindows': {'five_hour': {'utilization': 1, 'resetsAt': self.now + 600},
+                               'seven_day': {'utilization': .2, 'resetsAt': self.now + 300000}}}}))
+        def rate_limited(token):
+            raise HTTPError(collector.ENDPOINT, 429, '', {'Retry-After': '30'}, None)
+        with patch.object(collector, 'fetch_usage', side_effect=rate_limited) as fetch, \
+                patch.object(collector, 'probe_usage', side_effect=collector.UsageResponseError(
+                    'cli_unavailable', windows=exhausted)) as cli:
+            result = self.collect()
+            # A blocked Fable probe with exhausted telemetry spends no Haiku request.
+            cli.assert_called_once()
+            self.assertEqual(result['cli_next_attempt_at'], collector.stamp(self.now + 660))
+            self.assertEqual(result['endpoint_next_attempt_at'], collector.stamp(self.now + 3600))
+            self.collect(self.now + 659)
+            self.assertEqual(cli.call_count, 1)
+        with patch.object(collector, 'fetch_usage') as later_fetch, \
+                patch.object(collector, 'probe_usage', return_value=self.windows) as later_cli:
+            result = self.collect(self.now + 660)
+        fetch.assert_called_once()
+        later_fetch.assert_not_called()
+        later_cli.assert_called_once()
+        self.assertEqual((result['status'], result['source']), ('ok', 'cli'))
+        self.assertEqual(result['endpoint_next_attempt_at'], collector.stamp(self.now + 660 + 86400))
+
+    def test_old_snapshot_schedules_migrate_without_extra_requests(self):
+        for cli_next, endpoint_next, expected in ((None, 3000, 0), (240, 3000, 1), (None, None, 1)):
+            with self.subTest(cli_next=cli_next, endpoint_next=endpoint_next):
+                previous = self.seed_known_usage()
+                previous.update(cli_next_attempt_at=collector.stamp(self.now + cli_next) if cli_next else None,
+                                endpoint_next_attempt_at=collector.stamp(self.now + endpoint_next) if endpoint_next else None)
+                self.snapshot.write_text(json.dumps(previous))
+                with patch.object(collector, 'fetch_usage', side_effect=URLError('private')) as fetch, \
+                        patch.object(collector, 'probe_usage', return_value=self.windows) as cli:
+                    self.collect(self.now + 240)
+                self.assertEqual(cli.call_count, expected)
+                self.assertEqual(fetch.call_count, int(endpoint_next is None))
+
+    def test_dashboard_keeps_day_old_snapshot_valid_until_its_resets(self):
+        sys.path.insert(0, str(ROOT / 'dashboard'))
+        import server
+        payload = {'five_hour': {'utilization': 4, 'resets_at': collector.stamp(self.now + 14000)},
+                   'seven_day': {'utilization': 16, 'resets_at': collector.stamp(self.now + 300000)},
+                   'limits': [{'kind': 'weekly_scoped', 'percent': 13, 'resets_at': collector.stamp(self.now + 200000),
+                               'scope': {'model': {'display_name': 'Fable'}}}]}
+        for five_hour in (True, False):
+            with self.subTest(five_hour=five_hour):
+                self.snapshot.unlink(missing_ok=True)
+                body = payload if five_hour else {k: v for k, v in payload.items() if k != 'five_hour'}
+                with patch.object(collector, 'fetch_usage', return_value=body):
+                    self.collect()
+                with patch.object(collector, 'fetch_usage') as fetch, patch.object(collector, 'probe_usage') as cli:
+                    for offset, status in ((900, 'ok'), (13999, 'ok'), (14000, 'stale' if five_hour else 'ok'),
+                                           (86399, 'stale' if five_hour else 'ok')):
+                        self.collect(self.now + offset)
+                        view = server.watch_account(self.snapshot, 'claude-b', 'Claude B', False, self.now + offset)
+                        self.assertEqual((view['status'], view['error']), (status, None))
+                        self.assertEqual(view['checked_at'], collector.stamp(self.now))
+                        fable = view['windows'][-1]
+                        self.assertEqual((fable['model'], fable['used']), ('Fable', 13))
+                    fetch.assert_not_called()
+                    cli.assert_not_called()
+
     def test_plan_comes_from_validated_service_setting(self):
-        for value, expected in ((' Max (5x) ', 'Max (5x)'), ('Pro', 'Pro'), ('Max (20x)', 'Max (20x)'),
-                                 ('Max', None), ('pro', None), ('', None)):
+        for value, expected in ((' Max (5x) ', 'Max'), ('Pro', 'Pro'), ('Max (20x)', 'Ultra'),
+                                 ('Max', 'Max'), ('Ultra', 'Ultra'), ('pro', None), ('', None)):
             with self.subTest(value=value), patch.dict(os.environ, {'CLAUDE_B_PLAN': value}):
                 result = collector.collect_b(self.root / 'missing-token', self.snapshot, self.now)
                 self.assertEqual(result['plan'], expected)

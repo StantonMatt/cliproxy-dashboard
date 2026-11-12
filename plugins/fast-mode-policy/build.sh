@@ -11,18 +11,19 @@ if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]]; then
 fi
 # GO may point to the spike toolchain, or any installed Go >= 1.26 toolchain.
 go_bin=${GO:-go}
+version=0.2.0
 export CGO_ENABLED=1 GOOS=linux GOARCH=amd64
 stage=$(mktemp -d "$out_dir/.build-XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
 cd -- "$source_dir"
 runner=()
 if command -v heavy >/dev/null 2>&1; then runner=(heavy); fi
-"${runner[@]}" "$go_bin" build -mod=readonly -trimpath -buildvcs=false -buildmode=c-shared -o "$stage/fast-mode-policy-v0.1.2.so" .
-target="$out_dir/fast-mode-policy-v0.1.2.so"
+"${runner[@]}" "$go_bin" build -mod=readonly -trimpath -buildvcs=false -buildmode=c-shared -o "$stage/fast-mode-policy-v$version.so" .
+target="$out_dir/fast-mode-policy-v$version.so"
 # Never overwrite a potentially loaded library, even in the build cache.
 if [[ -e "$target" ]]; then
-  cmp -s -- "$target" "$stage/fast-mode-policy-v0.1.2.so" || { echo 'Versioned library exists with different bytes; use another output directory.' >&2; exit 1; }
+  cmp -s -- "$target" "$stage/fast-mode-policy-v$version.so" || { echo 'Versioned library exists with different bytes; use another output directory.' >&2; exit 1; }
 else
-  ln -- "$stage/fast-mode-policy-v0.1.2.so" "$target"
+  ln -- "$stage/fast-mode-policy-v$version.so" "$target"
 fi
 printf '%s\n' "$target"

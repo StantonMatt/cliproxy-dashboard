@@ -87,7 +87,7 @@ class Lab:
         self.sh('install', '-d', '-o', 'root', '-g', 'cliproxyapi', '-m', '0750', self.etc, self.runtime)
         self.sh('install', '-d', '-o', 'root', '-g', 'root', '-m', '0700', self.state)
         self.sh('install', '-d', '-o', 'cliproxyapi', '-g', 'cliproxyapi', '-m', '0770', self.requests)
-        self.sh('install', '-o', 'root', '-g', 'cliproxyapi', '-m', '0640',
+        self.sh('install', '-o', 'root', '-g', 'cliproxyapi', '-m', '0660',
                 ROOT / 'tests/fixtures/config-v8-nested.yaml', self.config)
         for name in ('move-conversations.py', 'gateway_config.py'):
             self.sh('install', '-o', 'root', '-g', 'root', '-m', '0644', ROOT / 'scripts' / name, self.helper / name)

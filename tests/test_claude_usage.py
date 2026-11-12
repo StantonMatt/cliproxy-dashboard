@@ -1,5 +1,6 @@
 from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
+from email.utils import formatdate
 import importlib.util
 import io
 import json
@@ -34,6 +35,9 @@ class ClaudeUsageTests(unittest.TestCase):
             'organization': {'rate_limit_tier': 'default_claude_max_20x'}})
         self.fetch_profile = profile.start()
         self.addCleanup(profile.stop)
+        jitter = patch.object(collector.random, 'uniform', return_value=0)
+        jitter.start()
+        self.addCleanup(jitter.stop)
 
     def write_credentials(self, **updates):
         oauth = {'accessToken': self.access, 'refreshToken': self.refresh,
@@ -41,8 +45,24 @@ class ClaudeUsageTests(unittest.TestCase):
         oauth.update(updates)
         self.credentials.write_text(json.dumps({'claudeAiOauth': oauth}))
 
+    def make_due(self):
+        saved = json.loads(self.snapshot.read_text())
+        saved['next_attempt_at'] = None
+        self.snapshot.write_text(json.dumps(saved))
+
     def collect(self, payload=None, now=None):
-        with patch.object(collector, 'fetch_usage', return_value=payload if payload is not None else {'five_hour': None}):
+        # Parser/profile fixtures request an explicit observation. Cadence is tested
+        # separately through collector.collect without making the snapshot due.
+        if self.snapshot.exists():
+            try:
+                saved = json.loads(self.snapshot.read_text())
+            except ValueError:
+                saved = {}
+            if isinstance(saved, dict) and saved.get('status') == 'ok':
+                saved['next_attempt_at'] = None
+                self.snapshot.write_text(json.dumps(saved))
+        payload = {'seven_day': {'utilization': 0}, **(payload or {})}
+        with patch.object(collector, 'fetch_usage', return_value=payload):
             return collector.collect(self.credentials, self.snapshot, self.now if now is None else now)
 
     def test_window_durations_emitted_and_retained_in_snapshots(self):
@@ -67,9 +87,70 @@ class ClaudeUsageTests(unittest.TestCase):
         self.assertEqual({w['kind']: w['seconds'] for w in stale['windows']}, expected)
         self.assertNotIn('seconds', collector.window('unknown', 'Unknown', 17, self.now + 1))
 
+    def test_idle_collector_reads_once_just_after_an_unexhausted_reset(self):
+        reset = collector.stamp(self.now + 6000)
+        first = self.collect({'five_hour': {'utilization': 40, 'resets_at': reset}})
+        self.assertEqual(collector.epoch(first['next_attempt_at']), self.now + 6060)
+        with patch.object(collector, 'fetch_usage', return_value={'seven_day': {'utilization': 0}}) as fetch:
+            collector.collect(self.credentials, self.snapshot, self.now + 6059)
+            fetch.assert_not_called()
+            after = collector.collect(self.credentials, self.snapshot, self.now + 6060)
+            fetch.assert_called_once()
+        self.assertEqual(collector.epoch(after['next_attempt_at']), self.now + 6060 + 86400)
+
+    def test_successful_idle_collector_has_no_hourly_usage_poll(self):
+        first = self.collect()
+        self.assertEqual(collector.epoch(first['next_attempt_at']), self.now + 86400)
+        with patch.object(collector, 'fetch_usage') as fetch:
+            for delta in (300, 1800, 3600, 86399):
+                collector.collect(self.credentials, self.snapshot, self.now + delta)
+            fetch.assert_not_called()
+        with patch.object(collector.random, 'uniform', return_value=123):
+            result = self.collect(now=self.now + 60)
+        self.assertEqual(collector.epoch(result['next_attempt_at']), self.now + 60 + 86523)
+
+    def test_saved_success_schedule_cannot_skip_a_required_primary_reset_read(self):
+        for kind, used in (('five_hour', 40), ('five_hour', 100), ('seven_day', 40), ('seven_day', 100)):
+            with self.subTest(kind=kind, used=used):
+                first = self.collect({kind: {'utilization': used,
+                    'resets_at': collector.stamp(self.now + 6000)}})
+                first['next_attempt_at'] = collector.stamp(self.now + 86400)
+                self.snapshot.write_text(json.dumps(first))
+                with patch.object(collector, 'fetch_usage', return_value={'seven_day': {'utilization': 0}}) as fetch:
+                    collector.collect(self.credentials, self.snapshot, self.now + 6059)
+                    fetch.assert_not_called()
+                    self.assertEqual(json.loads(self.snapshot.read_text())['next_attempt_at'],
+                                     collector.stamp(self.now + 6060))
+                    result = collector.collect(self.credentials, self.snapshot, self.now + 6060)
+                    fetch.assert_called_once()
+                self.assertEqual(result['checked_at'], collector.stamp(self.now + 6060))
+
+    def test_saved_idle_schedule_cannot_skip_the_daily_read(self):
+        self.write_credentials(expiresAt=(self.now + 4 * 86400) * 1000)
+        first = self.collect()
+        first['next_attempt_at'] = collector.stamp(self.now + 3 * 86400)
+        self.snapshot.write_text(json.dumps(first))
+        with patch.object(collector, 'fetch_usage', return_value={'seven_day': {'utilization': 0}}) as fetch:
+            collector.collect(self.credentials, self.snapshot, self.now + 89999)
+            fetch.assert_not_called()
+            collector.collect(self.credentials, self.snapshot, self.now + 90000)
+            fetch.assert_called_once()
+
+    def test_reset_schedule_clamp_preserves_failure_backoff_and_provider_deadlines(self):
+        first = self.collect({'five_hour': {'utilization': 40,
+            'resets_at': collector.stamp(self.now + 6000)}})
+        for updates in (dict(status='error', error='network', consecutive_failures=1),
+                        dict(provider_retry_at=collector.stamp(self.now + 9000))):
+            with self.subTest(updates=updates):
+                saved = dict(first, next_attempt_at=collector.stamp(self.now + 86400), **updates)
+                self.snapshot.write_text(json.dumps(saved))
+                with patch.object(collector, 'fetch_usage') as fetch:
+                    collector.collect(self.credentials, self.snapshot, self.now + 6060)
+                    fetch.assert_not_called()
+
     def test_plan_mapping_and_hourly_profile_cache(self):
-        for tier, kind, expected in (('default_claude_max_20x', 'claude_max', 'Max (20x)'),
-                                     ('default_claude_max_5x', 'claude_max', 'Max (5x)'),
+        for tier, kind, expected in (('default_claude_max_20x', 'claude_max', 'Ultra'),
+                                     ('default_claude_max_5x', 'claude_max', 'Max'),
                                      (None, 'claude_pro', 'Pro'), ('unknown', 'unknown', None)):
             self.assertEqual(collector.parse_plan({'organization': {
                 'rate_limit_tier': tier, 'organization_type': kind}}), expected)
@@ -79,7 +160,7 @@ class ClaudeUsageTests(unittest.TestCase):
         self.collect(now=self.now + 3600)
         self.assertEqual(self.fetch_profile.call_count, 2)
         self.fetch_profile.side_effect = URLError('private')
-        self.assertEqual(self.collect(now=self.now + 7200)['plan'], 'Max (20x)')
+        self.assertEqual(self.collect(now=self.now + 7200)['plan'], 'Ultra')
         self.collect(now=self.now + 7500)
         self.assertEqual(self.fetch_profile.call_count, 3)
 
@@ -351,23 +432,25 @@ class ClaudeUsageTests(unittest.TestCase):
     def test_equal_window_values_do_not_merge_distinct_models(self):
         reset = '2026-10-01T00:00:00Z'
         rows, _ = collector.parse_usage({
+            'seven_day': {'utilization': 0},
             'seven_day_sonnet': {'utilization': 0, 'resets_at': reset},
             'seven_day_fable': {'utilization': 0, 'resets_at': reset},
             'limits': [{'kind': 'weekly_scoped', 'percent': 0, 'resets_at': reset,
                         'scope': {'model': {'display_name': 'Fable'}}}]})
-        self.assertEqual([r['label'] for r in rows], ['Weekly · Sonnet', 'Weekly · Fable'])
-        self.assertEqual([r['used'] for r in rows], [0, 0])
+        self.assertEqual([r['label'] for r in rows], ['Weekly · all models', 'Weekly · Sonnet', 'Weekly · Fable'])
+        self.assertEqual([r['used'] for r in rows], [0, 0, 0])
 
     def test_model_identity_merges_duplicates_even_with_different_values(self):
         rows, _ = collector.parse_usage({
+            'seven_day': {'utilization': 0},
             'seven_day_fable': {'utilization': 10},
             'limits': [{'kind': 'weekly_scoped', 'percent': used,
                         'scope': {'model': {'display_name': name}}}
                        for name, used in (('Fable', 0), ('Fable', 0), ('fable', 5))]})
-        self.assertEqual(len(rows), 1)
-        self.assertEqual((rows[0]['model'], rows[0]['used']), ('Fable', 0))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual((rows[1]['model'], rows[1]['used']), ('Fable', 0))
 
-    def test_cached_watch_card_ages_into_stale_and_dimmed_in_browser(self):
+    def test_cached_unused_zero_card_ages_into_stale_and_dimmed_in_browser(self):
         script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const elements=new Map();
@@ -378,11 +461,11 @@ function element(id){
 const context={document:{getElementById:element,addEventListener(){},documentElement:{dataset:{}},querySelectorAll:()=>[]},
   window:{addEventListener(){}},localStorage:{getItem:()=>null},location:{port:'8320'},navigator:{platform:'linux'},assert};
 vm.createContext(context);
-const source=fs.readFileSync('dashboard/static/app.js','utf8').split('showView();load();setInterval')[0];
+const source=fs.readFileSync('dashboard/static/app.js','utf8').split("window.addEventListener('DOMContentLoaded'")[0];
 vm.runInContext(source,context);
 vm.runInContext(`
 const now=1790790000000;Date.now=()=>now;
-const a={status:'ok',checked_at:new Date(now-900000).toISOString(),windows:[],extra_usage:{enabled:true,used:3.2,limit:50,currency:'USD'}};
+const a={status:'ok',checked_at:new Date(now-900000).toISOString(),windows:[{kind:'seven_day',used:0,remaining:100,resets_at:null}],extra_usage:{enabled:true,used:3.2,limit:50,currency:'USD'}};
 assert.equal(watchState(a).tone,'ok');
 renderWatch({watch_accounts:[a]});
 assert(!document.getElementById('watch-grid').innerHTML.includes('last known'));
@@ -437,7 +520,7 @@ const context={document:{getElementById:element,addEventListener(){},documentEle
   setInterval:(fn,delay)=>timers.push({fn,delay}),assert};
 vm.createContext(context);
 const source=fs.readFileSync('dashboard/static/app.js','utf8');
-const startup=source.indexOf('showView();load();setInterval');
+const startup=source.indexOf("window.addEventListener('DOMContentLoaded'");
 vm.runInContext(source.slice(0,startup),context);
 vm.runInContext(`
 const now=1790790000000;Date.now=()=>now;
@@ -509,7 +592,7 @@ function element(id){
 const context={document:{getElementById:element,addEventListener(){},documentElement:{dataset:{}},querySelectorAll:()=>[]},
   window:{addEventListener(){}},localStorage:{getItem:()=>null},location:{port:'8320'},navigator:{platform:'linux'},assert};
 vm.createContext(context);
-const source=fs.readFileSync('dashboard/static/app.js','utf8').split('showView();load();setInterval')[0];
+const source=fs.readFileSync('dashboard/static/app.js','utf8').split("window.addEventListener('DOMContentLoaded'")[0];
 vm.runInContext(source,context);
 vm.runInContext(`
 const now=1790790000000;Date.now=()=>now;
@@ -563,6 +646,28 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
         result = subprocess.run(['node', '-e', script], cwd=ROOT, capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_weekly_only_usage_and_legacy_plan_snapshots(self):
+        for for_b in (False, True):
+            for five in ('absent', None):
+                payload = {'seven_day': {'utilization': 15}}
+                if five is None:
+                    payload['five_hour'] = None
+                windows, _ = collector.parse_usage(payload, for_b=for_b)
+                self.assertEqual([w['kind'] for w in windows], ['seven_day'])
+            for bad in ({}, False, [], '', {'utilization': None}, {'utilization': True},
+                        {'utilization': -1}, {'utilization': float('nan')}):
+                with self.assertRaisesRegex(collector.UsageResponseError, 'no_usage_data'):
+                    collector.parse_usage({'five_hour': bad, 'seven_day': {'utilization': 15}}, for_b=for_b)
+            for payload in ({'five_hour': {'utilization': 15}}, {'seven_day': None}):
+                with self.assertRaisesRegex(collector.UsageResponseError, 'no_usage_data'):
+                    collector.parse_usage(payload, for_b=for_b)
+        for old, expected in [('Max (5x)', 'Max'), ('Max (20x)', 'Ultra'), ('Ultra', 'Ultra')]:
+            self.snapshot.write_text(json.dumps({'plan': old}))
+            self.assertEqual(collector.previous_snapshot(self.snapshot)['plan'], expected)
+        for tier, flag in [('new_ultra_verified', False), ('unknown', True)]:
+            self.assertEqual(collector.parse_plan({'organization': {'rate_limit_tier': tier},
+                'account': {'has_claude_ultra': flag}}), 'Ultra')
+
     def test_missing_null_and_invalid_fields_are_unknown(self):
         for payload in ({'five_hour': None, 'seven_day': None, 'limits': None, 'extra_usage': None},
                         {'five_hour': {'utilization': None}, 'seven_day': {'utilization': True},
@@ -570,16 +675,14 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
                                     {'kind': 'weekly_scoped', 'scope': {'model': None}}],
                          'extra_usage': {'is_enabled': None, 'monthly_limit': None, 'used_credits': None}}):
             with self.subTest(payload=payload):
-                rows, extra = collector.parse_usage(payload)
-                self.assertEqual(rows, [])
-                self.assertEqual(extra, {'enabled': False, 'used': None, 'limit': None,
-                                         'utilization': None, 'currency': None})
+                with self.assertRaisesRegex(collector.UsageResponseError, 'no_usage_data'):
+                    collector.parse_usage(payload)
         with self.assertRaises(ValueError):
             collector.parse_usage([])
 
     def test_percentages_clamp_and_bad_reset_is_null(self):
         rows, _ = collector.parse_usage({'five_hour': {'utilization': 130, 'resets_at': 'bad'},
-                                         'seven_day': {'utilization': -5, 'resets_at': '2026-09-30T12:00:00'}})
+                                         'seven_day': {'utilization': 0, 'resets_at': '2026-09-30T12:00:00'}})
         self.assertEqual([r['remaining'] for r in rows], [0, 100])
         self.assertTrue(all(r['resets_at'] is None for r in rows))
 
@@ -618,7 +721,7 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
         result = self.collect(now=self.now + 1)
         self.assertEqual(result['status'], 'ok')
         self.assertEqual(result['consecutive_failures'], 0)
-        self.assertIsNone(result['next_attempt_at'])
+        self.assertEqual(result['next_attempt_at'], collector.stamp(self.now + 86401))
 
     def test_expiry_preserves_real_failure_count_and_deadline(self):
         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')):
@@ -657,7 +760,7 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
         self.assertEqual(before[0], after[0])
         self.assertEqual((before[1].st_ino, before[1].st_mtime_ns), (after[1].st_ino, after[1].st_mtime_ns))
         self.assertEqual({p.name for p in self.root.iterdir()}, {'credentials.json', 'claude.json'})
-        self.assertEqual(result['plan'], 'Max (20x)')
+        self.assertEqual(result['plan'], 'Ultra')
 
     def test_allowlist_and_logs_never_contain_credentials_or_raw_errors(self):
         output = io.StringIO()
@@ -668,6 +771,7 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
             self.collect(payload)
             for error in (HTTPError(collector.ENDPOINT, 401, self.access, {}, None),
                           URLError(self.refresh), ValueError(self.access)):
+                self.make_due()
                 with patch.object(collector, 'fetch_usage', side_effect=error):
                     collector.collect(self.credentials, self.snapshot, self.now + 3600)
                 self.now += 3600
@@ -686,9 +790,10 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
 
     def test_failure_preserves_success_and_backoff_skips_then_recovers(self):
         success = self.collect({'five_hour': {'utilization': 80}, 'extra_usage': {'used_credits': 42}})
+        self.make_due()
         with patch.object(collector, 'fetch_usage', side_effect=URLError('private')) as fetch:
-            now = self.now + 300
-            for delay in (300, 600, 1200, 1800, 1800):
+            now = self.now + 3600
+            for delay in (300, 600, 1200, 2400, 4800):
                 result = collector.collect(self.credentials, self.snapshot, now)
                 self.assertEqual(result['windows'], success['windows'])
                 self.assertEqual(result['extra_usage'], success['extra_usage'])
@@ -706,7 +811,33 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
         recovered = self.collect(now=now)
         self.assertEqual(recovered['status'], 'ok')
         self.assertEqual(recovered['consecutive_failures'], 0)
-        self.assertIsNone(recovered['next_attempt_at'])
+        self.assertEqual(recovered['next_attempt_at'], collector.stamp(collector.epoch(recovered['checked_at']) + 86400))
+
+    def test_429_waits_at_least_an_hour_and_honors_retry_after(self):
+        attempted = self.now + 3600
+        for header, delay in ((None, 3600), ('300', 3600), ('5400', 5400),
+                              (formatdate(attempted + 7200, usegmt=True), 7200), ('invalid', 3600)):
+            with self.subTest(header=header):
+                self.snapshot.unlink(missing_ok=True)
+                success = self.collect({'five_hour': {'utilization': 80}})
+                self.make_due()
+                headers = {'Retry-After': header} if header else {}
+                error = HTTPError(collector.ENDPOINT, 429, 'private', headers, None)
+                with patch.object(collector, 'fetch_usage', side_effect=error) as fetch:
+                    result = collector.collect(self.credentials, self.snapshot, attempted)
+                    self.assertEqual((result['status'], result['error']), ('error', 'http_429'))
+                    self.assertEqual(result['windows'], success['windows'])
+                    self.assertEqual(result['checked_at'], success['checked_at'])
+                    self.assertEqual(result['attempted_at'], collector.stamp(attempted))
+                    self.assertEqual(result['consecutive_failures'], 1)
+                    self.assertEqual(collector.epoch(result['next_attempt_at']), attempted + delay)
+                    skipped = collector.collect(self.credentials, self.snapshot, attempted + delay - 1)
+                    self.assertEqual(skipped, result)
+                    fetch.assert_called_once()
+                recovered = self.collect(now=attempted + delay)
+                self.assertEqual(recovered['status'], 'ok')
+                self.assertEqual(recovered['consecutive_failures'], 0)
+                self.assertEqual(recovered['next_attempt_at'], collector.stamp(collector.epoch(recovered['checked_at']) + 86400))
 
     def test_200_error_and_unrecognized_responses_preserve_success_and_backoff(self):
         payload = {'five_hour': {'utilization': 80},
@@ -723,7 +854,8 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
                 self.snapshot.unlink(missing_ok=True)
                 success = self.collect(payload)
                 self.assertEqual(success['status'], 'ok')
-                attempted = self.now + 300
+                self.make_due()
+                attempted = self.now + 3600
                 opener = Mock()
                 opener.open.return_value = io.BytesIO(json.dumps(response).encode())
                 with patch.object(collector, 'build_opener', return_value=opener):
@@ -745,10 +877,10 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
                 self.assertEqual((recovered['status'], recovered['error']), ('ok', None))
                 self.assertEqual(recovered['checked_at'], collector.stamp(attempted + 300))
                 self.assertEqual(recovered['consecutive_failures'], 0)
-                self.assertIsNone(recovered['next_attempt_at'])
+                self.assertEqual(recovered['next_attempt_at'], collector.stamp(collector.epoch(recovered['checked_at']) + 86400))
 
-    def test_each_recognized_usage_field_can_succeed_alone(self):
-        for key in ('five_hour', 'seven_day', 'limits', 'extra_usage', 'seven_day_sonnet'):
+    def test_optional_fields_can_be_null_with_required_weekly_usage(self):
+        for key in ('five_hour', 'limits', 'extra_usage', 'seven_day_sonnet'):
             with self.subTest(key=key):
                 self.snapshot.unlink(missing_ok=True)
                 self.assertEqual(self.collect({key: None})['status'], 'ok')
@@ -757,12 +889,13 @@ vm.runInContext(`watchResetAction('claude','/api/claude/resets/consume',{grant_i
         previous = self.collect({'seven_day': {'utilization': 10}})
         for contents in (None, '{', 'null', '{}'):
             self.snapshot.write_text(json.dumps(previous))
+            self.make_due()
             if contents is None:
                 self.credentials.unlink()
             else:
                 self.credentials.write_text(contents)
             with patch.object(collector, 'fetch_usage') as fetch:
-                result = collector.collect(self.credentials, self.snapshot, self.now + 300)
+                result = collector.collect(self.credentials, self.snapshot, self.now + 3600)
             fetch.assert_not_called()
             self.assertEqual((result['status'], result['error']), ('unavailable', 'credentials'))
             self.assertEqual(result['windows'], previous['windows'])

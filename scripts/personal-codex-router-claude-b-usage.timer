@@ -1,5 +1,5 @@
 [Unit]
-Description=Check Claude B subscription usage every five minutes
+Description=Check Claude B subscription usage when a read is due
 
 [Timer]
 OnStartupSec=30

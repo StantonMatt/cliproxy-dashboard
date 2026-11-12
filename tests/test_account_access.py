@@ -110,7 +110,7 @@ class AccountAccessTests(unittest.TestCase):
         self.assertFalse(any(method == 'PATCH' for _, _, method in self.calls))
 
     def test_plan_projection_preserves_new_nonempty_claims(self):
-        for plan, label in (('prolite', 'Pro 100'), ('future_super_plan', 'Future Super Plan'),
+        for plan, label in (('prolite', 'Pro 100'), ('pro', 'Pro 200'), ('future_super_plan', 'Future Super Plan'),
                             ('future-super-plan', 'Future Super Plan'), ('unknown', 'Unknown')):
             with self.subTest(plan=plan):
                 self.record['id_token']['plan_type'] = plan
@@ -212,6 +212,7 @@ class AccountAccessTests(unittest.TestCase):
     def test_notice_episode_identity_legacy_dismissal_close_and_recur(self):
         account = self.project(self.record)
         now = dt.datetime.now(dt.timezone.utc).timestamp()
+        account['windows'][0]['resets_at'] = now + 3600
         gateway = {'online': True, 'checked_at': app.utcnow(), 'accounts': [account]}
         with tempfile.TemporaryDirectory() as directory:
             store = operations.NoticeStore(Path(directory) / 'notices.json', Path(directory))

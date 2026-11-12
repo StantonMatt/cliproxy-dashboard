@@ -10,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import re
+import random
 import subprocess
 import tempfile
 import time
@@ -23,12 +24,12 @@ B_SNAPSHOT = SNAPSHOT.with_name('claude-b.json')
 CLAUDE = Path.home() / '.local/bin/claude'
 ENDPOINT = 'https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1'
 PROFILE = 'https://api.anthropic.com/api/oauth/profile'
-PLANS = ('Pro', 'Max (5x)', 'Max (20x)')
+PLANS = ('Free', 'Pro', 'Max', 'Ultra')
 PROVIDER_TIMEOUT = 10
-# Below the five-minute timer period (minus jitter), so B's probe runs on every timer tick.
-CLI_PROBE_INTERVAL = 240
-FABLE_PROBE_INTERVAL = 3600
-FABLE_PROBE_MODEL = 'claude-fable-5-1'
+# B reads once a day; failed reads back off from an hour, growing to a day.
+B_READ_INTERVAL = 86400
+B_RETRY_INTERVAL = 3600
+FABLE_PROBE_MODEL = 'claude-fable-5-2'
 
 
 def number(value):
@@ -53,6 +54,41 @@ def reset_epoch(value):
 
 def stamp(value):
     return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat()
+
+
+def exhausted_delay(windows, now):
+    # Keep standalone collection independent of the dashboard installation.
+    resets = [w.get('resets_at') for w in windows if w.get('kind') in ('five_hour', 'seven_day')
+              and number(w.get('used')) and w['used'] >= 100]
+    future = [at for at in resets if number(at) and at > now]
+    return max(future) + 60 - now if future else None
+
+
+def fable_window(windows, now):
+    """A Fable measurement is known until its own reset passes."""
+    return next((row for row in windows if row.get('kind') == 'weekly_model'
+                 and str(row.get('model')).casefold() == 'fable' and number(row.get('used'))
+                 and number(row.get('resets_at')) and row['resets_at'] > now), None)
+
+
+def next_b_read(windows, now, failures=0):
+    """Read daily, or back off after failures; read once just after an exhausted or Fable reset."""
+    delay = exhausted_delay(windows, now)
+    if delay is not None:
+        return now + delay
+    delays = [min(B_READ_INTERVAL, B_RETRY_INTERVAL * 2 ** min(9, failures - 1)) if failures
+              else B_READ_INTERVAL + random.uniform(0, 3600)]
+    fable = fable_window(windows, now)
+    if fable is not None:
+        delays.append(fable['resets_at'] + 60 - now)
+    return now + min(delays)
+
+
+def schedule_b_read(data, read_at, endpoint_after):
+    # A due read probes the CLI only if the endpoint fails or is still deferred by a provider retry.
+    data['cli_next_attempt_at'] = stamp(read_at)
+    data['endpoint_next_attempt_at'] = stamp(max(read_at, endpoint_after,
+                                                 epoch(data.get('provider_retry_at')) or 0))
 
 
 def model_name(value):
@@ -214,10 +250,15 @@ def cached_grants(raw):
                         if isinstance(items, list) else []}, normalized=True)
 
 
+def plan_name(value):
+    value = {'Max (5x)': 'Max', 'Max (20x)': 'Ultra'}.get(value, value) if isinstance(value, str) else None
+    return value if value in PLANS else None
+
+
 def b_plan():
     # B's setup-token cannot read its profile, so the plan comes from the service.
     value = os.environ.get('CLAUDE_B_PLAN', '').strip()
-    return value if value in PLANS else None
+    return plan_name(value)
 
 
 def email_address(value):
@@ -239,11 +280,14 @@ def parse_plan(profile):
     if not isinstance(organization, dict):
         return None
     tier = organization.get('rate_limit_tier')
-    if tier == 'default_claude_max_20x':
-        return 'Max (20x)'
-    if tier == 'default_claude_max_5x':
-        return 'Max (5x)'
-    return 'Pro' if organization.get('organization_type') in ('claude_pro', 'pro') else None
+    account = profile.get('account')
+    account = account if isinstance(account, dict) else {}
+    if (account.get('has_claude_ultra') is True or isinstance(tier, str) and
+            ('ultra' in tier.casefold() or tier == 'default_claude_max_20x')):
+        return 'Ultra'
+    if tier == 'default_claude_max_5x' or account.get('has_claude_max') is True:
+        return 'Max'
+    return 'Pro' if account.get('has_claude_pro') is True or organization.get('organization_type') in ('claude_pro', 'pro') else None
 
 
 class UsageResponseError(ValueError):
@@ -304,6 +348,11 @@ def parse_usage(payload, *, for_b=False):
         if row and not any(name.casefold() == m['model'].casefold() for m in models):
             windows.append(row)
     windows.extend(models)
+    primary = {w['kind'] for w in windows if w['kind'] in ('five_hour', 'seven_day')}
+    if ('seven_day' not in primary or payload.get('five_hour') is not None and
+            (not isinstance(payload['five_hour'], dict) or
+             not number(payload['five_hour'].get('utilization')) or payload['five_hour']['utilization'] < 0)):
+        raise UsageResponseError('no_usage_data', windows=b_windows(windows) if for_b else ())
     if for_b:
         windows = b_windows(windows, require_usage=True)
     return windows, extra_usage(payload.get('extra_usage'), minor_units=True)
@@ -332,7 +381,8 @@ def previous_snapshot(path):
             label = 'Weekly · ' + kind[len('seven_day_'):].replace('_', ' ').title()
         else:
             continue
-        safe = window(kind, label, row.get('used'), row.get('resets_at'), name if kind == 'weekly_model' else None)
+        safe = window(kind, label, row.get('used'), row.get('resets_at'), name if kind == 'weekly_model' else None,
+                      allow_unknown=kind in ('five_hour', 'seven_day'))
         if safe:
             if row.get('invalid_reset') is True:
                 safe['invalid_reset'] = True
@@ -346,17 +396,19 @@ def previous_snapshot(path):
     failures = raw.get('consecutive_failures')
     return {'id': 'claude', 'provider': 'claude', 'label': 'Claude',
             'email': email_address(raw.get('email')),
-            'plan': raw.get('plan') if raw.get('plan') in PLANS else None,
+            'plan': plan_name(raw.get('plan')),
             'status': raw.get('status') if raw.get('status') in ('ok', 'expired_token', 'unavailable', 'error') else 'unavailable',
             'error': raw.get('error') if isinstance(raw.get('error'), str) and
-                     re.fullmatch(r'http_[1-5][0-9]{2}|network|parse|credentials|expired_token|api_rate_limit_error|api_error|unexpected_response', raw['error']) else None,
+                     re.fullmatch(r'http_[1-5][0-9]{2}|network|parse|credentials|expired_token|api_rate_limit_error|api_error|unexpected_response|no_usage_data', raw['error']) else None,
+            'fresh_until': stamp(epoch(raw['fresh_until'])) if epoch(raw.get('fresh_until')) is not None else None,
             'checked_at': stamp(epoch(raw['checked_at'])) if epoch(raw.get('checked_at')) is not None else None,
             'attempted_at': stamp(epoch(raw['attempted_at'])) if epoch(raw.get('attempted_at')) is not None else None,
             'windows': windows, 'extra_usage': extra,
             'resets': cached_grants(raw.get('resets')),
             'profile_attempted_at': stamp(epoch(raw['profile_attempted_at'])) if epoch(raw.get('profile_attempted_at')) is not None else None,
             'consecutive_failures': min(32, failures) if type(failures) is int and failures >= 0 else 0,
-            'next_attempt_at': stamp(epoch(raw['next_attempt_at'])) if epoch(raw.get('next_attempt_at')) is not None else None}
+            'next_attempt_at': stamp(epoch(raw['next_attempt_at'])) if epoch(raw.get('next_attempt_at')) is not None else None,
+            'provider_retry_at': stamp(epoch(raw['provider_retry_at'])) if epoch(raw.get('provider_retry_at')) is not None else None}
 
 
 def publish(path, data, mode=0o640):
@@ -409,12 +461,29 @@ def collect(credentials=CREDENTIALS, snapshot=SNAPSHOT, now=None):
     now = time.time() if now is None else now
     data = previous_snapshot(snapshot)
     retry = epoch(data['next_attempt_at'])
+    checked = epoch(data['checked_at'])
+    if (data['status'] == 'ok' and not data['error'] and not data['consecutive_failures']
+            and checked is not None and checked <= now and retry is not None):
+        # Reconcile saved success schedules with required reads, including resets
+        # already passed. Failure backoff and provider deadlines remain floors.
+        primary = [w for w in data['windows'] if w.get('kind') in ('five_hour', 'seven_day')
+                   and number(w.get('resets_at')) and w['resets_at'] > checked]
+        blocked = [w['resets_at'] for w in primary if number(w.get('used')) and w['used'] >= 100]
+        required = (max(blocked) + 60 if blocked else
+                    min([checked + 90000] + [w['resets_at'] + 60 for w in primary]))
+        clamped = min(retry, max(required, epoch(data.get('provider_retry_at')) or 0))
+        if clamped < retry:
+            data['next_attempt_at'] = stamp(clamped)
+            retry = clamped
+            if now < retry:
+                publish(snapshot, data)
     # Older snapshots backed off on expiry without making a provider request.
     # Recheck credentials on every expiry skip so renewal is visible immediately.
-    if data['status'] != 'expired_token' and retry is not None and now < retry:
+    if (epoch(data.get('provider_retry_at')) or 0) > now or (data['status'] != 'expired_token' and retry is not None and now < retry):
         return data
     data['attempted_at'] = stamp(now)
     status, error = 'unavailable', 'credentials'
+    retry_deadline = now
     try:
         # Exactly one read, never a write, refresh, or copy of this file.
         raw = json.loads(credentials.read_text())
@@ -429,10 +498,6 @@ def collect(credentials=CREDENTIALS, snapshot=SNAPSHOT, now=None):
             if not isinstance(token, str) or not token:
                 raise ValueError('credentials')
             status, error = 'error', 'network'
-            payload = fetch_usage(token)
-            error = 'parse'
-            windows, extra = parse_usage(payload)
-            resets = parse_grants(payload.get('cedar_ember'), now)
             plan = data['plan']
             email = data['email']
             attempted = epoch(data.get('profile_attempted_at'))
@@ -442,8 +507,16 @@ def collect(credentials=CREDENTIALS, snapshot=SNAPSHOT, now=None):
                     profile = fetch_profile(token)
                     plan = parse_plan(profile)
                     email = parse_email(profile)
-                except (HTTPError, URLError, OSError, ValueError, TypeError):
-                    pass  # Preserve known profile metadata; do not retry before an hour.
+                except HTTPError as exc:
+                    if exc.headers and retry_after(exc.headers.get('Retry-After'), now) > now:
+                        raise
+                    exc.close()
+                except (URLError, OSError, ValueError, TypeError):
+                    pass  # Keep last-known metadata when this event's profile read fails.
+            payload = fetch_usage(token)
+            error = 'parse'
+            windows, extra = parse_usage(payload)
+            resets = parse_grants(payload.get('cedar_ember'), now)
             # skip_spend may omit extra_usage. Preserve the last known value.
             if not isinstance(payload.get('extra_usage'), dict):
                 extra = data['extra_usage']
@@ -454,6 +527,9 @@ def collect(credentials=CREDENTIALS, snapshot=SNAPSHOT, now=None):
             status, error = 'ok', None
     except HTTPError as exc:
         error = 'http_' + str(exc.code) if 100 <= exc.code <= 599 else 'network'
+        deadline = retry_after(exc.headers.get('Retry-After'), now) if exc.headers else now
+        data['provider_retry_at'] = stamp(max(deadline, epoch(data.get('provider_retry_at')) or 0))
+        retry_deadline = max(now + 3600 if exc.code == 429 else now, deadline)
         exc.close()
     except (URLError, OSError, TimeoutError):
         pass  # Never log exception strings, response bodies, or credentials.
@@ -464,11 +540,18 @@ def collect(credentials=CREDENTIALS, snapshot=SNAPSHOT, now=None):
             error = 'parse'
     data.update(status=status, error=error)
     if status == 'ok':
-        data.update(consecutive_failures=0, next_attempt_at=None)
+        delay = exhausted_delay(data['windows'], now)
+        # An unexhausted primary reset also needs one read just after it passes.
+        resets = [w['resets_at'] for w in data['windows'] if w.get('kind') in ('five_hour', 'seven_day')
+                  and number(w.get('resets_at')) and w['resets_at'] > now]
+        idle = min([86400 + random.uniform(0, 3600)] + [at + 60 - now for at in resets])
+        data.update(consecutive_failures=0, next_attempt_at=stamp(now + (delay if delay is not None else idle)),
+                    provider_retry_at=None, fresh_until=stamp(now + delay + 300) if delay is not None else None)
     elif status != 'expired_token':
         data['consecutive_failures'] = min(32, data['consecutive_failures'] + 1)
-        delay = min(1800, 300 * 2 ** min(3, data['consecutive_failures'] - 1))
-        data['next_attempt_at'] = stamp(now + delay)
+        delay = min(86400, 300 * 2 ** min(9, data['consecutive_failures'] - 1))
+        delay = max(delay, exhausted_delay(data['windows'], now) or 0)
+        data['next_attempt_at'] = stamp(max(now + delay, retry_deadline))
     publish(snapshot, data)
     return data
 
@@ -492,15 +575,19 @@ def b_windows(rows, previous=(), *, require_usage=False, measured_at=None, now=N
                 number(row.get('used')) and row['used'] >= 0}
 
     current = usable(rows)
-    if require_usage and not any(kind in current for kind in ('five_hour', 'seven_day')):
+    if require_usage and ('seven_day' not in current or any(
+            isinstance(row, dict) and row.get('kind') == 'five_hour' for row in rows) and 'five_hour' not in current):
         # A model-only sample must not freshen primary success or suppress fallback,
         # but its allowlisted measurements are still useful to retain.
         raise UsageResponseError('no_usage_data', windows=b_windows(rows))
     cached = {identity(row): row for row in previous if isinstance(row, dict) and identity(row) is not None and
               (row.get('used') is None or (number(row.get('used')) and row['used'] >= 0))}
+    # A successful weekly-only observation supersedes an old 5h allowance.
+    if require_usage and 'five_hour' not in current:
+        cached.pop('five_hour', None)
     retained = {**cached, **current}
     windows = []
-    keys = ['five_hour', 'seven_day'] + [key for key in retained if key not in ('five_hour', 'seven_day')]
+    keys = [key for key in ('five_hour', 'seven_day') if key in retained] + [key for key in retained if key not in ('five_hour', 'seven_day')]
     for key in keys:
         row = retained.get(key, {})
         kind = row.get('kind', key)
@@ -530,6 +617,8 @@ def b_windows(rows, previous=(), *, require_usage=False, measured_at=None, now=N
 
 def b_checked_at(windows):
     """Every displayed primary window must have a known measurement time."""
+    if not any(row['kind'] == 'seven_day' for row in windows):
+        return None
     measured = [epoch(row.get('measured_at')) for row in windows if row['kind'] in ('five_hour', 'seven_day')]
     return stamp(min(measured)) if measured and all(at is not None for at in measured) else None
 
@@ -661,21 +750,27 @@ def _collect_b(token_path, snapshot, now):
         if not token or any(c.isspace() for c in token):
             raise ValueError('missing_token')
     except (OSError, UnicodeError, ValueError):
-        data.update(status='missing_token', error='missing_token', attempted_at=stamp(now))
+        # A restored token reads on the next run, under the saved schedule.
+        data.update(status='missing_token', error='missing_token', attempted_at=stamp(now),
+                    cli_next_attempt_at=stamp(now))
         publish(snapshot, data)
         return data
 
-    endpoint_due = epoch(data['endpoint_next_attempt_at'])
-    usage_checked = epoch(data['usage_checked_at'])
-    checked = epoch(data['checked_at'])
-    fresh_usage = (data['source'] == 'usage' and usage_checked is not None and
-                   0 <= now - usage_checked < 900 and checked is not None and
-                   0 <= now - checked < 900 and all(number(row['used']) for row in data['windows']
-                                                   if row['kind'] in ('five_hour', 'seven_day')))
+    # Older snapshots without a CLI deadline last read the endpoint successfully.
+    read_due = epoch(data['cli_next_attempt_at'] or data['endpoint_next_attempt_at'])
+    if read_due is not None and now < read_due:
+        # Reads are event-driven; timer runs between them make no requests.
+        publish(snapshot, data)
+        return data
+    endpoint_after = max(epoch(data['endpoint_next_attempt_at']) or 0, epoch(data.get('provider_retry_at')) or 0)
+    if now >= endpoint_after:
+        endpoint_after = now
+    failures = min(32, data['consecutive_failures'] + 1)
+    # Persist a failed read's schedule before any dispatch, so an interrupted run cannot repeat requests.
+    schedule_b_read(data, next_b_read(data['windows'], now, failures), endpoint_after)
+    data['attempted_at'] = stamp(now)
     windows, source, error = None, None, data.get('error')
-    if endpoint_due is None or now >= endpoint_due:
-        fresh_usage = False
-        data.update(endpoint_next_attempt_at=stamp(now + 3600), attempted_at=stamp(now))
+    if endpoint_after <= now:
         publish(snapshot, data)
         try:
             rows, _ = parse_usage(fetch_usage(token), for_b=True)
@@ -685,7 +780,8 @@ def _collect_b(token_path, snapshot, now):
         except HTTPError as exc:
             data['endpoint_error'] = 'http_' + str(exc.code) if 100 <= exc.code <= 599 else 'network'
             deadline = retry_after(exc.headers.get('Retry-After'), now) if exc.headers else now
-            data['endpoint_next_attempt_at'] = stamp(max(now + 3600, deadline))
+            data['provider_retry_at'] = stamp(max(deadline, epoch(data.get('provider_retry_at')) or 0))
+            endpoint_after = max(now + 3600 if exc.code == 429 else now, deadline)
             exc.close()
         except UsageResponseError as exc:
             data['endpoint_error'] = str(exc)
@@ -699,55 +795,55 @@ def _collect_b(token_path, snapshot, now):
             data['endpoint_error'] = 'network'
         except (ValueError, TypeError, UnicodeError):
             data['endpoint_error'] = 'parse'
+    if windows is None:
+        # The CLI is only a fallback for this due read: one attempt, with Fable
+        # only while its window is unknown or past its reset.
+        fable_due = fable_window(data['windows'], now) is None
+        if fable_due:
+            data['fable_probe_attempted_at'] = stamp(now)
+        schedule_b_read(data, next_b_read(data['windows'], now, failures), endpoint_after)
         publish(snapshot, data)
-    if windows is None and not fresh_usage:
-        cli_due = epoch(data['cli_next_attempt_at'])
-        if cli_due is None or now >= cli_due:
-            last_fable = epoch(data['fable_probe_attempted_at'])
-            if last_fable is None:
-                # Existing endpoint/CLI windows can seed the first hourly budget.
-                last_fable = max((epoch(row.get('measured_at')) for row in data['windows']
-                                  if row['kind'] == 'weekly_model' and row['model'].casefold() == 'fable'
-                                  and number(row['used']) and number(row['resets_at']) and row['resets_at'] > now
-                                  and epoch(row.get('measured_at')) is not None), default=None)
-            fable_due = last_fable is None or now - last_fable >= FABLE_PROBE_INTERVAL
-            data.update(cli_next_attempt_at=stamp(now + CLI_PROBE_INTERVAL), attempted_at=stamp(now))
-            if fable_due:
-                data['fable_probe_attempted_at'] = stamp(now)
+        for model in ([FABLE_PROBE_MODEL, 'haiku'] if fable_due else ['haiku']):
+            remaining = collection_deadline - time.monotonic()
+            if remaining < 5:
+                error = 'collection_deadline'
+                break
+            try:
+                rows = (probe_usage(token, model=model, timeout=min(90, remaining)) if model != 'haiku'
+                        else probe_usage(token, timeout=min(90, remaining)))
+                windows, source = b_windows(rows, data['windows'], require_usage=True,
+                    measured_at=now if fixed_time else time.time()), 'cli'
+                break
+            except UsageResponseError as exc:
+                error = str(exc)
+                if exc.windows:
+                    if token in json.dumps(exc.windows):
+                        error = 'parse'
+                    else:
+                        data['windows'] = b_windows(exc.windows, data['windows'],
+                                                   measured_at=now if fixed_time else time.time())
+                        if exhausted_delay(data['windows'], now) is not None:
+                            break  # The next read waits for the exhausted reset.
+            except (OSError, ValueError, TypeError, UnicodeError):
+                error = 'cli_unavailable'
+        if windows is None:
+            schedule_b_read(data, next_b_read(data['windows'], now, failures), endpoint_after)
+            data.update(status='error', error=error, consecutive_failures=failures)
             publish(snapshot, data)
-            for model in ([FABLE_PROBE_MODEL, 'haiku'] if fable_due else ['haiku']):
-                remaining = collection_deadline - time.monotonic()
-                if remaining < 5:
-                    error = 'collection_deadline'
-                    break
-                try:
-                    rows = (probe_usage(token, model=model, timeout=min(90, remaining)) if model != 'haiku'
-                            else probe_usage(token, timeout=min(90, remaining)))
-                    windows, source = b_windows(rows, data['windows'], require_usage=True,
-                        measured_at=now if fixed_time else time.time()), 'cli'
-                    break
-                except UsageResponseError as exc:
-                    error = str(exc)
-                    if exc.windows:
-                        if token in json.dumps(exc.windows):
-                            error = 'parse'
-                        else:
-                            data['windows'] = b_windows(exc.windows, data['windows'],
-                                                       measured_at=now if fixed_time else time.time())
-                except (OSError, ValueError, TypeError, UnicodeError):
-                    error = 'cli_unavailable'
-            if windows is None:
-                data.update(status='error', error=error)
-                publish(snapshot, data)
-                return data
-    if windows is not None:
-        if token in json.dumps(windows):
-            raise ValueError('parse')
-        if source == 'usage':
-            data['usage_checked_at'] = stamp(now)
-        data.update(windows=windows, source=source, status='ok', error=None,
-                    checked_at=b_checked_at(windows),
-                    consecutive_failures=0, next_attempt_at=None)
+            return data
+    if token in json.dumps(windows):
+        raise ValueError('parse')
+    if source == 'usage':
+        data['usage_checked_at'] = stamp(now)
+        data['provider_retry_at'] = None
+    data.update(windows=windows, source=source, status='ok', error=None,
+                checked_at=b_checked_at(windows),
+                consecutive_failures=0, next_attempt_at=None, fresh_until=None)
+    schedule_b_read(data, next_b_read(windows, now), endpoint_after)
+    delay = exhausted_delay(windows, now)
+    checked = epoch(data['checked_at'])
+    if delay is not None and checked is not None and 0 <= now - checked <= 900:
+        data['fresh_until'] = stamp(now + delay + 300)
     publish(snapshot, data)
     return data
 

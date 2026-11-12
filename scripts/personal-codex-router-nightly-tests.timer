@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly router source tests
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=personal-codex-router-nightly-tests.service
+
+[Install]
+WantedBy=timers.target

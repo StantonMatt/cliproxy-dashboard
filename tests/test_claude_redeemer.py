@@ -45,7 +45,7 @@ class RedeemerTests(unittest.TestCase):
             'organization': {'uuid': 'org-private'}, 'account': {'uuid': 'user-private'}}).start()
         self.fingerprint = hashlib.sha256(b'["org-private","user-private"]').hexdigest()
         self.addCleanup(patch.stopall)
-        self.payload = {'five_hour': {'utilization': 100}, 'cedar_ember': {
+        self.payload = {'five_hour': {'utilization': 100}, 'seven_day': {'utilization': 10}, 'cedar_ember': {
             'eligible': True, 'at_limit': True, 'exhausted': ['five_hour'], 'next_grant_id': 'grant1',
             'cooldown_until': None, 'grants': [{'id': 'grant1', 'clears': ['five_hour', 'seven_day'],
                 'resets_left': 2, 'resets_total': 3, 'paused': False, 'usable_now': True,

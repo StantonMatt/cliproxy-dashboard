@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect official AI provider status every five minutes
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=5min
+RandomizedDelaySec=30
+AccuracySec=5
+Unit=personal-codex-router-provider-status.service
+
+[Install]
+WantedBy=timers.target

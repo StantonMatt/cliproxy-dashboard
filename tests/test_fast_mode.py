@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'dashboard'))
 import fast_mode as fast
+import codex_catalog as catalog_module
 import server as app
 
 spec = importlib.util.spec_from_file_location('fast_usage_collector', ROOT / 'scripts/collect-usage.py')
@@ -26,12 +27,14 @@ class FastModeTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.base = Path(directory.name)
+        self.now = 1790985600
         self.manager = fast.FastModeManager(self.base / 'controls.json', self.base / 'policy.json',
                                             self.base / 'status.json')
-        self.accounts = [{'id': 'index1', 'email': 'one@example.test', 'name': 'codex-one.json',
-                          'supports_ultrafast': False},
-                         {'id': 'index2', 'email': 'two@example.test', 'name': 'codex-two.json',
-                          'supports_ultrafast': True}]
+        self.accounts = [fast.fast_account('index1', 'one@example.test', 'codex-one.json',
+                                           {'known': True, 'status': 'ok', 'ultrafast_models': []}),
+                         fast.fast_account('index2', 'two@example.test', 'codex-two.json',
+                                           {'known': True, 'status': 'ok', 'fetched_at': fast.stamp(self.now),
+                                            'ultrafast_models': [{'id': 'gpt-6.1-sol', 'name': 'GPT-6.1-Sol'}]})]
         self.db = self.base / 'usage.sqlite3'
         self.now = 1790985600
 
@@ -57,16 +60,18 @@ class FastModeTests(unittest.TestCase):
     def test_policy_defaults_both_keys_modes_reconciliation_and_reload(self):
         self.manager.reconcile(self.accounts)
         policy = json.loads(self.manager.policy_path.read_text())
-        self.assertEqual(policy['version'], 1)
+        self.assertEqual(policy['version'], 2)
         self.assertIsNotNone(fast.epoch(policy['updated_at']))
         for account in self.accounts:
-            expected = {'allow_fast': True, 'supports_ultrafast': account['supports_ultrafast']}
+            expected = {'level': 'fast', 'ultrafast_models': account['ultrafast_models'],
+                        'allow_fast': True, 'supports_ultrafast': False}
             self.assertEqual(policy['accounts'][account['id']], expected)
             self.assertEqual(policy['files'][account['name']], expected)
         self.assertEqual(self.manager.policy_path.stat().st_mode & 0o777, 0o640)
         with patch.object(fast, 'enforcement', return_value='active'), patch.object(fast.time, 'time', return_value=self.now):
             result = self.manager.set_allowed('index1', False, self.accounts)
-            self.assertEqual(result, {'allowed': False, 'changed_at': fast.stamp(self.now), 'enforcement': 'active'})
+            self.assertEqual({k: result[k] for k in ('allowed', 'level', 'changed_at', 'enforcement')},
+                             {'allowed': False, 'level': 'normal', 'changed_at': fast.stamp(self.now), 'enforcement': 'active'})
             self.assertEqual(self.manager.set_allowed('index1', False, self.accounts), result)
         self.assertEqual(self.manager.path.stat().st_mode & 0o777, 0o600)
         rebuilt = fast.FastModeManager(self.manager.path, self.manager.policy_path, self.manager.status_path)
@@ -209,9 +214,11 @@ print(json.dumps(report))
             ('priority', 'normal', False), ('priority', 'default', True), ('normal', 'normal', True),
             (None, 'priority', True), (None, 'ultrafast', True), (None, 'normal', True),
             ('priority', None, True)])
+        # on-fast is at ultrafast with gpt-5.4 allowed, so its priority request also ran ultrafast.
         self.assertEqual([r['forwarded_service_tier'] for r in recent], [
-            'unknown', 'normal', 'ultrafast', 'priority', 'priority', 'normal', 'priority',
+            'unknown', 'normal', 'ultrafast', 'priority', 'ultrafast', 'normal', 'priority',
             'normal', 'unknown', 'unknown', 'unknown', 'priority'])
+        self.assertEqual(recent[2]['fast_mode_level'], 'ultrafast')
 
     def test_failed_policy_or_state_write_rolls_back_and_reconcile_recovers(self):
         self.manager.reconcile(self.accounts)
@@ -262,6 +269,18 @@ print(json.dumps(report))
             self.manager.set_allowed('index1', False, self.accounts)
         self.assertFalse(self.manager.policy_path.exists())
 
+    def catalog(self):
+        catalog = catalog_module.CodexCatalog(self.base / 'catalog.json', clock=lambda: self.now)
+        catalog.entries = {
+            'one@example.test': {'fetched_at': fast.stamp(self.now), 'attempted_at': fast.stamp(self.now),
+                                 'error': None, 'plan_type': 'pro',
+                                 'models': [{'id': 'gpt-6.1-terra', 'service_tiers': ['priority']}]},
+            'two@example.test': {'fetched_at': fast.stamp(self.now), 'attempted_at': fast.stamp(self.now),
+                                 'error': None, 'plan_type': 'promax',
+                                 'models': [{'id': 'gpt-6.1-sol', 'name': 'GPT-6.1-Sol',
+                                             'service_tiers': ['priority', 'ultrafast']}]}}
+        return catalog
+
     def post(self, data, headers=None):
         handler = object.__new__(app.Handler)
         handler.path = '/api/fast-mode'
@@ -278,9 +297,7 @@ print(json.dumps(report))
         return handler.send.call_args.args[0], json.loads(handler.send.call_args.args[1])
 
     def test_endpoint_validation_account_resolution_persistence_and_failure(self):
-        self.gateway = app.GatewayState(Mock(), Mock(), self.manager)
-        self.gateway.data['accounts'] = [{'id': 'index1', 'plan': 'Pro (10x)'},
-                                          {'id': 'index2', 'plan': 'Pro (25x)'}]
+        self.gateway = app.GatewayState(Mock(), Mock(), self.manager, catalog=self.catalog())
         files = [dict(auth_index=a['id'], type='codex', email=a['email'], name=a['name']) for a in self.accounts]
         body = {'account_id': 'index1', 'allowed': False}
         with patch.object(app, 'api', return_value={'files': files}) as api, patch.object(fast, 'enforcement', return_value='active'):
@@ -297,7 +314,8 @@ print(json.dumps(report))
             self.assertFalse(value['allowed'])
             self.assertEqual(api.call_args.args, ('/auth-files',))
             self.assertFalse(json.loads(self.manager.policy_path.read_text())['files']['codex-one.json']['allow_fast'])
-            self.assertTrue(json.loads(self.manager.policy_path.read_text())['accounts']['index2']['supports_ultrafast'])
+            self.assertEqual(json.loads(self.manager.policy_path.read_text())['accounts']['index2']['ultrafast_models'],
+                             ['gpt-6.1-sol'])
             self.assertEqual(self.post({**body, 'account_id': 'missing'})[0], 400)
             with patch.object(fast, 'write_json', side_effect=OSError('secret fixture')):
                 code, value = self.post({**body, 'allowed': True})
@@ -312,10 +330,10 @@ print(json.dumps(report))
         self.row(con, asked='priority', served='normal')
         resets = Mock()
         resets.view.return_value = {}
-        state = app.GatewayState(resets, Mock(), self.manager)
+        state = app.GatewayState(resets, Mock(), self.manager, catalog=self.catalog())
         state.data.update(online=True, checked_at=fast.stamp(self.now), accounts=[{
             'id': a['id'], 'email': a['email'], '_fast_file': a['name'], 'active': True,
-            'plan': 'Pro (25x)' if a['supports_ultrafast'] else 'Pro (10x)',
+            'plan': 'Pro 200',
             'windows': [], 'availability': {'state': 'ready'}} for a in self.accounts])
         with patch.object(app, 'DB', self.db), patch.object(app, 'billing_records', return_value={}), \
                 patch.object(app, 'preference_status', return_value=None), \
@@ -405,8 +423,9 @@ print(json.dumps(report))
         for offset, asked, served, account in cases:
             self.row(con, offset, asked, served, account)
         report = app.usage_summary('1970-01-01T00:00:00Z', self.db, self.manager)
+        # Fast mode maps ultrafast to priority; the plan label no longer implies ultrafast support.
         self.assertEqual([r['forwarded_service_tier'] for r in report['recent']],
-                         ['ultrafast', 'priority', 'priority', 'normal', 'normal', 'normal', 'normal', 'normal', 'priority'])
+                         ['priority', 'priority', 'priority', 'normal', 'normal', 'normal', 'normal', 'normal', 'priority'])
         self.assertEqual([r['fast_mode_allowed'] for r in report['recent']],
                          [True, True, True, False, False, False, False, False, True])
         with patch.object(fast.time, 'time', return_value=self.now), patch.object(fast, 'enforcement', return_value='active'):
@@ -436,9 +455,12 @@ print(json.dumps(report))
                 total_tokens INTEGER, reasoning_effort TEXT)''')
             con.execute("INSERT INTO usage VALUES (7, 'old', 'old', 'codex', 'model', 'index1', 0, 5, 1, 2, 3, 4, 5, 'high')")
             old = con.execute('SELECT * FROM usage').fetchone()
+            old_columns = [row[1] for row in con.execute('PRAGMA table_info(usage)')]
         con.close()
         con = self.connect()
-        self.assertEqual(con.execute('SELECT * FROM usage').fetchone(), (*old, None, None, None, None))
+        self.assertEqual(con.execute('SELECT ' + ','.join(old_columns) + ' FROM usage').fetchone(), old)
+        self.assertEqual(con.execute('''SELECT service_tier,response_service_tier,cache_read_tokens,
+            cache_creation_tokens,request_time FROM usage''').fetchone(), (None,) * 5)
         other = collector.connect(self.db)
         other.close()
         spool = self.base / 'batch.json'

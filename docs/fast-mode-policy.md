@@ -1,16 +1,34 @@
 # Fast-mode policy
 
-`fast-mode-policy` 0.1.2 runs inside live CLIProxyAPI 8.0.30 using its native C/JSON
-plugin ABI. For each selected Codex account it removes `service_tier` when fast
-is disabled and the requested value is `fast`, `priority` or `ultrafast`. Normal
-means the field is absent. With fast allowed, it retains the request, except that
-`map_unsupported_ultrafast: true` maps `ultrafast` to `priority` on accounts whose
-policy does not declare ultrafast support. It never adds a tier or upgrades one.
-Other values pass through the plugin unchanged; the gateway's own translator
-can normalize `fast` to `priority` and remove `default` later.
+`fast-mode-policy` 0.2.0 runs inside CLIProxyAPI 8.0.47 using its native C/JSON
+plugin ABI. Each Codex account has a speed level: **normal**, **fast** or
+**ultrafast**. Wire values are `priority` for Fast and `ultrafast` for Ultrafast;
+normal means the field is absent. The plugin only touches requests whose
+`service_tier` is `fast`, `priority` or `ultrafast`. Other values pass through
+unchanged, and an absent tier stays absent: the plugin never adds a tier.
+
+| Level | Requested `fast`/`priority` | Requested `ultrafast` |
+| --- | --- | --- |
+| normal | removed | removed |
+| fast | kept | `priority` |
+| ultrafast, model allowed, Responses or Chat client | `ultrafast` | kept |
+| ultrafast, model allowed, other client formats | kept | `priority` |
+| ultrafast, model not allowed or unknown | kept | `priority` |
+
+"Allowed" means the request's model is in the account's `ultrafast_models`
+allowlist. The plugin reads the selected upstream model (`req.Model`), falling
+back to the body's `model`, then trims, lowercases and strips a trailing `(…)`
+thinking suffix and any `prefix/` before an exact match. An empty or unknown
+model is never upgraded. Only the `openai-response` and `openai` client formats
+are upgraded, because only their Codex translators forward `ultrafast`; the
+Claude, Gemini and Interactions translators drop it, so the plugin maps a
+requested ultrafast to `priority` for them. Upgrades are allowlist-only and fail
+closed: an upstream 400 that mentions plan or model support cools that model down
+for 12 hours (upstream `sdk/cliproxy/auth/conductor_cooldown.go:1052-1059` in
+8.0.47, `isModelSupportResultError`).
 
 Verified 2026-10-27: the plugin status reports version 0.1.2 with the live gateway
-PID. The [8.0.30 upgrade record](gateway-upgrade-8.0.30-2026-10-15.md) documents
+PID (the schema 1 release; 0.2.0 adds levels). The [8.0.30 upgrade record](gateway-upgrade-8.0.30-2026-10-15.md) documents
 the installer's fix to match host event text without pinning source line numbers.
 The [8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md) passed isolated
 plugin and sandbox checks; that binary is staged, with cutover pending and
@@ -22,20 +40,31 @@ The dashboard atomically writes
 
 ```json
 {
-  "version": 1,
-  "updated_at": "2026-10-02T23:59:00Z",
-  "accounts": {"<auth_index>": {"allow_fast": true, "supports_ultrafast": false}},
-  "files": {"codex-example.json": {"allow_fast": true, "supports_ultrafast": false}}
+  "version": 2,
+  "updated_at": "2026-11-01T12:00:00Z",
+  "accounts": {"<auth_index>": {"level": "ultrafast", "ultrafast_models": ["gpt-6-astra", "gpt-6.1-sol"],
+                                "allow_fast": true, "supports_ultrafast": true}},
+  "files": {"codex-example.json": {"level": "ultrafast", "ultrafast_models": ["gpt-6-astra", "gpt-6.1-sol"],
+                                   "allow_fast": true, "supports_ultrafast": true}}
 }
 ```
+
+Schema 2 is backward compatible with schema 1. For each entry a valid `level`
+wins; without one the schema 1 fields apply exactly as in 0.1.x (`allow_fast:
+false` removes fast tiers; otherwise `map_unsupported_ultrafast` maps ultrafast to
+priority unless `supports_ultrafast` is true). `map_unsupported_ultrafast` only
+affects such entries; levels always enforce the allowlist. The dashboard also
+writes the schema 1 fields so a 0.1.x library still enforces each level sensibly
+after a rollback: `allow_fast` is false only at normal, and `supports_ultrafast`
+is true only at the ultrafast level with a non-empty allowlist. (At fast it stays
+false, so 0.1.2 keeps mapping ultrafast to priority, as it does today.)
 
 The dashboard writes every Codex account under both identifiers, with identical
 values. Index entries take precedence without merging fields from the filename
 entry. File-backed IDs exposed to the plugin are relative auth paths; the plugin
 uses their basename as the filename fallback. Missing, unreadable or malformed
-policy, unknown accounts and missing `allow_fast` default to allowing fast.
-Unknown `supports_ultrafast` defaults false, so the enabled mapping still maps
-ultrafast to priority with a missing or malformed policy. Policy read failures
+policy (including a non-string `level` or allowlist entry) and unknown accounts
+default to fast with ultrafast mapped to priority, and nothing is upgraded. Policy read failures
 log a rate-limited error without printing policy contents. Reads are cached by
 inode, mtime, size and mode; dashboard atomic replacement is detected on the next
 request without a config reload.
@@ -46,11 +75,30 @@ changing the auth directory changes the index. Account failover selects a new
 credential and re-evaluates the original request against that account's policy.
 The same-account executor's internal retry can reuse its previous decision.
 
-Ultrafast support on non-x25 accounts is unknown. Mapping it to priority avoids
-relying on unknown upstream behavior: a rejection may trigger a 12-hour model
-cooldown through upstream `conductor_cooldown.go:1768`. The dashboard's explicit
-`supports_ultrafast` value controls the exception; the plugin does not guess plan
-capability or inspect credentials.
+## Model catalog
+
+The dashboard derives enforced ultrafast support from the catalog, rather than
+the plan label. It reads each Codex account's live model catalog through the gateway management
+`/api-call` (GET
+`https://chatgpt.com/backend-api/codex/models?client_version=0.166.0`, with
+`Authorization: Bearer $TOKEN$`, `ChatGPT-Account-Id` and `originator:
+codex_cli_rs`; the gateway substitutes the token). Models whose `service_tiers`
+include id `ultrafast` form the account's `ultrafast_models`. On 2026-11-01 the
+Pro (`promax`) account listed `gpt-6.1-sol` and `gpt-6-astra`; every other model
+offered only `priority`.
+
+The catalog is read once after each dashboard start, then every 6 hours, and
+whenever the account's plan type changes, from the regular gateway poll. A failed
+read keeps the last good list and waits 15 minutes before retrying. Only model
+ids, display names and tier ids are kept, in
+`/var/lib/personal-codex-router/codex-model-catalog.json` (0640), so a restart
+does not lose the list. An account whose catalog has never loaded has no
+ultrafast models. The plugin does not inspect credentials or guess capability.
+
+The upstream accepted `service_tier: "ultrafast"` for both models (HTTP 200) but
+echoed `auto`/`default`, as it does for priority. The echo cannot prove the tier,
+so the dashboard infers it from the requested tier, the level and allowlist in
+effect at the request time, and the model.
 
 At registration and every plugin reconfiguration, the plugin atomically writes
 `/var/lib/cliproxyapi/fast-mode-plugin-status.json` (0640):
@@ -58,18 +106,37 @@ At registration and every plugin reconfiguration, the plugin atomically writes
 ```json
 {
   "plugin": "fast-mode-policy",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "pid": 12345,
   "loaded_at": "2026-10-02T23:59:00Z",
   "policy_path": "/var/lib/personal-codex-router/fast-mode-policy.json",
   "map_unsupported_ultrafast": true,
-  "audit": false
+  "audit": false,
+  "policy_schema": 2
 }
 ```
 
-The dashboard infers whether a request ran fast from its recorded requested tier
-and the account toggle at the request timestamp, mapping ultrafast to priority on
-accounts without ultrafast support. The Codex backend echoes `default` or `auto`
+`policy_schema` is the capability marker: 0.1.x statuses omit it (treated as 1).
+The dashboard offers the ultrafast level only when enforcement is live and the
+status reports `policy_schema` 2 or more, and only for accounts whose catalog
+lists ultrafast models. `POST /api/fast-mode` rejects ultrafast otherwise with
+409 and a code (`catalog_pending`, `no_models`, `plugin_not_enforced`,
+`plugin_outdated`). A level already saved as ultrafast stays saved if the plugin
+is later rolled back; 0.1.x then enforces its schema 1 mirror.
+
+The dashboard infers the tier each request ran at from its recorded requested
+tier, model, and the level and allowlist in effect at the request timestamp.
+Controls keep a bounded history of level changes, each with the allowlist then in
+effect; while ultrafast is selected, an allowlist change from the catalog adds a
+history entry too. Schema 1 history entries (`allow_fast` only) still read as
+normal or fast, retaining the old ultrafast pass-through inference for accounts
+with the legacy `(25x)` plan label. That label affects only old history, never
+the enforced policy. Request rows do not record the client format:
+Codex clients use the Responses API, so rows are inferred as `openai-response`
+requests. At fast, ultrafast reads as priority; at ultrafast, a fast or
+ultrafast request on an allowed model reads as ultrafast and on any other model as
+priority. Rows report `fast_mode_level` alongside `fast_mode_allowed` (false only
+at normal) and `forwarded_service_tier`. The Codex backend echoes `default` or `auto`
 for priority requests that measurably ran faster (verified 2026-10-03), so
 default, auto and missing served-tier echoes do not change that inference; only a
 priority or ultrafast echo while the toggle was off counts, as "Still fast".
@@ -95,9 +162,19 @@ Build and deploy from this checkout after the orchestrator's review:
 
 ```sh
 plugins/fast-mode-policy/build.sh /tmp/fast-mode-build
-sudo python3 scripts/install-fast-mode-plugin.py --dry-run --library /tmp/fast-mode-build/fast-mode-policy-v0.1.2.so
-sudo python3 scripts/install-fast-mode-plugin.py --library /tmp/fast-mode-build/fast-mode-policy-v0.1.2.so
+sudo python3 scripts/install-fast-mode-plugin.py --dry-run --library /tmp/fast-mode-build/fast-mode-policy-v0.2.0.so
+sudo python3 scripts/install-fast-mode-plugin.py --library /tmp/fast-mode-build/fast-mode-policy-v0.2.0.so
 ```
+
+Deploy order for 0.2.0: the dashboard first, then the plugin. The new dashboard
+writes schema 2 policies that 0.1.2 reads through their schema 1 fields, and it
+refuses the ultrafast level until the 0.2.0 status reports `policy_schema: 2`.
+After the plugin's verified reload, the ultrafast level becomes available on the
+next overview poll; no gateway restart is needed. To roll back, run
+`sudo python3 scripts/install-fast-mode-plugin.py --rollback <backup-directory>`
+using the backup directory printed by the upgrade. This restores the prior config
+selecting 0.1.2 (its versioned library stays under `/opt`); policies keep working
+through the schema 1 fields.
 
 The build supports `GO=/absolute/path/to/go` when Go is outside PATH. Omitting
 `--library` asks the root installer to build as the checkout owner (through
@@ -109,7 +186,7 @@ secret-bearing config. To test it without root or a live gateway, use
 `--dry-run --config /tmp/config.v8.yaml`.
 
 The installer creates root-owned directories and installs a root:root 0644 library
-at `/opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.1.2.so`.
+at `/opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.2.0.so`.
 It refuses different bytes under an existing versioned filename. It preserves
 other plugin entries; if active entries use another directory, deployment refuses
 until their libraries are reconciled. No gateway restart is used. Runtime
@@ -130,7 +207,7 @@ plugins:
       map_unsupported_ultrafast: true
       audit: false
       store:
-        version: 0.1.2
+        version: 0.2.0
 ```
 
 `store.version` is the upstream host's version selector. Pinning it makes a
@@ -185,11 +262,13 @@ sudo journalctl -u cliproxyapi --since '5 minutes ago' --no-pager | rg 'config s
 systemctl is-active personal-codex-router-usage.timer personal-codex-router-preference.timer
 ```
 
-Compare the status PID to MainPID and confirm version 0.1.2, the policy path and
-mapping flag. The installer itself also checks `/proc/<pid>/exe` or cmdline.
+Compare the status PID to MainPID and confirm version 0.2.0, `policy_schema: 2`,
+the policy path and mapping flag. The installer itself also checks `/proc/<pid>/exe` or cmdline.
 The policy file is written by the dashboard; deployment does not create or change
-account policies. Audit defaults off; when enabled it logs validated auth indexes
-and fixed tier labels, never request contents, headers or tokens.
+account policies. Audit defaults off; when enabled it logs validated auth indexes,
+the level (`normal`, `fast`, `ultrafast` or `v1`), whether the model was on the
+allowlist, and fixed tier labels, never request contents, model names, headers or
+tokens.
 
 Disable through a verified config reload (exit 3 means runtime deactivation remains unconfirmed):
 
@@ -278,6 +357,10 @@ When a requested tier is known, the Mode cell shows that requested tier with a
 
 Daily backups include the optional durable
 `/var/lib/personal-codex-router/fast-mode-controls.json`, including change history.
+Each saved account keeps `level` and the schema 1 `allow_fast`, and every history
+entry keeps `allow_fast`, so an older dashboard can still read the file after a
+rollback (it sees ultrafast as fast on). The model catalog cache is rebuilt from
+the provider and needs no backup.
 The dashboard regenerates `fast-mode-policy.json` from those controls and current
 account metadata. The plugin status is transient and must be recreated by the
 running gateway; neither derived policy nor status needs a separate backup.

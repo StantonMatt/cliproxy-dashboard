@@ -263,7 +263,7 @@ class FieldsImportTests(unittest.TestCase):
                                        auth_index='account-b', email='two@example.com')]
         state = app.GatewayState(Mock(), Mock(), Mock())
         self.addCleanup(state.signins.close)
-        def quota(record, call):
+        def quota(record, call, **kwargs):
             call('/api-call', {'url': 'https://chatgpt.com/backend-api/wham/usage'})
             if record['auth_index'] == 'account-b':
                 self.gateway.row['id_token']['plan_type'] = 'free'

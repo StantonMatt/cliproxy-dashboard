@@ -34,6 +34,41 @@ def overview():
 
 
 class ClaudeRoutingTests(unittest.TestCase):
+    def test_weekly_only_is_eligible_and_ranked_but_present_invalid_five_hour_holds(self):
+        data = overview()
+        for row in data['watch_accounts']:
+            row['windows'] = [w for w in row['windows'] if w['kind'] == 'seven_day']
+        self.assertEqual(p.choose(data, NOW, 'highest-remaining-quota', provider='claude')['preferred_email'], B)
+        self.assertEqual(p.choose(data, NOW, 'earliest-weekly-reset', provider='claude')['preferred_email'], A)
+        data['watch_accounts'][0]['windows'].append(dict(kind='five_hour', remaining=None, resets_at=NOW + 5000))
+        with self.assertRaises(p.DataHold):
+            p.choose(data, NOW, 'highest-remaining-quota', provider='claude')
+
+    def test_aged_exhausted_watch_deferral_preserves_routing_until_expiry(self):
+        data = overview()
+        first = data['watch_accounts'][0]
+        first.update(checked_at=p.stamp(NOW - 1800), fresh_until=p.stamp(NOW + 60))
+        first['windows'][0].update(used=100, remaining=0)
+        candidates, excluded = p.eligible_accounts(data, NOW, provider='claude')
+        self.assertEqual(set(candidates), {B})
+        self.assertEqual(excluded, {A: 'no remaining allowance'})
+        data['gateway']['checked_at'] = p.stamp(NOW + 10000)
+        with self.assertRaises(p.DataHold):
+            p.eligible_accounts(data, NOW + 10000, provider='claude')
+
+    def test_deferred_weekly_exhaustion_never_infers_elapsed_window_recovery(self):
+        data = overview()
+        first = data['watch_accounts'][0]
+        first.update(checked_at=p.stamp(NOW - 1800), fresh_until=p.stamp(NOW + 60))
+        first['windows'][0].update(used=100, remaining=0, resets_at=NOW - 60)
+        first['windows'][1].update(used=100, remaining=0)
+        with self.assertRaises(p.DataHold):
+            p.eligible_accounts(data, NOW, provider='claude')
+        # A normally fresh reading with an elapsed reset still waits for a new observation.
+        first.update(checked_at=p.stamp(NOW - 60))
+        with self.assertRaises(p.DataHold):
+            p.eligible_accounts(data, NOW, provider='claude')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -145,7 +180,7 @@ class ClaudeRoutingTests(unittest.TestCase):
             path.write_text(json.dumps(raw))
             data['watch_accounts'][0] = app.watch_account(path, 'claude', 'Claude A', True, NOW)
             projected = p.claude_observations(data, NOW)
-            self.assertEqual(projected['gateway']['accounts'][0]['windows'][0]['resets_at'], NOW+18000)
+            self.assertIsNone(projected['gateway']['accounts'][0]['windows'][0]['resets_at'])
 
     def test_collector_and_cached_snapshots_preserve_malformed_reset_marker(self):
         spec = importlib.util.spec_from_file_location('reset_collector',
@@ -278,7 +313,7 @@ class ClaudeRoutingTests(unittest.TestCase):
             for change in ('stale', 'unknown', 'reset'):
                 data = overview()
                 b = data['watch_accounts'][1]
-                if change == 'stale': b['checked_at'] = p.stamp(NOW-901)
+                if change == 'stale': b['checked_at'] = p.stamp(NOW+1)
                 if change == 'missing': data['watch_accounts'].pop()
                 if change == 'unknown': b['windows'][0]['remaining'] = None
                 if change == 'reset': b['windows'][0]['resets_at'] = NOW-1
@@ -312,7 +347,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         for change in ('missing', 'unknown', 'expired', 'error', 'nan', 'future'):
             data = overview()
             row = data['watch_accounts'][1]
-            if change == 'missing': row['windows'].pop(0)
+            if change == 'missing': row['windows'].pop(1)
             if change == 'unknown': row['windows'][0]['remaining'] = None
             if change == 'expired': row['windows'][1]['resets_at'] = NOW
             if change == 'error': row['error'] = 'network'
@@ -356,7 +391,7 @@ class ClaudeRoutingTests(unittest.TestCase):
                     result = self.reconcile({'mode': mode}, data)
                     self.assertEqual(result['status'], 'active')
                     self.assertEqual(result['preferred_email'], wanted)
-                    if wanted == A: self.assertEqual(result['weekly_resets_at'], NOW+604800)
+                    if wanted == A: self.assertIsNone(result['weekly_resets_at'])
 
     def test_unstarted_windows_use_their_period_and_accept_zero_used(self):
         data = overview()
@@ -367,7 +402,7 @@ class ClaudeRoutingTests(unittest.TestCase):
             window.update(used=0, resets_at=None)
         observed = p.claude_observations(data, NOW)['gateway']['accounts'][0]['windows']
         self.assertEqual([w['remaining'] for w in observed], [100, 100, 100])
-        self.assertEqual([w['resets_at'] for w in observed], [NOW+18000, NOW+604800, NOW+604800])
+        self.assertEqual([w['resets_at'] for w in observed], [None, None, None])
         self.assertNotIn('seconds', observed[2])
         self.assertEqual(p.choose(data, NOW, 'highest-remaining-quota', provider='claude')['preferred_email'], A)
         for window in windows: window['remaining'] = None
@@ -409,7 +444,7 @@ class ClaudeRoutingTests(unittest.TestCase):
                                          self.call, self.root/'claude', provider='claude')
                     self.assertEqual(result['status'], 'active')
                     self.assertEqual(result['preferred_email'], B)
-                    self.assertEqual(result['weekly_resets_at'], now+604800)
+                    self.assertIsNone(result['weekly_resets_at'])
                     self.assertFalse(self.writes)
 
     def test_unstarted_window_preserves_quota_and_reset_stability_margins(self):
@@ -421,7 +456,8 @@ class ClaudeRoutingTests(unittest.TestCase):
             weekly['remaining'] = remaining
             self.assertEqual(p.choose(data, NOW, 'highest-remaining-quota', current=B,
                                       provider='claude')['preferred_email'], winner)
-        for lead, winner in ((900, A), (901, B)):
+        # An unknown reset cannot establish a time-based stability margin.
+        for lead, winner in ((900, B), (901, B)):
             weekly['resets_at'] = NOW+604800-lead
             self.assertEqual(p.choose(data, NOW, current=A, provider='claude')['preferred_email'], winner)
 
@@ -450,7 +486,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         before = copy.deepcopy(self.rows)
         self.writes.clear()
         stale = overview()
-        stale['watch_accounts'][0]['checked_at'] = p.stamp(NOW-901)
+        stale['watch_accounts'][0]['checked_at'] = p.stamp(NOW+1)
         self.assertEqual(self.reconcile(data=stale)['status'], 'held')
         self.assertEqual(self.rows, before)
         self.assertFalse(self.writes)
@@ -548,6 +584,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         accounts[0]['priority'] = 100
         state = app.GatewayState(Mock(), Mock())
         state.notices.view.return_value = {}
+        state.notices.claude_view.return_value = dict(low=[], out=None, recovered=None)
         self.addCleanup(state.signins.close)
         state.data = dict(overview()['gateway'], accounts=[], claude_accounts=accounts)
         handler = object.__new__(app.Handler)
@@ -715,6 +752,7 @@ class ClaudeRoutingTests(unittest.TestCase):
     def state(self):
         state = app.GatewayState(Mock(), Mock())
         state.notices.view.return_value = {}
+        state.notices.claude_view.return_value = dict(low=[], out=None, recovered=None)
         self.addCleanup(state.signins.close)
         return state
 
@@ -780,7 +818,7 @@ class ClaudeRoutingTests(unittest.TestCase):
         target = app.account_access.claude_routing_id(self.rows[2])
         for cause in ('stale', 'quota', 'unavailable'):
             data = overview()['watch_accounts']
-            if cause == 'stale': data[1]['checked_at'] = p.stamp(NOW-901)
+            if cause == 'stale': data[1]['checked_at'] = p.stamp(NOW+1)
             if cause == 'quota': data[1]['windows'][0]['remaining'] = 0
             if cause == 'unavailable': data[1]['error'] = 'network'
             with self.subTest(cause=cause), patch.object(p, 'STATE', self.root), \

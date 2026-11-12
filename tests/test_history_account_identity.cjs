@@ -19,16 +19,12 @@ a.id=b.key;assert.equal(c.providerAccount('claude',b.key),b,'filename wins over 
 assert.equal(c.providerAccount('claude',null,a.email,'removed.json'),undefined,'removed filename stays removed');
 assert.equal(c.series('claude',null,undefined,b.key),'claude:b.json');
 assert.equal(c.series('claude',null),'claude:removed:unknown');
-const names=c.seriesNames();assert.equal(names['claude:b.json'],b.email);assert.equal(names['claude:removed:removed.json'],'Removed account');
-c.renderChart('usage-chart',c.fixture.usage,'today');
-assert.match(nodes.get('usage-chart').innerHTML,/b@example.test 7/);
-assert.match(nodes.get('usage-chart').innerHTML,/Removed account 3/);
-assert.doesNotMatch(nodes.get('usage-chart').innerHTML,/a@example.test 7/);
-c.renderUsage(c.fixture);
-assert.match(nodes.get('usage-accounts').innerHTML,/data-series="claude:b.json"[^]*b@example.test/);
-assert.doesNotMatch(nodes.get('usage-accounts').innerHTML,/a@example.test/);
-c.fixture.usage.recent=[{...row,provider:'claude',timestamp:new Date().toISOString()}];
-c.renderToday(c.fixture);
-assert.match(nodes.get('recent-table').innerHTML,/data-series="claude:b.json"[^]*b@example.test/);
-assert.doesNotMatch(nodes.get('recent-table').innerHTML,/a@example.test/);
-console.log('History account identity: filename-first lookup, non-empty runtime IDs, removed series and chart/table attribution passed');
+const names=Object.fromEntries([...c.seriesEntries()].map(([k,v])=>[k,v.name]));assert.equal(names['claude:b.json'],b.email);assert.equal(names['claude:removed:removed.json'],'Removed account');
+const {install,context:widgetContext,historyKeys}=require('./helpers/board-widgets.cjs');
+install(c);const keys=historyKeys(c);assert(keys.some(k=>k.name===b.email&&k.series.total===7));assert(keys.some(k=>k.name==='Removed account'&&k.series.total===3));
+(async()=>{
+ const host={classList:{add(){},remove(){}},innerHTML:''};await c.window.boardTest.defs.get('usage-accounts').render(host,widgetContext(c,'usage-accounts'));
+ assert.match(host.innerHTML,/data-series="claude:b.json"[^]*b@example.test/);assert.doesNotMatch(host.innerHTML,/a@example.test/);
+ const html=c.requestTable([{...row,provider:'claude',timestamp:new Date().toISOString()}],false);assert.match(html,/data-series="claude:b.json"[^]*b@example.test/);
+ console.log('Widget account identity: filename-first, missing IDs, removed series and table attribution passed');
+})().catch(e=>{console.error(e);process.exitCode=1});

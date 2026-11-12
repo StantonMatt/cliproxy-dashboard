@@ -15,6 +15,8 @@ def isolate(app, directory):
     app.claude_request = forbidden_transport
     app.routing_policy.urlopen = forbidden_transport
     app.routing_policy.STATE = directory / 'routing'
+    # Gateway polling also reads primary watch activity before usage requests.
+    app.CLAUDE_USAGE = directory / 'claude.json'
     # Sign-in writes credentials; never let a fixture reach the real auth dir.
     (directory / 'auth').mkdir(mode=0o700, parents=True, exist_ok=True)
     app.signin.credential_replace.AUTH_DIR = str(directory / 'auth')

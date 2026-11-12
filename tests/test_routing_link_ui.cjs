@@ -12,14 +12,14 @@ function element(id){
     addEventListener(){},removeAttribute(){},focus(){document.activeElement=el;},
     options:OPTIONS.map(value=>({value,textContent:value.includes('@')?'Prefer '+value:value})),
     querySelector(){return el.children.find(child=>/state/.test(child.id));},
-    before(node){node.parentElement=el.parentElement;}};
+    after(node){node.parentElement=el.parentElement;}};
   return el;
 }
 const document={documentElement:{dataset:{}},body:{},querySelectorAll:()=>[],querySelector:()=>null,
   getElementById(id){if(!elements.has(id))elements.set(id,element(id));return elements.get(id);}};
 document.activeElement=document.body;
 const $=id=>document.getElementById(id);
-for(const [host,state] of [['routing-all','routing-all-state'],['claude-routing','claude-routing-state']]){$(host).children.push($(state));$(state).parentElement=$(host);}
+for(const host of ['routing-all','claude-routing'])for(const part of ['state','feedback']){$(host).children.push($(host+'-'+part));$(host+'-'+part).parentElement=$(host);}
 $('routing-split').parentElement=$('routing-all');
 const context=vm.createContext({document,Date,JSON,localStorage:{getItem:()=>null}});
 const source=fs.readFileSync(path.join(__dirname,'../dashboard/static/app.js'),'utf8');
@@ -49,11 +49,11 @@ assert.equal($('routing-all-help').hidden,true);
 context.fixture.gateway.claude_preference={...active('preferred-account',B),status:'held',hold_reason:'usage is stale',held_since:new Date().toISOString()};
 render();
 assert.equal($('routing-all-state').hidden,false);
-assert.match($('routing-all-state').innerHTML,/<b>Claude<\/b>Held for under a minute · usage is stale/);
-assert.doesNotMatch($('routing-all-state').innerHTML,/<b>Codex<\/b>/);
+assert.match($('routing-all-state').innerHTML,/<span>Held<\/span><\/button><span class="state-detail" data-title="Claude · Held for under a minute" hidden>Usage is stale<\/span>$/);
+assert.doesNotMatch($('routing-all-state').innerHTML,/Codex/);
 context.fixture.gateway.preference={...active('round-robin'),suspended:true};
 render();
-assert.match($('routing-all-state').innerHTML,/<b>Codex<\/b>Suspended after a rollback/);
+assert.match($('routing-all-state').innerHTML,/<span>Suspended<\/span>.*data-title="Codex · Suspended after a rollback".*data-title="Claude · Held for under a minute"/);
 assert.equal($('routing-all-resume').hidden,false);
 // Gateways that disagree while linked show the Codex choice, without an extra line.
 context.fixture.gateway.preference=active('preferred-account',B);
@@ -64,6 +64,7 @@ assert.equal($('routing-all-state').hidden,true);
 context.fixture.read_only=true;
 render();
 assert.equal($('routing-all-mode').disabled,true);
+assert.equal($('routing-all-trigger').disabled,true,'the routing button follows its row');
 assert.equal($('routing-link').disabled,true);
 assert.equal($('routing-all-help').textContent,'Change routing from your computer dashboard');
 assert.equal($('routing-all-help').hidden,false);

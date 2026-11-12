@@ -47,6 +47,84 @@ class DashboardTests(unittest.TestCase):
         manager.start()
         self.addCleanup(manager.stop)
 
+    def test_overview_exposes_user_billing_for_grok_and_preserves_claude_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'billing.json'
+            rows = [dict(type=provider, name=provider + '.json', auth_index=provider + '-index',
+                         email=provider + '@example.test', status='active') for provider in ('xai', 'claude')]
+            for row in rows:
+                app.subscriptions.save_billing(path, row, renewal_date='2026-11-01', plan='Personal')
+            state = app.GatewayState(Mock(), Mock())
+            self.addCleanup(state.signins.close)
+            state.notices.claude_view.return_value = []
+            state.notices.view.return_value = []
+            state.data.update(online=True, inventory=rows, claude_accounts=[dict(rows[1], key='claude.json')],
+                              usage_accounts=[dict(provider='xai', key='xai.json', auth_index='xai-index', plan=None)])
+            handler = object.__new__(app.Handler)
+            handler.allowed = Mock(return_value=True)
+            handler.send = Mock()
+            handler.headers = {}
+            handler.path = '/api/overview'
+            handler.server = Mock(state=state)
+            with patch.object(app, 'BILLING', path), \
+                    patch.object(app, 'watch_accounts', return_value=[]), \
+                    patch.object(app, 'preference_status', return_value=None), \
+                    patch.object(app.routing_policy, 'routing_linked', return_value=True), \
+                    patch.object(app, 'usage_summary', return_value={}), \
+                    patch.object(app, 'health', return_value={}), \
+                    patch.object(app.provider_status, 'read_snapshot', return_value={}):
+                for fetched_plan in (None, 'SuperGrok Heavy'):
+                    state.data['usage_accounts'][0]['plan'] = fetched_plan
+                    handler.do_GET()
+                    self.assertEqual(handler.send.call_args.args[0], 200)
+                    overview = json.loads(handler.send.call_args.args[1])
+                    accounts = {p['id']: p['accounts'][0] for p in overview['providers']}
+                    grok = accounts['xai']
+                    self.assertEqual(grok['billing']['renewal_date'], '2026-11-01')
+                    self.assertTrue(grok['billing']['confirmed'])
+                    self.assertEqual(grok['billing']['source'], 'user_confirmed')
+                    self.assertEqual(grok['billing']['plan'], 'Personal')
+                    self.assertEqual(grok['plan'], fetched_plan or 'Personal')
+                    self.assertEqual(grok['billing_editable'], dict(renewal=True, plan=not bool(fetched_plan)))
+                    if fetched_plan:
+                        self.assertNotIn('plan_source', grok)
+                    else:
+                        self.assertEqual(grok['plan_source'], 'user')
+                    self.assertEqual(accounts['claude']['billing'], overview['gateway']['claude_accounts'][0]['billing'])
+                    self.assertEqual(accounts['claude']['plan_source'], 'user')
+                    self.assertNotIn('billing', state.data['claude_accounts'][0])
+
+    def test_overview_includes_offline_provider_status_with_missing_snapshot_fallback(self):
+        handler = object.__new__(app.Handler)
+        handler.allowed = Mock(return_value=True)
+        handler.send = Mock()
+        handler.headers = {}
+        handler.path = '/api/overview'
+        handler.server = Mock()
+        handler.server.state.snapshot.return_value = {'accounts': [], 'inventory': []}
+        handler.server.state.notices.view.return_value = []
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(app, 'watch_accounts', return_value=[]), \
+                patch.object(app, 'usage_summary', return_value={}), \
+                patch.object(app, 'health', return_value={}), \
+                patch.object(app.provider_status, 'SNAPSHOT', Path(directory) / 'status.json'):
+            handler.do_GET()
+            self.assertEqual(handler.send.call_args.args[0], 200)
+            payload = json.loads(handler.send.call_args.args[1])
+            self.assertEqual(payload['provider_status']['codex']['indicator'], 'unknown')
+            self.assertEqual(payload['provider_status']['codex']['url'], 'https://status.openai.com/')
+            app.provider_status.SNAPSHOT.write_text(json.dumps({'provider_status': {
+                'codex': dict(indicator='minor', description='API degraded', checked_at=app.utcnow(),
+                              incident='Elevated API errors')}}))
+            handler.do_GET()
+            row = json.loads(handler.send.call_args.args[1])['provider_status']['codex']
+            self.assertEqual(row['indicator'], 'minor')
+            self.assertEqual(row['incident'], 'Elevated API errors')
+            app.provider_status.SNAPSHOT.write_text('corrupt')
+            handler.do_GET()
+            self.assertEqual(handler.send.call_args.args[0], 200)
+            self.assertEqual(json.loads(handler.send.call_args.args[1])['provider_status']['codex']['indicator'], 'unknown')
+
     def test_overview_shows_both_gateways_side_by_side(self):
         class Structure(HTMLParser):
             def __init__(self):
@@ -79,21 +157,24 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('hidden', structure.nodes['watch-section'][1])
         for identity in ('codex-notices', 'claude-notices', 'account-notices'):
             self.assertNotIn(identity, structure.nodes)
-        # Each gateway column holds its own cards and split-routing control.
+        # Each gateway column holds its own cards, and its header the split-routing control beside the stats. Linked,
+        # one control takes Claude's place.
         for identity, region in (('account-grid', 'codex-accounts'), ('routing-mode', 'codex-accounts'),
                                  ('watch-grid', 'watch-section'),
-                                 ('claude-routing-mode', 'watch-section')):
+                                 ('claude-routing-mode', 'watch-section'), ('routing-all-mode', 'watch-section')):
             self.assertIn(('section', region), structure.nodes[identity][2])
+        for identity in ('routing-mode', 'claude-routing-mode', 'routing-all-mode'):
+            self.assertIn(('header', None), structure.nodes[identity][2])
         self.assertLess(html.index('id="account-grid"'), html.index('id="watch-grid"'))
-        # The linked routing control and the activity sections span both gateways.
-        for identity in ('routing-all-mode', 'tokens-today', 'overview-chart', 'recent-table'):
-            ancestry = structure.nodes[identity][2]
-            self.assertIn(('section', 'overview-view'), ancestry)
-            self.assertNotIn(('section', 'codex-accounts'), ancestry)
-            self.assertNotIn(('section', 'watch-section'), ancestry)
-        self.assertNotIn(('section', 'overview-view'), structure.nodes['notice'][2])
-        self.assertIn("Today's activity", html)
-        self.assertIn('Recent requests', html)
+        self.assertLess(html.index('id="routing-mode"'), html.index('id="account-grid"'))
+        self.assertLess(html.index('id="routing-all-mode"'), html.index('id="watch-grid"'))
+        # Content is mounted by the widget registry, with no hidden singleton charts/summaries.
+        self.assertIn('board-grid', structure.nodes)
+        for identity in ('tokens-today', 'overview-chart', 'recent-table', 'usage-summary', 'usage-chart'):
+            self.assertNotIn(identity, structure.nodes)
+        boards = (Path(app.__file__).parent / 'static/boards.js').read_text()
+        self.assertIn("Today's activity", boards)
+        self.assertIn('Recent requests', boards)
 
     def test_claude_socket_timeouts(self):
         with patch.object(app.socket, 'socket') as socket_factory:
@@ -361,7 +442,8 @@ class DashboardTests(unittest.TestCase):
                 path.write_text(json.dumps(raw))
                 result = app.watch_accounts(now)[0]
                 self.assertEqual(set(result), {'id', 'provider', 'label', 'email', 'plan', 'status', 'error',
-                                              'checked_at', 'attempted_at', 'windows', 'extra_usage', 'resets', 'independent_windows'})
+                                              'checked_at', 'fresh_until', 'attempted_at', 'next_attempt_at', 'provider_retry_at',
+                                              'windows', 'extra_usage', 'resets', 'independent_windows'})
                 self.assertEqual((result['id'], result['provider'], result['label'], result['plan']),
                                  ('claude', 'claude', 'Claude A', 'Max'))
                 self.assertEqual(result['windows'][0]['remaining'], 18)
@@ -369,7 +451,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(result['extra_usage'], {'enabled': False, 'used': None, 'limit': None,
                                                          'currency': None, 'utilization': None})
                 self.assertNotIn('secret-not-public', json.dumps(result))
-                self.assertEqual(app.watch_accounts(now + 900)[0]['status'], 'ok')
+                self.assertEqual(app.watch_accounts(now + 900)[0]['status'], 'stale')
                 self.assertEqual(app.watch_accounts(now + 901)[0]['status'], 'stale')
                 raw.update(status='expired_token', error='expired_token')
                 path.write_text(json.dumps(raw))
@@ -403,7 +485,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(result[0], before)
                 self.assertEqual(len(result), 2)
                 self.assertEqual((result[1]['id'], result[1]['label'], result[1]['plan']),
-                                 ('claude-b', 'Claude B', a.get('plan')))
+                                 ('claude-b', 'Claude B', app.subscriptions.plan_name(a.get('plan'))))
                 self.assertEqual(result[1]['windows'][0]['remaining'], None)
                 self.assertEqual(result[1]['windows'][1]['remaining'], 84)
                 self.assertEqual(result[1]['email'], 'a@example.com')
@@ -412,7 +494,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertNotIn('private', json.dumps(result))
                 resets.assert_called_once()
                 self.assertEqual(app.watch_accounts(now + 901)[1]['status'], 'stale')
-                for plan, expected in (('Max (5x)', 'Max (5x)'), (None, None), ('evil', None)):
+                for plan, expected in (('Max (5x)', 'Max'), (None, None), ('evil', None)):
                     path.with_name('claude-b.json').write_text(json.dumps({**a, 'plan': plan}))
                     self.assertEqual(app.watch_accounts(now)[1]['plan'], expected)
                 path.unlink()
@@ -431,7 +513,7 @@ class DashboardTests(unittest.TestCase):
             path.write_text(json.dumps(raw))
             read = lambda at: app.watch_account(path, 'claude-b', 'Claude B', False, at)
             result = read(now)
-            self.assertEqual(result['status'], 'stale')
+            self.assertEqual(result['status'], 'ok')
             self.assertEqual(result['checked_at'], stamp(now - 901))
             self.assertEqual(result['windows'][1]['measured_at'], stamp(now - 901))
             self.assertEqual(result['windows'][1]['remaining'], 84)
@@ -550,6 +632,7 @@ class DashboardTests(unittest.TestCase):
                 resets, notices = Mock(), Mock()
                 resets.view.return_value = {}
                 notices.view.return_value = []
+                notices.claude_view.return_value = dict(low=[], out=None, recovered=None)
                 state = app.GatewayState(resets, notices)
                 state.data = {'online':True, 'checked_at':policy.stamp(now), 'accounts':[
                     {'id':str(i), 'label':email, 'email':email,
@@ -657,7 +740,7 @@ const context={assert,document:{getElementById:element,addEventListener(){},docu
   querySelectorAll:()=>[],querySelector:()=>null},window:{addEventListener(){}},
   localStorage:{getItem:()=>null},location:{port:'8320'},navigator:{platform:'linux'},CSS:{escape:value=>value}};
 vm.createContext(context);
-const source=fs.readFileSync('dashboard/static/app.js','utf8').split('showView();load();setInterval')[0];
+const source=fs.readFileSync('dashboard/static/app.js','utf8').split("window.addEventListener('DOMContentLoaded'")[0];
 vm.runInContext(source,context);
 vm.runInContext(`
 renderAccounts=()=>{};load=async()=>{};
@@ -882,7 +965,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
             return {'files':[file]} if path == '/auth-files' else {'routing':{}}
         for entrypoint in ('poll', 'reset'):
             with self.subTest(entrypoint=entrypoint), patch.object(app, 'api', side_effect=api), \
-                    patch.object(app, 'fetch_account', side_effect=lambda *args: dict(account)), \
+                    patch.object(app, 'fetch_account', side_effect=lambda *args, **kwargs: dict(account)), \
                     patch.object(app, 'utcnow', side_effect=[before, after]), \
                     patch.object(app.routing_policy, 'reconcile', return_value={'status':'active'}):
                 if entrypoint == 'poll':
@@ -995,7 +1078,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                      'quota_error':None,'quota_checked_at':app.utcnow()}
             fresh = dict(stale, windows=[{'remaining':100}])
             started, resumed = threading.Event(), threading.Event()
-            def fetch(file, resets):
+            def fetch(file, resets, **kwargs):
                 started.set()
                 self.assertTrue(resumed.wait(5))
                 return stale
@@ -1226,6 +1309,185 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
         finally:
             httpd.shutdown();httpd.server_close();thread.join()
 
+    def test_usage_rollup_selects_only_exact_utc_hours_and_matches_raw(self):
+        collector = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/collect-usage.py'))
+        with tempfile.TemporaryDirectory() as directory:
+            db, raw_db = Path(directory) / 'usage.sqlite3', Path(directory) / 'raw.sqlite3'
+            records = [dict(timestamp=stamp, provider=provider, auth_index=account, model=model,
+                            failed=bool(n % 2), latency_ms=None if n % 2 else 1.25,
+                            tokens={'total_tokens':None if n % 2 else 10,
+                                    'cache_read_tokens':0 if n % 2 else None})
+                       for provider in ('codex', 'claude')
+                       for n, (stamp, account, model) in enumerate((
+                           ('2026-10-03T02:59:59.9994Z', 'a', 'z'),
+                           ('2026-10-03T02:59:59.9996Z', 'b', 'a'),
+                           ('2026-10-03T03:00:00Z', 'a', 'z'),
+                           ('2026-10-03T03:15:00Z', 'b', 'a'),
+                           ('2026-10-03T04:00:00Z', '', ''),
+                           ('invalid', 'a', 'invalid')))]
+            with contextlib.closing(collector['connect'](db)) as con:
+                for index, batch in enumerate((records[:5], records[5:] + ['quarantined'])):
+                    spool = Path(directory) / (str(index) + '.json')
+                    spool.write_text(json.dumps(batch))
+                    collector['replay_spool'](con, spool)
+                with contextlib.closing(sqlite3.connect(raw_db)) as raw:
+                    con.backup(raw)
+                    raw.execute('DROP TABLE usage_hourly')
+                    raw.commit()
+            real_connect = sqlite3.connect
+            queries = []
+
+            def traced(*args, **kwargs):
+                con = real_connect(*args, **kwargs)
+                con.set_trace_callback(queries.append)
+                return con
+
+            for start, use_rollup in (
+                    ('1970-01-01T00:00:00Z', True), ('2026-10-03T00:00:00-03:00', True),
+                    ('2026-10-03T03:00:00Z', True), ('2026-10-03T04:00:00+01:00', True),
+                    ('2026-10-03T03:30:00+00:30', True),
+                    ('2026-10-03T03:30:00Z', False), ('2026-10-03T00:00:00-03:30', False),
+                    ('2026-10-03T03:00:00.000000001Z', False)):
+                with self.subTest(start=start):
+                    expected = app.usage_summary(start, raw_db)
+                    # Rollup metadata now reports the beginning of the earliest
+                    # recorded hour. All other values still match the raw query.
+                    for summary in (expected, expected['claude'], *expected['providers'].values()):
+                        if summary['since']:
+                            summary['since'] = '2026-10-03T02:00:00Z'
+                    queries.clear()
+                    with patch.object(app.sqlite3, 'connect', side_effect=traced):
+                        actual = app.usage_summary(start, db)
+                    self.assertEqual(actual, expected)
+                    self.assertEqual(any('sum(requests)' in sql for sql in queries), use_rollup)
+            rows = app.usage_summary('2026-10-03T03:00:00Z', db)['models']
+            self.assertEqual([r['model'] for r in rows], ['a', 'z', ''])
+            hours = app.usage_summary('2026-10-03T03:00:00Z', db)['hours']
+            self.assertEqual(hours[0]['hour'], '2026-10-03T02:00:00Z')
+            self.assertEqual(hours[0]['requests'], 1)
+
+    def test_usage_rollup_and_raw_reads_share_one_wal_snapshot(self):
+        collector = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/collect-usage.py'))
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'usage.sqlite3'
+            stamp = app.dt.datetime.now().astimezone().isoformat()
+            record = dict(timestamp=stamp, provider='codex', auth_index='a', model='m')
+            with contextlib.closing(collector['connect'](db)) as writer:
+                initial = Path(directory) / 'initial.json'
+                initial.write_text(json.dumps([record]))
+                collector['replay_spool'](writer, initial)
+                expected = app.usage_summary('1970-01-01T00:00:00Z', db)
+                pending = Path(directory) / 'pending.json'
+                pending.write_text(json.dumps([record, dict(record, failed=True)]))
+
+                class ConcurrentReader(sqlite3.Connection):
+                    def execute(self, sql, parameters=()):
+                        result = super().execute(sql, parameters)
+                        if sql.startswith('SELECT max(last_collected_at)'):
+                            collector['replay_spool'](writer, pending)
+                        return result
+
+                real_connect = sqlite3.connect
+                with patch.object(app.sqlite3, 'connect', side_effect=lambda *a, **kw:
+                                  real_connect(*a, **kw, factory=ConcurrentReader)):
+                    self.assertEqual(app.usage_summary('1970-01-01T00:00:00Z', db), expected)
+                fresh = app.usage_summary('1970-01-01T00:00:00Z', db)
+                self.assertEqual(fresh['accounts'][0]['requests'], 3)
+                self.assertEqual(fresh['providers']['codex']['today_accounts'][0]['requests'], 3)
+                self.assertEqual(len(fresh['recent']), 3)
+
+    def test_usage_summary_indexed_and_legacy_windows_are_identical(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'usage.sqlite3'
+            with contextlib.closing(sqlite3.connect(db)) as con, con:
+                con.execute("""CREATE TABLE usage (id INTEGER PRIMARY KEY, collected_at TEXT,
+                    timestamp TEXT, provider TEXT, model TEXT, auth_index TEXT, failed INTEGER,
+                    latency_ms REAL, input_tokens INTEGER, output_tokens INTEGER,
+                    cached_tokens INTEGER, total_tokens INTEGER)""")
+                for n, stamp in enumerate(('2026-10-02T23:59:59.999999999-03:00',
+                        '2026-10-03T03:00:00Z', '2026-10-03T05:00:00.0001+02:00',
+                        '2026-10-03T03:00:00.216142847Z', 'invalid')):
+                    con.execute("""INSERT INTO usage (collected_at,timestamp,provider,model,auth_index,
+                        failed,latency_ms,input_tokens,output_tokens,cached_tokens,total_tokens)
+                        VALUES (?,?,?,'model','account',0,?,1,2,NULL,3)""",
+                        (stamp, stamp, ('codex', 'claude', '', None, 'other')[n], 0.5 if n % 2 else None))
+            starts = ('1970-01-01T00:00:00Z', '2026-10-03T03:00:00Z',
+                      '2026-10-03 03:00:00+00:00', '2026-10-03T03:00:00.216142848Z')
+            expected = [app.usage_summary(start, db) for start in starts]
+            for report in expected:
+                for summary in (report, report['claude'], *report['providers'].values()):
+                    if summary['since']:
+                        summary['since'] = '2026-10-03T03:00:00Z'
+            collector = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/collect-usage.py'))
+            with contextlib.closing(collector['connect'](db)):
+                pass
+            for start, baseline in zip(starts, expected):
+                self.assertEqual(app.usage_summary(start, db), baseline)
+            # SQLite-readable legacy dates with NULL request_time stay included.
+            with contextlib.closing(sqlite3.connect(db)) as con, con:
+                con.execute("INSERT INTO usage (timestamp,collected_at,model,auth_index) "
+                            "VALUES ('2026-10-03 03:00:00','legacy','model','account')")
+            with contextlib.closing(sqlite3.connect(db)) as con, con:
+                con.execute('DROP TABLE usage_hourly')
+            with contextlib.closing(collector['connect'](db)):
+                pass
+            migrated = app.usage_summary(starts[0], db)
+            with contextlib.closing(sqlite3.connect(db)) as con, con:
+                for index in ('usage_by_request_time', 'usage_by_provider_request_time',
+                              'usage_failed_by_request_time', 'usage_failed_by_provider_request_time'):
+                    con.execute('DROP INDEX ' + index)
+                con.execute('ALTER TABLE usage DROP COLUMN request_time')
+            self.assertEqual(app.usage_summary(starts[0], db), migrated)
+
+    def test_usage_summary_today_window_and_midnight_rollover(self):
+        class Clock(app.dt.datetime):
+            day = 3
+
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 10, cls.day, 12, tzinfo=tz)
+
+        previous_tz = app.os.environ.get('TZ')
+        try:
+            app.os.environ['TZ'] = 'America/Santiago'
+            app.time.tzset()
+            with tempfile.TemporaryDirectory() as directory, patch.object(app.dt, 'datetime', Clock):
+                db = Path(directory) / 'usage.sqlite3'
+                with contextlib.closing(sqlite3.connect(db)) as con, con:
+                    con.execute("""CREATE TABLE usage (id INTEGER PRIMARY KEY, collected_at TEXT,
+                        timestamp TEXT, provider TEXT, model TEXT, auth_index TEXT, failed INTEGER,
+                        latency_ms REAL, input_tokens INTEGER, output_tokens INTEGER,
+                        cached_tokens INTEGER, total_tokens INTEGER)""")
+                    for stamp in ('2026-10-03T02:59:59.9994Z', '2026-10-03T02:59:59.9996Z',
+                                  '2026-10-03T03:00:00Z', '2026-10-04T02:59:59.9994Z',
+                                  '2026-10-04T02:59:59.9996Z', '2026-10-04T03:00:00Z', 'invalid'):
+                        for provider in ('codex', 'claude'):
+                            con.execute("""INSERT INTO usage (timestamp,collected_at,provider,auth_index,model,failed)
+                                VALUES (?,?,?,'a','model',0)""", (stamp, stamp, provider))
+                expected = {}
+                start = '1970-01-01T00:00:00Z'
+                for day in (3, 4):
+                    Clock.day = day
+                    expected[day] = app.usage_summary(start, db)
+                    for summary in (expected[day], expected[day]['claude'], *expected[day]['providers'].values()):
+                        if summary['since']:
+                            summary['since'] = '2026-10-03T02:00:00Z'
+                collector = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/collect-usage.py'))
+                with contextlib.closing(collector['connect'](db)):
+                    pass
+                for day, count in ((3, 3), (4, 2)):
+                    Clock.day = day
+                    actual = app.usage_summary(start, db)
+                    self.assertEqual(actual, expected[day])
+                    for provider in ('codex', 'claude'):
+                        self.assertEqual(actual['providers'][provider]['today_accounts'][0]['requests'], count)
+        finally:
+            if previous_tz is None:
+                app.os.environ.pop('TZ', None)
+            else:
+                app.os.environ['TZ'] = previous_tz
+            app.time.tzset()
+
     def test_usage_timestamp_keys_preserve_precision_and_reject_invalid_dates(self):
         for value in ['2026-10-03T00:49:40.216142847-03:00',
                       '2026-10-03T05:49:40.216142847+02:00',
@@ -1313,6 +1575,10 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                         con.execute('''INSERT INTO usage (collected_at,timestamp,provider,model,auth_index,
                             cached_tokens,cache_read_tokens,cache_creation_tokens) VALUES (?,?,?,?,?,?,?,?)''',
                             (stamp, stamp, provider, name, name, cached, read, creation))
+            with contextlib.closing(sqlite3.connect(db)) as con, con:
+                con.execute('DROP TABLE usage_hourly')
+            with contextlib.closing(collector['connect'](db)):
+                pass
             report = app.usage_summary(start, db)
             self.assertTrue(report['available'])
             expected = {'mixed': (3, 28, 10, 25, 2, 2), 'unknown': (1, 9, None, None, 0, 0),
@@ -1362,7 +1628,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
             connect.assert_called_once_with(f'file:{db}?mode=ro', uri=True, timeout=3)
             claude = report['claude']
             self.assertTrue(report['available'])
-            self.assertEqual(set(claude), {'since', 'accounts', 'models', 'hours'})
+            self.assertEqual(set(claude), {'since', 'accounts', 'models', 'hours', 'failure_counts'})
             self.assertEqual([{k: v for k, v in row.items() if k != 'email'} for row in claude['accounts']],
                              report['accounts'])
             self.assertEqual(claude['models'], report['models'])
@@ -1402,10 +1668,11 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
                     if expected == 3:
                         self.assertEqual(usage['claude'], claude)
                     elif expected == 0:
-                        self.assertEqual(usage['claude'], {'since': claude['since'], 'accounts': [], 'models': [], 'hours': []})
+                        self.assertEqual(usage['claude'], {'since': claude['since'], 'accounts': [], 'models': [], 'hours': [],
+                                                          'failure_counts': app.usage_failure_counts()})
 
     def test_claude_usage_is_empty_for_missing_legacy_and_unavailable_databases(self):
-        empty = {'since': None, 'accounts': [], 'models': [], 'hours': []}
+        empty = {'since': None, 'accounts': [], 'models': [], 'hours': [], 'failure_counts': app.usage_failure_counts()}
         with tempfile.TemporaryDirectory() as directory:
             db = Path(directory) / 'usage.sqlite3'
             report = app.usage_summary('1970-01-01T00:00:00Z', db)
@@ -1518,7 +1785,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
             self.assertEqual(report['accounts'][0]['requests'], 17)
             self.assertEqual([r['model'] for r in report['recent']],
                              ['16', '15', '14', '13', '12', '11', '10', 'tie9', '9', '8', '7', '6'])
-            self.assertTrue(all('id' not in r for r in report['recent']))
+            self.assertTrue(all(isinstance(r['id'], int) for r in report['recent']))
             self.assertTrue(all(r['provider'] == 'codex' and r['email'] is None for r in report['recent']))
 
     def test_usage_since_space_separator_and_aggregates_match_head(self):
@@ -1631,7 +1898,7 @@ class AvailabilityTests(unittest.TestCase):
         account = {'auth_state':'authenticated', 'quota_checked_at':app.routing_policy.stamp(now),
                    'windows':[{'remaining':100}]}
         self.assertEqual(classify({},account,now)['state'], 'ready')
-        for change in ({'quota_checked_at':None}, {'quota_checked_at':app.routing_policy.stamp(now-181)},
+        for change in ({'quota_checked_at':None}, {'quota_checked_at':app.routing_policy.stamp(now-901)},
                        {'windows':[]}, {'windows':[{'remaining':None}]}, {'windows':[{'remaining':float('nan')}]},
                        {'windows':[{'remaining':100},{'remaining':None}]}, {'quota_error':'Refresh unavailable'}):
             with self.subTest(change=change):
@@ -1644,7 +1911,7 @@ class AvailabilityTests(unittest.TestCase):
             account = {'auth_state':'authenticated', 'quota_checked_at':app.routing_policy.stamp(now),
                        'windows':[{'remaining':0,'resets_at':reset}]}
             result = classify({},account,now)
-            self.assertEqual(result['state'], 'quota_exhausted')
+            self.assertEqual(result['state'], 'unknown')
             self.assertIsNone(result['retry_at'])
 
     def test_fresh_allowance_overrides_stale_exhaustion_but_preserves_active_cooldown(self):

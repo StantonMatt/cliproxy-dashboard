@@ -7,10 +7,11 @@ import re
 import secrets
 import time
 from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.error import HTTPError
 
 from request_deadline import RequestDeadline
 
-TESTED_GATEWAYS = ('8.0.47',)
+TESTED_GATEWAYS = frozenset({'8.0.47'})
 # Exact origins from CLIProxyAPI v8.0.47 internal/auth provider implementations.
 FLOWS = {
     'claude': ('browser', 'claude.ai', 54545, '/callback'),
@@ -22,8 +23,9 @@ FLOWS = {
     'kimi-ai': ('device', 'auth.kimi.ai', None, None),
     'meta': ('device', 'auth.meta.com', None, None),
 }
+# Upstream v8.0.47 README: Kimi Code's Chinese site (.com) and Global (.ai).
 NAMES = {'claude': 'Claude', 'codex': 'Codex', 'antigravity': 'Antigravity',
-         'xai': 'Grok', 'kimi': 'Kimi (kimi.com)', 'kimi-ai': 'Kimi (kimi.ai)', 'meta': 'Meta'}
+         'xai': 'Grok', 'kimi': 'Kimi Code (China)', 'kimi-ai': 'Kimi Code (Global)', 'meta': 'Meta', 'devin': 'Devin'}
 PREFIX = '/v8/management/oauth/'
 ACTIVE = frozenset(('waiting', 'finishing'))
 
@@ -34,8 +36,26 @@ class AccountError(Exception):
         super().__init__(message)
 
 
+def confirmation_text(record, *, key_suffix=None, custom_name=None):
+    """The typeable disconnect identity, shared by projections and fresh reads."""
+    email = record.get('email')
+    if isinstance(email, str) and email.strip():
+        return email.strip()
+    if key_suffix is not None:
+        return custom_name.strip() if isinstance(custom_name, str) and custom_name.strip() else key_suffix
+    provider = record.get('provider') or record.get('type') or ''
+    return NAMES.get(provider, provider)
+
+
+def gateway_compat(version):
+    match = re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version) if isinstance(version, str) else None
+    parts = tuple(int(p) for p in match.groups()) if match and len(version) <= 32 else ()
+    return dict(version=version, tested=isinstance(version, str) and version in TESTED_GATEWAYS,
+                supported=bool(parts and parts[0] == 8 and parts >= (8, 0, 47)))
+
+
 def catalog(version):
-    if version not in TESTED_GATEWAYS:
+    if not gateway_compat(version)['supported']:
         return []
     result = []
     for provider, (flow, _, port, path) in FLOWS.items():
@@ -100,7 +120,43 @@ class AddManager:
             raise AccountError('session_changed', 'This sign-in session is no longer available.', 409)
         return self.sessions[handle]
 
-    def start(self, provider, deadline=None):
+    def _start_gateway(self, provider, call, is_webui):
+        auto_callback = is_webui and FLOWS[provider][0] == 'browser'
+        try:
+            response = call(PREFIX + 'auth-url?' + urlencode(
+                {'provider': provider, 'is_webui': str(auto_callback).lower()}))
+        except HTTPError as error:
+            # Upstream exposes a fixed callback-server error, not the listen error.
+            # Never forward this body (or exception text) to the browser or logs.
+            try:
+                response = json.loads(error.read(16385)) if error.code == 500 else {}
+            except (ValueError, OSError):
+                response = {}
+            finally:
+                error.close()
+            if not auto_callback or not isinstance(response, dict) or not (
+                    response.get('error') == 'failed to start callback server'
+                    or str(response.get('error', '')).startswith('failed to listen')):
+                raise AccountError('gateway_error', 'The gateway could not start sign-in.', 503) from None
+            state = response.get('state')
+            if isinstance(state, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,512}', state):
+                # Some gateways include state on errors. Refuse a second flow if
+                # that known session cannot be confirmed terminal.
+                failed = dict(provider=provider, gateway_state=state, expires=self.clock() + 300,
+                              before={}, result={'state': 'waiting'})
+                self.sessions[secrets.token_urlsafe(32)] = failed
+                self._cancel(failed, call)
+                if failed['result']['state'] in ACTIVE:
+                    self._reconcile(failed, call)
+                if failed['result']['state'] in ACTIVE:
+                    raise AccountError('gateway_error', 'Sign-in cleanup could not be confirmed. Try again.', 503)
+            # Stock v8.0.47 does not return state here and has no session-list API.
+            # The orphan has no waiter and expires in the gateway session store.
+            response = call(PREFIX + 'auth-url?' + urlencode({'provider': provider, 'is_webui': 'false'}))
+            auto_callback = False
+        return response, auto_callback
+
+    def start(self, provider, deadline=None, *, is_webui=True):
         deadline = deadline or RequestDeadline()
         call = deadline.wrap(self.call)
         with deadline.lock(self.lock):
@@ -110,10 +166,10 @@ class AddManager:
             if not isinstance(provider, str) or provider not in FLOWS:
                 raise AccountError('invalid_provider', 'Choose a supported provider.')
             config = call('/config')
-            if getattr(config, 'version', None) not in TESTED_GATEWAYS:
+            if not gateway_compat(getattr(config, 'version', None))['supported']:
                 raise AccountError('unsupported_gateway', 'Account sign-in is unavailable on this gateway version.', 409)
             before = call('/auth-files').get('files', [])
-            response = call(PREFIX + 'auth-url?' + urlencode({'provider': provider, 'is_webui': 'false'}))
+            response, auto_callback = self._start_gateway(provider, call, is_webui)
             state = response.get('state')
             # Retain only the minimum server-owned state; never echo gateway errors.
             try:
@@ -129,10 +185,13 @@ class AddManager:
                     raise ValueError()
             except (ValueError, TypeError):
                 if isinstance(state, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,512}', state):
+                    failed = dict(provider=provider, gateway_state=state, expires=self.clock() + 300,
+                                  before={}, result={'state': 'waiting'})
+                    self.sessions[secrets.token_urlsafe(32)] = failed
                     try:
-                        call(PREFIX + 'session?' + urlencode({'state': state}), method='DELETE')
+                        self._cancel(failed, call)
                     except Exception:
-                        pass
+                        pass  # Keep ownership until status or cancellation confirms cleanup.
                 raise AccountError('gateway_error', 'The gateway returned an invalid sign-in response.', 503) from None
             lifetime = response.get('expires_in', 300)
             if type(lifetime) is not int or lifetime <= 0:
@@ -143,6 +202,7 @@ class AddManager:
                 before={r['name']: fingerprint(r) for r in before if r.get('type') == provider and r.get('name')},
                 result={'state': 'waiting'})
             result = dict(session=handle, provider=provider, flow=flow, url=response['url'],
+                          auto_callback=auto_callback,
                           expires_at=dt.datetime.fromtimestamp(expires, dt.timezone.utc).isoformat())
             code = response.get('user_code')
             if flow == 'device' and isinstance(code, str) and 0 < len(code) <= 128 and code.isprintable():
@@ -166,6 +226,7 @@ class AddManager:
                 return copy.deepcopy(session['result'])
             if status == 'ok':
                 result = {'state': 'ok', 'message': 'Sign-in completed. Refresh the account inventory.'}
+                row = None
                 try:
                     rows = call('/auth-files').get('files', [])
                     candidates = [r for r in rows if r.get('type') == session['provider'] and r.get('name')
@@ -179,7 +240,7 @@ class AddManager:
                     pass  # Inventory attribution cannot undo a confirmed gateway sign-in.
                 session['result'] = result
                 try:
-                    self.changed()
+                    self.changed(row)
                 except Exception:
                     pass  # A refresh failure cannot undo a confirmed gateway sign-in.
             elif status == 'error':

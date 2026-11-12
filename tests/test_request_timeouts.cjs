@@ -11,17 +11,19 @@ class Upstream extends EventEmitter {
   destroy(){if(!this.destroyed){this.destroyed=true;this.emit('error',new Error('Synthetic deadline'));}}
 }
 const context=vm.createContext({console,Date,Set,Math,Number,String,Object,JSON,
-  fs:{readFileSync:()=>JSON.stringify(config)},net:{},process:{env:{},on(){},exit(){throw Error('Unexpected exit');}},
+  path, tls:{createSecureContext(){}}, https:{createServer(_credentials,callback){
+    callbacks.push(callback);return {on(){},emit(){},close(){},setSecureContext(){}};
+  }}, fs:{readFileSync:()=>JSON.stringify(config)},net:{createServer(){return {on(){},listen(){},close(){}};}},process:{env:{},on(){},exit(){throw Error('Unexpected exit');}},
   setInterval:()=>({unref(){}}),setTimeout:(callback,delay)=>{timers.set(++timerId,{callback,delay});return timerId;},
-  clearTimeout:id=>timers.delete(id),http:{createServer(callback){
-    callbacks.push(callback);return {on(){},listen(){},close(){}};
+  clearTimeout:id=>timers.delete(id),http:{createServer(){
+    return {on(){},emit(){},listen(){},close(){}};
   },request(options,reply){const upstream=new Upstream(options,reply);upstreams.push(upstream);return upstream;}}});
 vm.runInContext(source.replace(/^#!.*\n/,'').replace(/^import .*;\n/gm,''),context);
 assert.equal(callbacks.length,10);
 function request(route){
   const incoming=new EventEmitter();
   Object.assign(incoming,{method:'POST',url:route,headers:{host:'127.0.0.1:18749'},
-    socket:{remoteAddress:'127.0.0.1'},pipe(){}});
+    socket:{remoteAddress:'127.0.0.1',encrypted:true},pipe(){}});
   const response=new EventEmitter();
   Object.assign(response,{headersSent:false,writeHead(status){this.status=status;this.headersSent=true;},
     end(){this.ended=true;this.emit('close');},destroy(){this.destroyed=true;this.emit('close');}});

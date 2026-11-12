@@ -13,9 +13,12 @@ import random
 import re
 import threading
 import time
+import api_keys
 
 INTERVAL = 300
 MAX_AGE = 900
+PRIMARY_WATCH_MAX_AGE = 900
+PRIMARY_WATCH_MAX_COOLDOWN = 86400
 CLAUDE_URL = 'https://api.anthropic.com/api/oauth/usage'
 XAI_URL = 'https://cli-chat-proxy.grok.com/v1/billing?format=credits'
 XAI_HEADERS = {
@@ -55,9 +58,72 @@ def stamp(value):
     return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat()
 
 
-def fresh(value, now):
+def exhausted_delay(windows, now, jitter=60):
+    """Primary exhaustion: check once just after the last blocked reset."""
+    resets = [epoch(w.get('resets_at')) for w in windows
+              if w.get('kind') in (None, 'five_hour', 'seven_day')
+              and number(w.get('used')) and w['used'] >= 100]
+    future = [at for at in resets if at is not None and at > now]
+    return max(future) + jitter - now if future else None
+
+
+def passed_resets(windows, since, now, jitter=60):
+    """Usage resets that passed after the last endpoint read began, once due."""
+    resets = [epoch(w.get('resets_at')) for w in windows
+              if w.get('kind') in ('five_hour', 'seven_day', 'weekly_model')
+              or w.get('slot') in ('primary_window', 'secondary_window')]
+    return [at for at in resets if since is not None and at is not None and since < at <= now - jitter]
+
+
+class RefreshError(Exception):
+    def __init__(self, code, status, retry_at=None):
+        self.code, self.status, self.retry_at = code, status, retry_at
+        super().__init__(code)
+
+    def payload(self):
+        return dict(error=self.code, **({'retry_at': self.retry_at} if self.retry_at else {}))
+
+
+def deferred_fresh(value, fresh_until, now):
+    checked, until = epoch(value), epoch(fresh_until)
+    return checked is not None and until is not None and checked <= now <= until
+
+
+def fresh(value, now, fresh_until=None):
     checked = epoch(value)
-    return checked is not None and 0 <= now - checked <= MAX_AGE
+    return (checked is not None and 0 <= now - checked <= MAX_AGE
+            or deferred_fresh(value, fresh_until, now))
+
+
+def window_fresh(row, checked, now, fresh_until=None, primary=False):
+    measured = epoch(row.get('measured_at', checked))
+    reset = epoch(row.get('resets_at'))
+    if measured is None or measured > now or row.get('invalid_reset'):
+        return False
+    if reset is not None:
+        return measured < reset and now < reset <= measured + max(8 * 86400,
+            row['seconds'] + 86400 if number(row.get('seconds')) else 0)
+    return (row.get('remaining') == 100 or row.get('used') == 0) and fresh(
+        measured, now, None if primary else fresh_until)
+
+
+def observation_fresh(view, now, checked_field='checked_at'):
+    checked = view.get(checked_field)
+    measured = epoch(checked)
+    if measured is None or measured > now:
+        return False
+    rows = [w for w in view.get('windows', []) if w.get('kind') != 'weekly_model']
+    primary = [w for w in rows if w.get('kind') in ('five_hour', 'seven_day')
+               or w.get('slot') in ('primary_window', 'secondary_window') or number(w.get('seconds'))]
+    rows = primary or rows
+    return bool(rows) and all(window_fresh(dict(w, usage_source=w.get('usage_source', view.get('usage_source'))),
+        checked, now, view.get('fresh_until'), primary=True) for w in rows)
+
+
+def cooled_down(file, now):
+    return (not file.get('disabled') and file.get('status') != 'disabled' and
+            (file.get('unavailable') is True or file.get('status') in ('error', 'unavailable')
+             or (epoch(file.get('next_retry_after')) or 0) > now))
 
 
 def record(value):
@@ -109,7 +175,8 @@ def normalize_claude(payload):
         if re.fullmatch(r'seven_day_[a-z0-9_]{1,40}', kind):
             name = 'Fable' if kind == 'seven_day_overage_included' else kind[10:].replace('_', ' ').title()
             add('weekly_model', 'Weekly · ' + name, raw, name)
-    if not all(any(w['kind'] == kind for w in windows) for kind in ('five_hour', 'seven_day')):
+    if (not any(w['kind'] == 'seven_day' for w in windows) or
+            payload.get('five_hour') is not None and not any(w['kind'] == 'five_hour' for w in windows)):
         raise ValueError('no_usage_data')
     extra = payload.get('extra_usage')
     extra = extra if isinstance(extra, dict) else {}
@@ -191,20 +258,265 @@ def retry_after(headers, now):
         return 0
 
 
+def matched_claude_watch(runtime, runtime_rows, watched):
+    email = str(runtime.get('email') or '').casefold()
+    matches = [a for a in watched if a.get('provider', 'claude') == 'claude' and email
+               and str(a.get('email') or '').casefold() == email]
+    unique = sum(str(r.get('email') or '').casefold() == email for r in runtime_rows) == 1
+    return matches[0] if len(matches) == 1 and unique else None
+
+
+def active_primary_watch(watch, now):
+    # Only A's endpoint reader owns polling; B's independent CLI windows do not.
+    # Attempts, including failures, establish activity for fifteen minutes, and
+    # a scheduled retry (such as a 429 cooldown) keeps it until that retry is due.
+    # A successful daily schedule is not a backoff: once a usage window expires,
+    # let the gateway's event-driven reader take over. Keep real failure holds.
+    if (watch and watch.get('status') in ('ok', 'stale') and not watch.get('error')
+            and (not observation_fresh(watch, now) or any(
+                w.get('kind') == 'weekly_model' and epoch(w.get('resets_at')) is not None
+                and epoch(w['resets_at']) <= now for w in watch.get('windows', [])))):
+        return False
+    attempted = epoch(watch.get('attempted_at')) if watch else None
+    retry = epoch(watch.get('next_attempt_at')) if watch else None
+    recent = attempted is not None and 0 <= now - attempted <= PRIMARY_WATCH_MAX_AGE
+    cooling = (attempted is not None and retry is not None and attempted <= now < retry
+               and retry - now <= PRIMARY_WATCH_MAX_COOLDOWN)
+    return (watch is not None and watch.get('id') == 'claude'
+            and watch.get('independent_windows') is False and (recent or cooling))
+
+
 class UsageCache:
-    """One in-flight request and a non-bypassable budget per credential.
+    """One in-flight request, scheduled budget and manual budget per credential.
 
     Scheduling uses a monotonic clock; published observations use wall time.
-    Jitter is additive (0..30 s), so no caller can poll sooner than 300 s.
+    Claude/Codex reads follow events, each usage reset that passes after the last
+    read, and a jittered daily safety check.
+    Manual/redemption reads bypass local delays, never provider Retry-After.
     Failed attempts retain original successful timestamps, never response bodies.
     """
-    def __init__(self, clock=time.monotonic, wall_clock=time.time, jitter=None):
+    def __init__(self, clock=time.monotonic, wall_clock=time.time, jitter=None, *,
+                 interval=None, headers=True, allow_empty=False, daily_jitter=None):
         self.clock, self.wall_clock = clock, wall_clock
         self.jitter = jitter if jitter is not None else lambda: random.uniform(0, 30)
+        self.daily_jitter = daily_jitter or (lambda: random.uniform(0, 3600))
         self.lock = threading.Lock()
         self.entries = {}
+        self.pending = set()
+        self.interval, self.headers, self.allow_empty = interval, headers, allow_empty
 
-    def fetch(self, file, call):
+    def _headers(self, file, view, normalize):
+        import quota_headers
+        evidence = quota_headers.payload(file, self.wall_clock()) if self.headers else None
+        if evidence is None:
+            return view, False
+        body, measured = evidence
+        if view.get('auth_state') == 'sign_in_required' and epoch(measured) > (epoch(view.get('attempted_at')) or 0):
+            # Traffic that succeeded after the failed read proves the credential works again.
+            view = {k: v for k, v in view.items() if k != 'auth_state'}
+        normalized = (normalize or normalize_claude)(body)
+        windows = []
+        used_headers = False
+        for row in normalized['windows']:
+            # Status belongs only to validated header readings, never endpoint payloads.
+            if file.get('type') == 'claude' and body.get(row.get('kind'), {}).get('status') is not None:
+                row['status'] = body[row['kind']]['status']
+            previous = next((w for w in view.get('windows', [])
+                if (w.get('seconds') == row.get('seconds') if file.get('type') == 'codex'
+                    else (w.get('slot'), w.get('kind')) == (row.get('slot'), row.get('kind')))), {})
+            if ((epoch(previous.get('measured_at', view.get('checked_at'))) or 0) >= epoch(measured)
+                    and number(previous.get('remaining'))
+                    and window_fresh(previous, view.get('checked_at'), self.wall_clock(), primary=True)):
+                windows.append(copy.deepcopy(previous))
+                if file.get('type') == 'codex':
+                    # Slots are positional; keep this duration in the currently reported slot.
+                    windows[-1]['slot'] = row['slot']
+            else:
+                windows.append(dict(row, measured_at=measured, usage_source='headers'))
+                used_headers = True
+        for previous in view.get('windows', []):
+            omitted = (previous.get('seconds') in (18000, 604800)
+                and not any(r.get('seconds') == previous['seconds'] for r in windows)
+                if file.get('type') == 'codex' else previous.get('kind') == 'five_hour'
+                and not any(r.get('kind') == 'five_hour' for r in windows))
+            if (omitted and (epoch(previous.get('measured_at', view.get('checked_at'))) or 0) > epoch(measured)
+                    and window_fresh(previous, view.get('checked_at'), self.wall_clock(), primary=True)):
+                carried = copy.deepcopy(previous)
+                if file.get('type') == 'codex':
+                    # Carry actual newer evidence only. If primary changed duration,
+                    # use the free slot without changing the carried measurement.
+                    carried['slot'] = next(slot for slot in ('primary_window', 'secondary_window')
+                        if not any(r.get('slot') == slot for r in windows))
+                windows.append(carried)
+        # Keep the native Codex projection aligned with only the selected real windows,
+        # even when every selected reading comes from a newer active observation.
+        if '_t3_usage' in normalized:
+            projection = normalized['_t3_usage'] if used_headers else copy.deepcopy(view['_t3_usage'])
+            projection['body']['rate_limit'] = {row['slot']: dict(
+                used_percent=row['used'], reset_at=row['resets_at'], limit_window_seconds=row['seconds'])
+                for row in windows}
+            normalized['_t3_usage'] = projection
+            if not used_headers:
+                view = dict(view, windows=windows, _t3_usage=projection)
+        if not used_headers:
+            if all(w.get('usage_source') == 'headers' for w in windows):
+                return dict(view, status='ok', error=None,
+                    usage_endpoint_error=view.get('error') or view.get('usage_endpoint_error')), True
+            return view, True
+        measured = max(w['measured_at'] for w in windows)
+        # Primary traffic cannot refresh optional model/spend/reset observations.
+        windows += [copy.deepcopy(w) for w in view.get('windows', []) if w.get('kind') == 'weekly_model']
+        safe = {k: v for k, v in normalized.items() if k not in ('windows', 'extra_usage', 'recovery_windows')}
+        return dict(view, **safe, windows=windows, status='ok', error=None,
+                    checked_at=measured, usage_checked_at=measured,
+                    usage_source='headers', fresh_until=stamp(min(
+                        epoch(w['resets_at']) for w in windows if w.get('kind') != 'weekly_model'
+                        and epoch(w.get('resets_at')) is not None)) if any(
+                            epoch(w.get('resets_at')) is not None for w in windows
+                            if w.get('kind') != 'weekly_model') else None), True
+
+    def _events(self, key, entry, file, windows):
+        """Called under the cache lock; consume each episode/reset edge once."""
+        now = self.wall_clock()
+        if not cooled_down(file, now):
+            entry['episode'] = None
+            return
+        episode = entry.get('episode')
+        trigger = episode is None
+        if trigger:
+            episode = dict(started_at=now, resets=set(), consumed=set(), recovery=None)
+            entry['episode'] = episode
+        deadlines = [epoch(w.get('resets_at')) for w in windows]
+        deadlines.append(epoch(file.get('next_retry_after')))
+        episode['resets'].update(at for at in deadlines if at is not None and at > episode['started_at'])
+        passed = {at for at in episode['resets'] if at <= now} - episode['consumed']
+        if passed:
+            episode['consumed'].update(passed)
+            trigger = True
+        if trigger:
+            self.pending.add(key)
+            entry['due'] = entry.get('provider_due', 0)
+            entry['invalidated'] = entry['inflight']
+
+    def available(self, file, provider_retry_at=None):
+        supported = file.get('type') in ('codex', 'claude', 'xai') and not api_keys.is_api_key_row(file)
+        with self.lock:
+            entry = self.entries.get((file.get('type'), file.get('auth_index')), {})
+            remaining = max(0, entry.get('provider_due', 0) - self.clock(),
+                            entry.get('manual_due', 0) - self.clock(),
+                            (epoch(provider_retry_at) or 0) - self.wall_clock())
+        return dict(supported=supported, available_at=stamp(self.wall_clock() + remaining)
+                    if supported and remaining > 0 else None)
+
+    def due_now(self, file):
+        # Redemption/sign-in may bypass local delays, but never provider deadlines.
+        with self.lock:
+            self.pending.add((file.get('type'), file.get('auth_index')))
+            entry = self.entries.get((file.get('type'), file.get('auth_index')))
+            if entry is not None:
+                entry['due'] = entry.get('provider_due', 0)
+                entry['invalidated'] = entry['inflight']
+
+    def signed_in(self, file):
+        # A confirmed sign-in replaced the credential an earlier 401 was read with.
+        with self.lock:
+            entry = self.entries.get((file.get('type'), file.get('auth_index')))
+            if entry is not None and entry['binding'] == (file.get('name'), file.get('email')):
+                entry['view'].pop('auth_state', None)
+        self.due_now(file)
+
+    def event_due(self, file):
+        """Let Claude read its profile before a due usage event, on the same budget."""
+        key = (file.get('type'), file.get('auth_index'))
+        with self.lock:
+            entry = self.entries.get(key)
+            if not entry or entry['binding'] != (file.get('name'), file.get('email')):
+                return False
+            self._events(key, entry, file, entry['view'].get('windows', []))
+            return not entry['inflight'] and self.clock() >= max(
+                entry['due'], entry.get('provider_due', 0), entry.get('scheduled_retry_due', 0))
+
+    def recovery_view(self, file):
+        with self.lock:
+            entry = self.entries.get((file.get('type'), file.get('auth_index')), {})
+            if entry.get('binding') != (file.get('name'), file.get('email')):
+                return None
+            return copy.deepcopy(entry.get('last_recovery'))
+
+    def recover(self, file, profile, call, extra_windows=()):
+        """Reserve one attempt per observed episode before calling loopback management."""
+        key = (file.get('type'), file.get('auth_index'))
+        now = self.wall_clock()
+        with self.lock:
+            entry = self.entries.get(key, {})
+            episode, view = entry.get('episode'), entry.get('view', {})
+            if (not episode or episode.get('recovery') is not None or not cooled_down(file, now)
+                    or entry.get('binding') != (file.get('name'), file.get('email'))
+                    or view.get('status') != 'ok' or view.get('error')):
+                return
+            if file.get('type') == 'claude':
+                if (not profile.get('current') or profile.get('state') != 'ok'
+                        or profile.get('subscription_status') in ('canceled', 'cancelled', 'expired',
+                            'incomplete_expired', 'past_due', 'unpaid', 'incomplete')
+                        or not (profile.get('subscription_status') in ('active', 'trialing')
+                                or profile.get('entitled') is True)):
+                    return
+                primary = [w for w in view.get('windows', []) if w.get('kind') in ('five_hour', 'seven_day')]
+                if ([w.get('kind') for w in primary].count('seven_day') != 1
+                        or [w.get('kind') for w in primary].count('five_hour') > 1):
+                    return
+            elif file.get('type') == 'codex':
+                primary = [w for w in view.get('windows', []) if w.get('slot') in ('primary_window', 'secondary_window')]
+                if (sorted(w.get('slot') for w in primary) != ['primary_window', 'secondary_window']
+                        or any(w.get('status') != 'allowed' for w in primary)):
+                    return
+            else:
+                return
+            for row in primary:
+                measured = epoch(row.get('measured_at', view.get('checked_at')))
+                if (measured is None or not episode['started_at'] < measured <= now
+                        or not window_fresh(row, view.get('checked_at'), now, primary=True)
+                        or not number(row.get('remaining')) or not 0 < row['remaining'] <= 100
+                        or row.get('status') == 'rejected'):
+                    return
+            for row in list(view.get('windows', [])) + view.get('recovery_windows', []) + list(extra_windows):
+                if row in primary or row.get('kind') in ('five_hour', 'seven_day'):
+                    continue
+                # Malformed evidence is ambiguous. An elapsed model block is harmless;
+                # an unexpired exhausted model blocks this all-model management API.
+                remaining, reset = row.get('remaining'), epoch(row.get('resets_at'))
+                measured = epoch(row.get('measured_at', view.get('checked_at')))
+                if (not number(remaining) or not 0 <= remaining <= 100 or row.get('invalid_reset')
+                        or measured is None or measured > now
+                        or remaining == 0 and (reset is None or reset > now)
+                        or remaining > 0 and (reset is None or reset > now)
+                        and not window_fresh(row, view.get('checked_at'), now)):
+                    return
+            result = dict(episode_started_at=stamp(episode['started_at']),
+                          attempted_at=stamp(now), outcome='pending')
+            episode['recovery'] = result
+            entry['last_recovery'] = result
+        response = None
+        try:
+            response = call('/reset-quota', {'auth_index': key[1]},
+                            episode=episode, episode_started_at=episode['started_at'])
+            ok = isinstance(response, dict) and (response.get('status') == 'ok' or response.get('ok') is True)
+        except Exception:
+            ok = False
+        with self.lock:
+            result.update(outcome='superseded' if isinstance(response, dict) and response.get('status') == 'superseded'
+                          else 'cleared' if ok else 'failed', completed_at=stamp(self.wall_clock()))
+        return copy.deepcopy(result)
+
+    def cached(self, file):
+        with self.lock:
+            entry = self.entries.get((file.get('type'), file.get('auth_index')))
+            if entry and entry['binding'] == (file.get('name'), file.get('email')):
+                return copy.deepcopy(entry['view'])
+        return None
+
+    def fetch(self, file, call, *, runtime_rows=(), watched=(), manual=False, force=False,
+              request_body=None, normalize=None, provider_retry_at=None, event_windows=()):
         # Aliases for one auth_index share the budget but never inherit another
         # filename/email binding's observation.
         key = (file.get('type'), file.get('auth_index'))
@@ -213,45 +525,159 @@ class UsageCache:
                      provider=file.get('type'), email=file.get('email'), id=file.get('name'),
                      windows=[], status='unavailable', error=None, checked_at=None,
                      usage_checked_at=None, usage_source='gateway', attempted_at=None)
-        if file.get('type') not in ('claude', 'xai') or not file.get('name') or not file.get('auth_index'):
+        if (file.get('type') not in ('codex', 'claude', 'xai') or not file.get('name')
+                or not file.get('auth_index') or api_keys.is_api_key_row(file)):
             return empty
+        watch = matched_claude_watch(file, runtime_rows, watched) if file['type'] == 'claude' else None
+        provider_retry_at = provider_retry_at or (watch or {}).get('provider_retry_at')
+        with self.lock:
+            pending = key in self.pending
+            entry = self.entries.get(key)
+            if entry and entry['binding'] != binding and not entry['inflight']:
+                self.pending.discard(key)
+                entry.update(binding=binding, view=empty, episode=None, last_recovery=None,
+                             due=entry['due'], failures=0)
+                entry.pop('invalidated', None)
+            if (entry and entry['binding'] == binding and not cooled_down(file, self.wall_clock())):
+                entry['episode'] = None
+        if (not (manual or force) and not pending and not cooled_down(file, self.wall_clock())
+                and file['type'] == 'claude' and active_primary_watch(watch, self.wall_clock())
+                and not file.get('quota')):
+            return self.cached(file) or empty
         with self.lock:
             entry = self.entries.setdefault(key, dict(view=empty, binding=binding,
                                                        due=0, inflight=False, failures=0))
-            if entry['inflight'] or self.clock() < entry['due']:
+            if entry['binding'] == binding and file['type'] in ('claude', 'codex'):
+                self._events(key, entry, file, list(entry['view'].get('windows', [])) + list(event_windows))
+            pending = key in self.pending
+        if (not (manual or force or pending) and file['type'] == 'claude'
+                and active_primary_watch(watch, self.wall_clock()) and not file.get('quota')):
+            return self.cached(file) or empty
+        with self.lock:
+            entry = self.entries.setdefault(key, dict(view=empty, binding=binding,
+                                                       due=0, inflight=False, failures=0))
+            if entry['binding'] == binding:
+                entry['view'], has_headers = self._headers(file, entry['view'], normalize)
+            else:
+                has_headers = False
+            pending = key in self.pending
+        if not (manual or force or pending) and file['type'] == 'claude' and active_primary_watch(
+                watch, self.wall_clock()):
+            # Leave the credential's cached view and retry budget untouched.
+            return self.cached(file) or empty
+        with self.lock:
+            entry = self.entries.setdefault(key, dict(view=empty, binding=binding,
+                                                       due=0, inflight=False, failures=0))
+            external = max(0, (epoch(provider_retry_at) or 0) - self.wall_clock())
+            entry['provider_due'] = max(entry.get('provider_due', 0), self.clock() + external)
+            if manual:
+                if entry['inflight']:
+                    raise RefreshError('busy', 409)
+                retry = max(entry.get('provider_due', 0), entry.get('manual_due', 0))
+                if self.clock() < retry:
+                    raise RefreshError('rate_limited', 429, stamp(self.wall_clock() + retry - self.clock()))
+                entry['manual_due'] = self.clock() + 60
+            if force:
+                entry['due'] = entry.get('provider_due', 0)
+                entry['invalidated'] = entry['inflight']
+            # A reading whose reset passed unrefreshed is due without forcing a profile read.
+            reset_due = (file['type'] in ('claude', 'codex') and entry['binding'] == binding and not entry['failures']
+                         and bool(passed_resets(entry['view'].get('windows', []),
+                                                entry.get('read_at'), self.wall_clock())))
+            if entry['inflight'] or (not manual and (
+                    self.clock() < max(entry['provider_due'], entry.get('scheduled_retry_due', 0))
+                    or self.clock() < entry['due'] and not reset_due)):
                 return copy.deepcopy(entry['view']) if entry['binding'] == binding else empty
             view = copy.deepcopy(entry['view']) if entry['binding'] == binding else empty
-            entry.update(inflight=True, binding=binding, view=copy.deepcopy(view))
+            self.pending.discard(key)
+            entry.update(inflight=True, binding=binding, view=copy.deepcopy(view), read_at=self.wall_clock())
         view['attempted_at'] = stamp(self.wall_clock())
         wait = 0
+        provider_wait = 0
         success = False
+        rate_limited = False
         try:
-            response = call('/api-call', request(file))
+            response = call('/api-call', request_body if request_body is not None else request(file))
             status = response.get('status_code')
+            rate_limited = status == 429
             if status == 429 or (type(status) is int and 500 <= status <= 599):
-                wait = retry_after(response.get('header'), self.wall_clock())
+                provider_wait = retry_after(response.get('header'), self.wall_clock())
+                wait = provider_wait
+            if status == 401:
+                view['auth_state'] = 'sign_in_required'
             if status != 200:
                 raise ValueError('http')
-            normalized = (normalize_claude if file['type'] == 'claude' else normalize_xai)(response.get('body'))
-            if not normalized['windows']:
+            normalized = (normalize or (normalize_claude if file['type'] == 'claude' else normalize_xai))(response.get('body'))
+            if not normalized['windows'] and file['type'] != 'codex' and not self.allow_empty:
                 raise ValueError('no_usage_data')
+            if file['type'] == 'claude' and normalize is None and 'extra_usage' not in record(response.get('body')):
+                normalized.pop('extra_usage', None)
+            known_models = {w.get('model', '').casefold() for w in normalized['windows'] if w.get('kind') == 'weekly_model'}
+            normalized['windows'] += [copy.deepcopy(w) for w in view.get('windows', [])
+                if w.get('kind') == 'weekly_model' and w.get('model', '').casefold() not in known_models]
             checked = stamp(self.wall_clock())
-            for row in normalized['windows']:
-                row.update(measured_at=checked, usage_source='gateway')
-            view.update(normalized, status='ok', error=None, checked_at=checked, usage_checked_at=checked)
+            # A successful read proves the credential works; drop any earlier 401 marker.
+            view.pop('auth_state', None)
+            for row in normalized['windows'] + normalized.get('recovery_windows', []):
+                if 'measured_at' not in row:
+                    row.update(measured_at=checked, usage_source='gateway')
+            view.update(normalized, status='ok', error=None, checked_at=checked, usage_checked_at=checked,
+                        fresh_until=None, usage_source='gateway')
+            for field in ('extra_usage', 'resets', 'recovery_windows'):
+                if field in normalized:
+                    view[field + '_checked_at'] = checked
             success = True
         except Exception as error:
             # Outer management HTTP errors may carry their own Retry-After.
+            rate_limited = rate_limited or getattr(error, 'code', None) == 429
             if getattr(error, 'code', None) == 429 or (isinstance(getattr(error, 'code', None), int)
                                                       and 500 <= error.code <= 599):
-                wait = max(wait, retry_after(getattr(error, 'headers', None), self.wall_clock()))
-            view.update(status='error', error='usage_unavailable')
+                provider_wait = max(provider_wait, retry_after(getattr(error, 'headers', None), self.wall_clock()))
+                wait = max(wait, provider_wait)
+            if rate_limited:
+                wait = max(3600, wait)
+            view.update(status='error', error='http_429' if rate_limited else 'usage_unavailable')
         finally:
             with self.lock:
-                entry['failures'] = 0 if success else min(5, entry['failures'] + 1)
-                backoff = 0 if success else min(3600, INTERVAL * 2 ** (entry['failures'] - 1))
+                entry['failures'] = 0 if success else min(10, entry['failures'] + 1)
+                backoff = 0 if success else min(86400, INTERVAL * 2 ** (entry['failures'] - 1))
+                normal = self.interval or (86400 + self.daily_jitter() if success and file['type'] in ('codex', 'claude') else INTERVAL)
+                jitter = self.jitter()
+                delay = exhausted_delay(view['windows'], self.wall_clock())
+                scheduled = normal + (0 if file['type'] == 'codex' or normal >= 86400 else jitter) if delay is None else delay
+                local_backoff = backoff + jitter if backoff else 0
+                retry_wait = wait + jitter if wait and (rate_limited or delay is None) else wait
+                if success and delay is not None:
+                    grace = 60 if file['type'] == 'codex' else INTERVAL
+                    view['fresh_until'] = stamp(self.wall_clock() + scheduled + grace)
+                # Inventory reads can publish newer real traffic during this request.
+                current = entry['view']
+                if ((epoch(current.get('checked_at')) or 0) > (epoch(view.get('checked_at')) or 0)
+                        or current.get('usage_source') == 'headers' and
+                        (epoch(current.get('checked_at')) or 0) > (epoch(view.get('attempted_at')) or 0)):
+                    latest = copy.deepcopy(current)
+                    models = {w.get('model', '').casefold(): copy.deepcopy(w)
+                              for w in latest.get('windows', []) if w.get('kind') == 'weekly_model'}
+                    for row in view.get('windows', []):
+                        name = row.get('model', '').casefold()
+                        if row.get('kind') == 'weekly_model' and (epoch(row.get('measured_at')) or 0) > (
+                                epoch(models.get(name, {}).get('measured_at')) or 0):
+                            models[name] = copy.deepcopy(row)
+                    latest['windows'] = [w for w in latest.get('windows', [])
+                                         if w.get('kind') != 'weekly_model'] + list(models.values())
+                    for field in ('extra_usage', 'resets', 'recovery_windows'):
+                        measured_field = field + '_checked_at'
+                        if (epoch(view.get(measured_field)) or 0) > (epoch(latest.get(measured_field)) or 0):
+                            latest[field] = copy.deepcopy(view[field])
+                            latest[measured_field] = view[measured_field]
+                    view = latest
+                view, _ = self._headers(file, view, normalize)
                 entry.update(view=view, inflight=False,
-                             due=self.clock() + max(INTERVAL, backoff, wait) + self.jitter())
+                             provider_due=max(entry['provider_due'], self.clock() + provider_wait),
+                             scheduled_retry_due=self.clock() + 3600 if rate_limited else 0,
+                             due=self.clock() + max(scheduled, local_backoff, retry_wait))
+                if entry.pop('invalidated', False) and not rate_limited:
+                    entry['due'] = entry['provider_due']
         return copy.deepcopy(view)
 
 
@@ -269,23 +695,22 @@ def claude_observation(runtime, runtime_rows, watched, now=None):
     """Select usage; email joins only attach unambiguous watch observations."""
     now = time.time() if now is None else now
     email = str(runtime.get('email') or '').casefold()
-    matches = [a for a in watched if a.get('provider', 'claude') == 'claude' and email
-               and str(a.get('email') or '').casefold() == email]
-    unique = sum(str(r.get('email') or '').casefold() == email for r in runtime_rows) == 1
-    watch = matches[0] if len(matches) == 1 and unique else None
+    watch = matched_claude_watch(runtime, runtime_rows, watched)
     gateway = runtime.get('_gateway_usage') or {}
     if (gateway.get('provider') != 'claude' or gateway.get('key') != runtime.get('key', runtime.get('name'))
             or gateway.get('auth_index') != runtime.get('auth_index')
             or str(gateway.get('email') or '').casefold() != email):
         gateway = {}
-    primary = gateway.get('status') == 'ok' and not gateway.get('error') and fresh(gateway.get('checked_at'), now)
+    newer = ((epoch(gateway.get('checked_at')) or 0) > (epoch((watch or {}).get('checked_at')) or 0))
+    primary = ((not active_primary_watch(watch, now) or newer) and gateway.get('status') == 'ok'
+               and not gateway.get('error') and observation_fresh(gateway, now))
     selected = gateway if primary else watch if watch is not None else gateway
     if not selected:
         return {}
     view = copy.deepcopy(selected)
-    source = 'gateway' if selected is gateway else 'watch'
+    source = gateway.get('usage_source', 'gateway') if selected is gateway else 'watch'
     view.update(usage_source=source, usage_checked_at=view.get('checked_at'))
-    if view.get('status') == 'ok' and not fresh(view.get('checked_at'), now):
+    if view.get('status') == 'ok' and not observation_fresh(view, now):
         view['status'] = 'stale'
     if watch is not None:
         view.update(watch_checked_at=watch.get('checked_at'), watch_attempted_at=watch.get('attempted_at'),
@@ -295,23 +720,38 @@ def claude_observation(runtime, runtime_rows, watched, now=None):
     if primary and watch is not None:
         # Do not overwrite gateway usage/status/time with watch metadata.
         view['id'] = watch.get('id', view.get('id'))
-        for field in ('plan', 'resets'):
+        for field in ('plan', 'resets', 'extra_usage'):
             if view.get(field) is None and watch.get(field) is not None:
                 view[field] = copy.deepcopy(watch[field])
         if watch.get('resets') is not None:
             view['resets_checked_at'] = watch.get('checked_at')
-        has_fable = any(w.get('model', '').casefold() == 'fable' for w in view.get('windows', []))
+        if watch.get('extra_usage') is not None and gateway.get('extra_usage') is None:
+            view['extra_usage_checked_at'] = watch.get('checked_at')
+        has_fable = any(w.get('model', '').casefold() == 'fable'
+                        and window_fresh(w, view.get('checked_at'), now) for w in view.get('windows', []))
         if not has_fable:
             for row in watch.get('windows', []):
                 measured = row.get('measured_at', watch.get('checked_at'))
                 if (row.get('kind') == 'weekly_model' and row.get('model', '').casefold() == 'fable'
-                        and fresh(measured, now) and number(row.get('used'))
-                        and (row.get('resets_at') is None or
-                             (number(row['resets_at']) and row['resets_at'] > now))):
+                        and window_fresh(row, watch.get('checked_at'), now) and number(row.get('used'))):
+                    view['windows'] = [w for w in view.get('windows', []) if w.get('model', '').casefold() != 'fable']
                     view['windows'].append(dict(copy.deepcopy(row), measured_at=measured, usage_source='watch'))
                     break
     for row in view.get('windows', []):
         row.setdefault('measured_at', view.get('checked_at'))
         row.setdefault('usage_source', source)
         row.setdefault('used_pct', row.get('used'))
+        # Primary traffic/deferred freshness cannot carry a model percentage into its next window.
+        if row.get('kind') == 'weekly_model' and not window_fresh(row, view.get('checked_at'), now):
+            row.update(used=None, used_pct=None, remaining=None)
     return view
+
+
+def claude_near_limit_windows(view, now):
+    """Only current primary header warnings can demote an account."""
+    checked = view.get('checked_at', view.get('quota_checked_at'))
+    return [row['kind'] for row in view.get('windows', [])
+            if row.get('kind') in ('five_hour', 'seven_day')
+            and row.get('usage_source', view.get('usage_source')) == 'headers'
+            and row.get('status') == 'allowed_warning'
+            and window_fresh(row, checked, now, primary=True)]

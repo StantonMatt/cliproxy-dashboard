@@ -263,8 +263,38 @@ class HubTests(unittest.TestCase):
         self.cache['watch_accounts'] = [{**self.cache['watch_accounts'][0], 'email': 'replacement@example.test'}]
         self.assertEqual(self.usage('claude')[1]['status_code'], 503)
 
+    def test_aged_exhausted_observations_remain_available_only_until_fresh_until(self):
+        for provider in ('codex', 'claude'):
+            self.cache = fixture()
+            if provider == 'codex':
+                row = self.cache['accounts'][0]
+                row['quota_checked_at'] = stamp(NOW - 1800)
+                row['_t3_usage']['body']['rate_limit']['primary_window']['used_percent'] = 100
+            else:
+                row = self.cache['watch_accounts'][0]
+                row.update(checked_at=stamp(NOW - 1800))
+                for window in row['windows']:
+                    window['measured_at'] = stamp(NOW - 1800)
+                row['windows'][0]['used'] = 100
+            row['fresh_until'] = stamp(NOW + 60)
+            status, envelope = self.usage(provider)
+            self.assertEqual((status, envelope['status_code']), (200, 200))
+            if provider == 'claude':
+                # Last-known model windows retain their own reset and measurement.
+                self.assertIn('limits', json.loads(envelope['body']))
+            row['fresh_until'] = stamp(NOW - 1)
+            self.assertEqual(self.usage(provider)[1]['status_code'], 200)
+            if provider == 'claude':
+                row['windows'][0]['resets_at'] = NOW
+            else:
+                row['_t3_usage']['body']['rate_limit']['primary_window']['reset_at'] = NOW
+            if provider == 'claude':
+                self.assertEqual(self.usage(provider)[1]['status_code'], 503)
+            else:
+                self.assertEqual(self.usage(provider)[1]['status_code'], 503)
+
     def test_stale_failed_future_and_missing_windows_never_zero(self):
-        for key, invalid in (('quota_checked_at', stamp(NOW - 181)), ('quota_checked_at', stamp(NOW + 1)),
+        for key, invalid in (('quota_checked_at', stamp(NOW + 1)),
                              ('quota_checked_at', None), ('quota_error', 'failed')):
             self.cache = fixture()
             self.cache['accounts'][0][key] = invalid
@@ -276,7 +306,7 @@ class HubTests(unittest.TestCase):
             self.cache[key] = invalid
             for provider in ('codex', 'claude'):
                 self.assertEqual(self.usage(provider)[1]['status_code'], 503)
-        for changed in (dict(status='error'), dict(status='stale'), dict(checked_at=stamp(NOW - 901)),
+        for changed in (dict(status='error'), dict(status='stale'),
                         dict(checked_at=stamp(NOW + 1)), dict(windows=[])):
             self.cache = fixture()
             self.cache['watch_accounts'][0].update(changed, id='claude', independent_windows=False)
@@ -285,30 +315,34 @@ class HubTests(unittest.TestCase):
         self.cache['accounts'][0]['_t3_usage']['body']['rate_limit'] = {}
         self.assertEqual(self.usage()[1]['status_code'], 503)
         # A secondary-only observation must retain its actual slot.
-        self.cache['accounts'][0]['_t3_usage']['body']['rate_limit']['secondary_window'] = {'used_percent': 19}
+        self.cache['accounts'][0]['_t3_usage']['body']['rate_limit']['secondary_window'] = {'used_percent': 19, 'reset_at': NOW + 2000}
         body = json.loads(self.usage()[1]['body'])
-        self.assertEqual(body['rate_limit'], {'secondary_window': {'used_percent': 19}})
+        self.assertEqual(body['rate_limit'], {'secondary_window': {'used_percent': 19, 'reset_at': NOW + 2000}})
 
     def test_claude_b_independent_ages_and_absent_windows(self):
         windows = self.cache['watch_accounts'][0]['windows']
         windows[-1]['measured_at'] = stamp(NOW - 901)
         body = json.loads(self.usage('claude')[1]['body'])
-        self.assertNotIn('limits', body)
-        windows[0]['measured_at'] = stamp(NOW - 901)
+        self.assertIn('limits', body)
+        windows[0]['measured_at'] = stamp(NOW + 1)
+        self.assertEqual(self.usage('claude')[1]['status_code'], 503)
+        # Absent 5h is permitted; an explicitly malformed reported 5h is not.
+        windows.pop(0)
         body = json.loads(self.usage('claude')[1]['body'])
         self.assertNotIn('five_hour', body)
         self.assertEqual(body['seven_day']['utilization'], 24)
-        windows[1]['used'] = None
+        windows[0]['used'] = None
         self.assertEqual(self.usage('claude')[1]['status_code'], 503)
         self.cache = fixture()
-        self.cache['watch_accounts'][0]['id'] = 'claude'
-        self.cache['watch_accounts'][0]['independent_windows'] = False
-        self.cache['watch_accounts'][0]['windows'] = [{'kind': 'seven_day_sonnet', 'used': 18, 'resets_at': None}]
-        self.assertEqual(json.loads(self.usage('claude')[1]['body'])['limits'][0]['scope']['model']['display_name'], 'Sonnet')
-        self.cache['watch_accounts'][0]['windows'][0]['invalid_reset'] = True
+        self.cache['watch_accounts'][0].update(id='claude', independent_windows=False,
+            windows=[{'kind': 'seven_day_sonnet', 'used': 18, 'resets_at': None}])
         self.assertEqual(self.usage('claude')[1]['status_code'], 503)
 
     def test_projection_allowlist_and_numeric_validation(self):
+        for invalid in (None, True, '10', -1, 101, float('nan'), float('inf')):
+            self.cache = fixture()
+            self.cache['watch_accounts'][0]['windows'][0]['used'] = invalid
+            self.assertEqual(self.usage('claude')[1]['status_code'], 503)
         for invalid in (None, True, '10', -1, 101, float('nan'), float('inf'), 10 ** 400):
             result = hub.codex_projection({'rate_limit': {'primary_window': {'used_percent': invalid}}}, 'identity')
             self.assertEqual(result['body'], {'rate_limit': {}})
@@ -341,23 +375,31 @@ class CacheIntegrationTests(unittest.TestCase):
             key.write_text(json.dumps({'linux': LINUX_KEY, 'mac': MAC_KEY}))
             watch = root / 'claude.json'
             watch.write_text(json.dumps(dict(email='claude@example.test', status='ok', checked_at=stamp(NOW),
-                windows=[dict(kind='five_hour', used=13, resets_at=NOW + 2000)])))
+                windows=[dict(kind='seven_day', used=13, resets_at=NOW + 2000)])))
             watch.with_name('claude-b.json').write_text(json.dumps(dict(email='claude-b@example.test', status='ok',
-                checked_at=stamp(NOW), windows=[dict(kind='five_hour', used=25, resets_at=NOW + 2000,
+                checked_at=stamp(NOW), windows=[dict(kind='seven_day', used=25, resets_at=NOW + 2000,
                     measured_at=stamp(NOW - 10))])))
             file = dict(type='codex', name='private-file.json', auth_index='runtime-a', email='codex@example.test',
                         disabled=False, id_token={'chatgpt_account_id': 'workspace-a', 'plan_type': 'pro'})
             with patch.object(app, 'utcnow', return_value=stamp(NOW)):
-                account = app.fetch_account(file, call=Mock(return_value={'status_code': 200, 'body': json.dumps({
-                    'plan_type': 'pro', 'rate_limit': {'primary_window': {'used_percent': 37}}})}))
+                account = app.fetch_account(file, cache=app.usage_adapters.UsageCache(
+                    wall_clock=lambda: NOW), call=Mock(return_value={'status_code': 200, 'body': json.dumps({
+                    'plan_type': 'pro', 'rate_limit': {'primary_window': {'used_percent': 37, 'reset_at': NOW + 2000}}})}))
             app.account_access.AccountAccess().project(file, account)
             state = object.__new__(app.GatewayState)
             state.lock, state.running = threading.Lock(), False
+            state.notices = app.NoticeStore(root / 'notices.json', root)
+            state.models_cache = app.providers.ModelsCache()
+            state.profiles = app.subscriptions.Profiles(wall_clock=lambda: NOW)
+            state.codex_billing = app.subscriptions.CodexBilling(wall_clock=lambda: NOW)
+            state.usage_cache = app.usage_adapters.UsageCache(wall_clock=lambda: NOW)
             state.data = dict(online=True, checked_at=stamp(NOW), accounts=[account], claude_accounts=[
                 dict(auth_index='c-a', email='claude@example.test', routing_id='ca'),
                 dict(auth_index='c-b', email='claude-b@example.test', routing_id='cb')])
             state.fast_modes, state.resets, state.signins = Mock(), Mock(), Mock()
             state.fast_modes.views.return_value = {}
+            state.catalog = Mock()
+            state.catalog.view.return_value = {}
             state.resets.view.return_value = {}
             state.signins.view.return_value = {}
             stack.enter_context(patch.object(app, 'CLAUDE_USAGE', watch))
@@ -416,15 +458,16 @@ class CacheIntegrationTests(unittest.TestCase):
                 response.read()
                 client.close()
             self.assertEqual(request('GET', '/v0/management/auth-files', headers={'Origin': 'null'})[0], 403)
-            # Exercise the real B parser: its aggregate status is stale, but one window is fresh.
+            # A weekly-only B observation also passes through the real snapshot parser.
             b_path = watch.with_name('claude-b.json')
             b_path.write_text(json.dumps(dict(email='claude-b@example.test', status='ok', checked_at=stamp(NOW), windows=[
-                dict(kind='five_hour', used=25, resets_at=NOW + 2000, measured_at=stamp(NOW - 901)),
                 dict(kind='seven_day', used=45, resets_at=NOW + 2000, measured_at=stamp(NOW - 10)),
                 dict(kind='weekly_model', model='Fable', used=15, resets_at=NOW + 2000, measured_at=stamp(NOW - 901))])))
             b_account = next(a for a in listed['files'] if a['email'] == 'claude-b@example.test')
             b_body = json.loads(request('POST', '/v0/management/api-call', polling(b_account))[1]['body'])
-            self.assertEqual(b_body, {'seven_day': {'utilization': 45, 'resets_at': stamp(NOW + 2000)}})
+            self.assertEqual(b_body['seven_day'], {'utilization': 45, 'resets_at': stamp(NOW + 2000)})
+            self.assertNotIn('five_hour', b_body)
+            self.assertEqual(b_body['limits'][0]['percent'], 15)
             # Missing hub keys leave ordinary static routes and dashboard request guards intact.
             key.unlink()
             self.assertEqual(request('GET', '/v0/management/auth-files')[0], 401)

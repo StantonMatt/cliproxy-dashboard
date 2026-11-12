@@ -2,7 +2,7 @@
 
 Every 60 seconds, the dashboard reads Codex entries from the gateway's
 management auth-file list. The explicit nested `id_token.plan_type` claim supplies
-the plan label: `prolite` displays **Pro 100**, and unfamiliar non-empty plan
+the plan label: `prolite` displays **Pro 100** and `pro` displays **Pro 200**, and unfamiliar non-empty plan
 values display a title-cased label (underscores and hyphens become spaces).
 Missing or malformed claims display **Unknown**. Labels do not determine plan
 validity: any non-empty string is accepted for sign-in, enable and refresh.

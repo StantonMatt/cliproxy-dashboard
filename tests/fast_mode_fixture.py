@@ -95,6 +95,7 @@ def build_state(directory):
     app.health = lambda _: {'gateway': {'status': 'healthy'}, 'accounts': [],
                             'usage_collection': {'status': 'healthy'}}
     fast.enforcement = lambda *args: 'active'
+    fast.plugin_schema = lambda *args: 2
     manager = fast.FastModeManager(directory / 'controls.json', directory / 'policy.json', directory / 'status.json')
     state = app.GatewayState(app.ResetManager(lambda *args: {}, app.account_metadata, directory / 'resets.json'),
                              app.NoticeStore(directory / 'notices.json'), manager)
@@ -102,16 +103,26 @@ def build_state(directory):
     con = collector.connect(app.DB)
     con.execute('DELETE FROM usage')
     controls = {'accounts': {}}
+    catalog = {'version': 1, 'accounts': {}}
     files = []
     for i, (account_id, allowed, changed, rows) in enumerate(CASES):
         email = account_id + '@example.test'
         changed_at = fast.stamp(now - 3600) if changed else None
         controls['accounts'][email] = {'allow_fast': allowed, 'changed_at': changed_at,
             'history': [{'changed_at': changed_at, 'allow_fast': allowed}] if changed else []}
+        if account_id == 'on-fast':
+            # The one ultrafast account: its catalog offers gpt-5.4 at ultrafast.
+            changed_at = fast.stamp(now - 7200)
+            controls['accounts'][email] = {'level': 'ultrafast', 'allow_fast': True, 'changed_at': changed_at,
+                'history': [{'changed_at': changed_at, 'level': 'ultrafast', 'allow_fast': True,
+                             'ultrafast_models': ['gpt-5.4']}]}
+        catalog['accounts'][email] = {'fetched_at': fast.stamp(now - 600), 'attempted_at': fast.stamp(now - 600),
+            'error': None, 'plan_type': 'pro', 'models': [{'id': 'gpt-5.4', 'name': 'GPT-5.4',
+            'service_tiers': ['priority', 'ultrafast'] if account_id == 'on-fast' else ['priority']}]}
         files.append(auth_file_row({'type': 'codex', 'email': email,
             'id_token': jwt(email=email, workspace='workspace-' + account_id)}, account_id + '.json', account_id))
         state.data['accounts'].append({'key': account_id + '.json', 'id': account_id, 'email': email, 'label': email,
-            '_fast_file': account_id + '.json', 'plan': 'Pro (25x)' if account_id == 'on-fast' else 'Pro (10x)', 'active': True, 'disabled': False,
+            '_fast_file': account_id + '.json', 'plan': 'Pro 200', 'active': True, 'disabled': False,
             'auth_state': 'authenticated', 'quota_error': None, 'quota_checked_at': fast.stamp(now),
             'windows': [{'label': 'Weekly', 'seconds': 604800, 'remaining': 96 if i % 2 == 0 else 94,
                          'used': 4 if i % 2 == 0 else 6, 'resets_at': now + 6 * 86400}],
@@ -137,6 +148,7 @@ def build_state(directory):
     con.commit()
     con.close()
     fast.write_json(manager.path, controls, 0o600)
+    fast.write_json(state.catalog.path, catalog, 0o640)
     state.data.update(online=True, checked_at=fast.stamp(now), routing={'strategy': 'round-robin'})
     def fixture_api(path, body=None, method=None, timeout=None):
         if path == '/auth-files' and body is None:

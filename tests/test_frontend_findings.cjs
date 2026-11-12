@@ -28,7 +28,7 @@ function harness(data=fixture()){
       addEventListener(type,fn){listeners[type]=fn;},listeners,removeAttribute(){},setAttribute(){},
       focus(){document.activeElement=el;},closest(selector){return selector==='#watch-grid'&&id.startsWith('claude-route-')?get('watch-grid'):null;},
       querySelector(){return el.children.find(c=>/state/.test(c.id)) || null;},
-      before(node){node.parentElement=el.parentElement;}};
+      after(node){node.parentElement=el.parentElement;}};
     let html='';
     Object.defineProperty(el,'innerHTML',{get:()=>html,set(value){
       if(id==='watch-grid'&&document.activeElement?.id?.startsWith('claude-route-'))document.activeElement=document.body;
@@ -38,7 +38,7 @@ function harness(data=fixture()){
   }
   function get(id){if(!elements.has(id))elements.set(id,element(id));return elements.get(id);}
   document.getElementById=get;
-  for(const [host,state] of [['routing-all','routing-all-state'],['claude-routing','claude-routing-state']]){get(host).children.push(get(state));get(state).parentElement=get(host);}
+  for(const host of ['routing-all','claude-routing'])for(const part of ['state','feedback']){get(host).children.push(get(host+'-'+part));get(host+'-'+part).parentElement=get(host);}
   get('routing-split').parentElement=get('claude-routing');
   const context=vm.createContext({document,Date,JSON,Math,CSS:{escape:v=>v},setTimeout:()=>0,BillingDates:{describe:()=>({})},
     localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)}});
@@ -71,8 +71,7 @@ test('Overview renders health without reading notification items or creating not
   const get=h.document.getElementById;
   h.document.getElementById=id=>{assert.doesNotMatch(id,/^(?:codex|claude|account)-notices$/);return get(id);};
   h.context.renderOperations(h.context.fixture);
-  assert.match(h.get('codex-server').textContent,/Codex server/);
-  assert.match(h.get('health-panel').innerHTML,/Backup/);
+  assert.match(h.get('health-panel').innerHTML,/Codex server.*Backup/);
   assert.doesNotMatch(source,/claudeNotices|router-dismissed-notices|data-notice-|data-dismiss-|api\/notifications\/dismiss/);
   assert.doesNotMatch(css,/account-notice|notice-actions|notification-warning|codex-notice|claude-notice/);
 });
@@ -83,12 +82,14 @@ test('F4: a third account wraps inside its section instead of needing a grid fal
   assert.match(css,/\.gateway>\.account-grid,\.gateway>\.watch-grid\{display:flex;flex-wrap:wrap/);
   assert.doesNotMatch(css+source,/many-accounts|grid-template-rows:subgrid/);
 });
-test('F7/S6: readiness requires online gateway and fresh positive core windows',async()=>{
+test('F7/S6: readiness requires online gateway and valid positive core windows',async()=>{
   const h=harness(),c=h.context,a=c.fixture.watch_accounts[0];assert.equal(c.claudeRoutable(a),true);
   for(const kind of ['five_hour','seven_day']){a.windows.find(w=>w.kind===kind).remaining=0;assert.equal(c.claudeRoutable(a),false);a.windows.find(w=>w.kind===kind).remaining=70;}
   for(const value of [null,NaN,Infinity]){a.windows[0].remaining=value;assert.equal(c.claudeRoutable(a),false);}a.windows[0].remaining=70;
-  a.windows[0].measured_at=new Date(Date.now()-16*60000).toISOString();assert.equal(c.claudeRoutable(a),false);delete a.windows[0].measured_at;
-  a.checked_at=new Date(Date.now()-16*60000).toISOString();assert.equal(c.claudeRoutable(a),false);c.renderWatch(c.fixture);assert.match(h.get('claude-status').innerHTML,/Status unavailable · checking/);
+  a.windows[0].measured_at=new Date(Date.now()-16*60000).toISOString();assert.equal(c.claudeRoutable(a),true);
+  a.windows[0].measured_at=new Date(Date.now()+1000).toISOString();assert.equal(c.claudeRoutable(a),false);delete a.windows[0].measured_at;
+  a.checked_at=new Date(Date.now()-16*60000).toISOString();assert.equal(c.claudeRoutable(a),true);
+  a.checked_at=new Date(Date.now()+1000).toISOString();assert.equal(c.claudeRoutable(a),false);c.renderWatch(c.fixture);assert.match(h.get('claude-status').innerHTML,/Status unavailable · checking/);
   a.checked_at=new Date().toISOString();c.fixture.gateway.online=false;c.renderWatch(c.fixture);assert.match(h.get('claude-status').innerHTML,/Status unavailable · checking/);assert.doesNotMatch(h.get('claude-status').innerHTML,/status-item ok/);
   c.fixture.gateway.online=true;c.fixture.watch_accounts[1].windows[0].remaining=0;c.accountRequest=async()=>{throw Error('should confirm first');};await c.saveClaudeAccountRouting('claude',false);assert.equal(h.run("claudeRouteConfirm.has('c'.repeat(64))"),true);
   c.fixture.gateway.checked_at=new Date(Date.now()-4*60000).toISOString();c.renderWatch(c.fixture);assert.match(h.get('claude-status').innerHTML,/Status unavailable · checking/);
@@ -117,11 +118,10 @@ test('S7: filename series preserve removed history separately',()=>{
   c.fixture.watch_accounts.pop();
   assert.equal(c.series('claude','cb',B),'claude:removed:cb');
   assert.equal(c.series('claude','missing'),'claude:removed:missing');
-  const legend={};h.document.querySelectorAll=()=>[legend];c.renderLegend();
-  assert.doesNotMatch(legend.innerHTML,/Removed account/);
+  const {historyKeys}=require('./helpers/board-widgets.cjs');
+  assert(!historyKeys(c).some(k=>k.name==='Removed account'));
   c.fixture.usage={claude:{accounts:[{auth_index:'missing',requests:7}],hours:[{hour:new Date().toISOString(),auth_index:'missing',requests:7}]}};
-  c.renderLegend();assert.match(legend.innerHTML,/claude:removed:missing[^]*Removed account/);
-  assert.equal(c.seriesNames()['claude:removed:missing'],'Removed account');
-  c.renderChart('usage-chart',c.fixture.usage,'today');assert.match(h.get('usage-chart').innerHTML,/Removed account 7/);assert.doesNotMatch(h.get('usage-chart').innerHTML,/NaN/);
+  const missing=historyKeys(c).find(k=>k.account==='missing');assert.equal(missing.name,'Removed account');assert.equal(missing.series.total,7);
+
 });
 (async()=>{let failed=0;for(const [name,fn] of tests){try{await fn();console.log('PASS '+name);}catch(error){failed++;console.error('FAIL '+name+'\n'+error.stack);}}if(failed)process.exitCode=1;})();

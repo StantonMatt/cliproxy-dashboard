@@ -40,8 +40,8 @@ when remaining is absent) counts as full, with a synthetic reset of now plus fiv
 hours for the 5-hour window or seven days for any other window. This ranks an
 unstarted weekly allowance latest for reset preference. Other reported allowance
 windows must also be valid and non-exhausted. The collectors preserve measured
-timestamps. Their five-minute cadence allows at most
-15 minutes of observation age, matching the Claude cards' existing stale threshold.
+timestamps. A window with a known reset stays valid until that reset; one without
+a reset ages out after 15 minutes, matching the Claude cards' stale rule.
 Quota errors, missing or expired windows, and stale snapshots for enabled accounts
 hold priorities. Disabled accounts are excluded before checking their usage.
 Preferred-account mode uses the same eligibility checks and can prefer the other

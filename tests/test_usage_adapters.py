@@ -59,6 +59,10 @@ def watch(at=NOW - 100):
                 windows=[dict(w, measured_at=usage.stamp(at)) for w in usage.normalize_claude(claude_body())['windows']])
 
 
+def primary_watch(at=NOW):
+    return dict(watch(at), id='claude', independent_windows=False, attempted_at=usage.stamp(at))
+
+
 class NormalizationTests(unittest.TestCase):
     def test_claude_main_models_and_extra_are_allowlisted(self):
         result = usage.normalize_claude(json.dumps(claude_body()))
@@ -120,7 +124,7 @@ class BudgetTests(unittest.TestCase):
     def setUp(self):
         self.clock = [0]
         self.wall = [NOW]
-        self.cache = usage.UsageCache(clock=lambda: self.clock[0], wall_clock=lambda: self.wall[0], jitter=lambda: 17)
+        self.cache = usage.UsageCache(clock=lambda: self.clock[0], wall_clock=lambda: self.wall[0], jitter=lambda: 17, interval=300)
         self.call = Mock(return_value=dict(status_code=200, body=claude_body()))
 
     def advance(self, value):
@@ -150,8 +154,9 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(failed['checked_at'], original['checked_at'])
         self.assertEqual(failed['windows'], original['windows'])
         self.assertEqual(failed['status'], 'error')
+        self.assertEqual(failed['error'], 'http_429')
         self.assertNotIn('private', json.dumps(failed))
-        self.advance(1016)
+        self.advance(3616)
         self.cache.fetch(file(), self.call)
         self.assertEqual(self.call.call_count, 2)
         self.advance(1)
@@ -166,6 +171,142 @@ class BudgetTests(unittest.TestCase):
         self.advance(317)
         self.cache.fetch(file(), self.call)
         self.assertEqual(self.call.call_count, 5)
+
+    def test_active_primary_watch_skips_request_without_changing_gateway_budget(self):
+        watched = [primary_watch()]
+        empty = self.cache.fetch(file(), self.call, runtime_rows=[file()], watched=watched)
+        self.assertEqual(empty['windows'], [])
+        self.assertEqual(self.cache.entries, {})
+        self.call.assert_not_called()
+
+        self.cache.fetch(file(), self.call)
+        self.advance(317)
+        watched = [dict(primary_watch(self.wall[0]), status='error', error='http_429',
+                        checked_at=usage.stamp(NOW - 10800))]
+        before = copy.deepcopy(self.cache.entries)
+        self.cache.fetch(file(), self.call, runtime_rows=[file()], watched=watched)
+        self.assertEqual(self.cache.entries, before)
+        self.assertEqual(self.call.call_count, 1)
+        self.cache.fetch(file(), self.call, runtime_rows=[file()], watched=[])
+        self.assertEqual(self.call.call_count, 2)
+
+    def test_watch_cooldown_keeps_deferral_until_its_retry_is_due(self):
+        row = file()
+        cooling = lambda next_at: dict(primary_watch(NOW - 1800), status='error', error='http_429',
+                                       next_attempt_at=usage.stamp(next_at))
+        cases = [(cooling(NOW + 1800), False), (cooling(NOW), True),
+                 (cooling(NOW + 86401), True), (dict(cooling(NOW + 1800), next_attempt_at='bad'), True),
+                 (dict(cooling(NOW + 1800), id='claude-b'), True)]
+        for watched, polls in cases:
+            with self.subTest(watched=watched):
+                cache = usage.UsageCache(wall_clock=lambda: NOW, jitter=lambda: 0)
+                self.call.reset_mock()
+                cache.fetch(row, self.call, runtime_rows=[row], watched=[watched])
+                self.assertEqual(self.call.called, polls)
+
+    def test_stale_successful_watch_releases_gateway_after_failed_observation(self):
+        for status in ('ok', 'stale'):
+            with self.subTest(status=status):
+                # A saved daily schedule must not make an idle, expired reading
+                # own the endpoint after the gateway's last attempt failed.
+                stale = dict(primary_watch(NOW - 1800), status=status,
+                    next_attempt_at=usage.stamp(NOW + 20 * 3600),
+                    windows=[dict(kind='five_hour', used=0, remaining=100, resets_at=None),
+                             dict(kind='seven_day', used=20, remaining=80, resets_at=NOW + 300000)])
+                cache = usage.UsageCache(clock=lambda: self.clock[0], wall_clock=lambda: NOW,
+                                         jitter=lambda: 0, daily_jitter=lambda: 0)
+                call = Mock(return_value=dict(status_code=503))
+                failed = cache.fetch(file(), call)
+                row = runtime(failed)
+                overview = dict(gateway=dict(claude_accounts=[row]), watch_accounts=[stale])
+                with self.assertRaisesRegex(routing_policy.DataHold, 'quota unavailable'):
+                    routing_policy.claude_observations(overview, NOW)
+                self.assertFalse(usage.active_primary_watch(stale, NOW))
+                # Releasing ownership preserves the failed gateway's backoff.
+                cache.fetch(file(), call, runtime_rows=[row], watched=[stale])
+                self.assertEqual(call.call_count, 1)
+                self.clock[0] += 300
+                call.return_value = dict(status_code=200, body=claude_body())
+                recovered = cache.fetch(file(), call, runtime_rows=[row], watched=[stale])
+                self.assertEqual(call.call_count, 2)
+                row['_gateway_usage'] = recovered
+                account, = routing_policy.claude_observations(overview, NOW)['gateway']['accounts']
+                self.assertEqual((account['email'], account['usage_source']), (row['email'], 'gateway'))
+
+    def test_successful_watch_ownership_requires_fresh_windows_but_failures_keep_backoff(self):
+        stale = dict(primary_watch(NOW - 1800), next_attempt_at=usage.stamp(NOW + 7200))
+        stale['windows'][0].update(resets_at=NOW - 60)
+        self.assertFalse(usage.active_primary_watch(stale, NOW))
+        self.assertFalse(usage.active_primary_watch(dict(stale, attempted_at=usage.stamp(NOW)), NOW))
+        fresh = dict(primary_watch(NOW - 1800), next_attempt_at=usage.stamp(NOW + 7200))
+        self.assertTrue(usage.active_primary_watch(fresh, NOW))
+        for code in ('http_429', 'http_503', 'network'):
+            self.assertTrue(usage.active_primary_watch(dict(stale, status='error', error=code), NOW))
+
+    def test_model_reset_releases_successful_watch_owner_but_preserves_failure_hold(self):
+        watched = dict(primary_watch(NOW - 1800), next_attempt_at=usage.stamp(NOW + 7200))
+        watched['windows'][-1].update(resets_at=NOW - 60)
+        self.assertFalse(usage.active_primary_watch(watched, NOW))
+        cache = usage.UsageCache(clock=lambda: self.clock[0], wall_clock=lambda: NOW, jitter=lambda: 0)
+        cache.fetch(file(), self.call, runtime_rows=[file()], watched=[watched])
+        self.call.assert_called_once()
+        self.assertTrue(usage.active_primary_watch(dict(watched, status='error', error='http_429'), NOW))
+
+    def test_deferral_requires_recent_unambiguous_primary_endpoint_reader(self):
+        row = file()
+        cases = [([], [row]), ([primary_watch(NOW - 901)], [row]),
+                 ([primary_watch(NOW + 1)], [row]),
+                 ([dict(primary_watch(), attempted_at=None)], [row]),
+                 ([dict(primary_watch(), attempted_at='bad')], [row]),
+                 ([watch()], [row]), ([dict(primary_watch(), id='claude-b')], [row]),
+                 ([dict(primary_watch(), independent_windows=True)], [row]),
+                 ([dict(primary_watch(), independent_windows=None)], [row]),
+                 ([dict(primary_watch(), email='other@example.test')], [row]),
+                 ([dict(primary_watch(), provider='codex')], [row]),
+                 ([primary_watch(), primary_watch()], [row]),
+                 ([primary_watch()], [row, dict(row, name='duplicate.json')])]
+        for watched, rows in cases:
+            with self.subTest(watched=watched, rows=rows):
+                cache = usage.UsageCache(wall_clock=lambda: NOW, jitter=lambda: 0)
+                self.call.reset_mock()
+                cache.fetch(row, self.call, runtime_rows=rows, watched=watched)
+                self.call.assert_called_once()
+        # The boundary is inclusive and email matching is case-insensitive.
+        self.call.reset_mock()
+        self.cache.fetch(row, self.call, runtime_rows=[row], watched=[
+            dict(primary_watch(NOW - 900), email=row['email'].upper())])
+        self.call.assert_not_called()
+        self.call.return_value = dict(status_code=200, body={'config': {'creditUsagePercent': 20}})
+        self.cache.fetch(file('xai'), self.call, runtime_rows=[row], watched=[
+            dict(primary_watch(), email=file('xai')['email'])])
+        self.call.assert_called_once()
+
+    def test_429_minimum_and_retry_after_for_inner_and_outer_errors(self):
+        later = format_datetime(dt.datetime.fromtimestamp(NOW + 7200, dt.timezone.utc), usegmt=True)
+        for outer in (False, True):
+            for header, delay in ((None, 3600), ('300', 3600), ('5400', 5400),
+                                  (later, 7200), ('invalid', 3600)):
+                with self.subTest(outer=outer, header=header):
+                    clock = [0]
+                    cache = usage.UsageCache(clock=lambda: clock[0], wall_clock=lambda: NOW + clock[0],
+                                             jitter=lambda: 0)
+                    headers = {'Retry-After': header} if header else {}
+                    if outer:
+                        error = HTTPError('http://loopback/', 429, 'private', headers, None)
+                        self.addCleanup(error.close)
+                        call = Mock(side_effect=error)
+                    else:
+                        call = Mock(return_value=dict(status_code=429, header=headers, body='private'))
+                    failed = cache.fetch(file(), call)
+                    self.assertEqual((failed['status'], failed['error']), ('error', 'http_429'))
+                    self.assertIsNone(failed['checked_at'])
+                    self.assertNotIn('private', json.dumps(failed))
+                    clock[0] = delay - 1
+                    cache.fetch(file(), call)
+                    self.assertEqual(call.call_count, 1)
+                    clock[0] += 1
+                    cache.fetch(file(), call)
+                    self.assertEqual(call.call_count, 2)
 
     def test_aliases_share_budget_without_borrowing_another_identitys_usage(self):
         self.cache.fetch(file(), self.call)
@@ -182,7 +323,7 @@ class BudgetTests(unittest.TestCase):
     def test_retry_after_http_date_and_outer_management_error(self):
         later = format_datetime(dt.datetime.fromtimestamp(NOW + 900, dt.timezone.utc), usegmt=True)
         self.call.side_effect = HTTPError('http://loopback/', 503, 'not forwarded', {'retry-after': later}, None)
-        self.cache.fetch(file(), self.call)
+        self.assertEqual(self.cache.fetch(file(), self.call)['error'], 'usage_unavailable')
         self.advance(916)
         self.cache.fetch(file(), self.call)
         self.assertEqual(self.call.call_count, 1)
@@ -255,22 +396,87 @@ class SelectionTests(unittest.TestCase):
     def test_gateway_model_wins_and_old_watch_model_never_gets_freshened(self):
         result = self.select(runtime(observed()))
         self.assertEqual(result['windows'][-1]['usage_source'], 'gateway')
-        for watched in (watch(NOW - 901), watch(NOW + 1)):
-            result = self.select(watched=[watched])
-            self.assertEqual(len(result['windows']), 2)
+        old = self.select(watched=[watch(NOW - 7200)])
+        self.assertEqual(old['windows'][-1]['measured_at'], usage.stamp(NOW - 7200))
+        result = self.select(watched=[watch(NOW + 1)])
+        self.assertEqual(len(result['windows']), 2)
         expired = watch()
         expired['windows'][-1]['resets_at'] = NOW - 1
         self.assertEqual(len(self.select(watched=[expired])['windows']), 2)
 
+    def test_unusable_gateway_model_can_be_replaced_by_current_watch_model(self):
+        for reset, invalid in ((NOW, False), (NOW - 1, False), (None, False), (None, True)):
+            with self.subTest(reset=reset, invalid=invalid):
+                gateway = observed()
+                gateway['windows'][-1].update(resets_at=reset, invalid_reset=invalid,
+                                               measured_at=usage.stamp(NOW - 1000))
+                original = copy.deepcopy(gateway)
+                result = self.select(runtime(gateway))
+                models = [w for w in result['windows'] if w.get('model') == 'Fable']
+                self.assertEqual(len(models), 1)
+                self.assertEqual(models[0]['usage_source'], 'watch')
+                self.assertEqual(models[0]['measured_at'], usage.stamp(NOW - 100))
+                self.assertEqual(result['usage_source'], 'gateway')
+                self.assertEqual(gateway, original)
+
+    def test_unusable_models_without_watch_are_unknown_even_with_deferred_primary(self):
+        for reset, invalid in ((NOW - 1, False), (None, False), (None, True)):
+            with self.subTest(reset=reset, invalid=invalid):
+                gateway = dict(observed(), fresh_until=usage.stamp(NOW + 7200))
+                gateway['windows'][-1].update(resets_at=reset, invalid_reset=invalid,
+                                               measured_at=usage.stamp(NOW - 100))
+                result = self.select(runtime(gateway), watched=[])
+                self.assertEqual(result['status'], 'ok')
+                self.assertEqual([result['windows'][-1][key] for key in ('used', 'used_pct', 'remaining')],
+                                 [None, None, None])
+        # A current zero with no reset is a valid idle window, not an old percentage.
+        gateway['windows'][-1].update(used=0, used_pct=0, remaining=100, invalid_reset=False)
+        self.assertEqual(self.select(runtime(gateway), watched=[])['windows'][-1]['remaining'], 100)
+
+    def test_watch_zero_without_reset_replaces_expired_gateway_model(self):
+        gateway = observed()
+        gateway['windows'][-1].update(resets_at=NOW - 1, measured_at=usage.stamp(NOW - 1000))
+        watched = watch()
+        watched['windows'][-1].update(resets_at=None, used=0, used_pct=0, remaining=100)
+        result = self.select(runtime(gateway), watched=[watched])
+        self.assertEqual(result['windows'][-1]['usage_source'], 'watch')
+        self.assertEqual(result['windows'][-1]['remaining'], 100)
+
     def test_failed_or_stale_gateway_falls_back_to_watch_without_changing_time(self):
-        for gateway in (dict(observed(), status='error', error='usage_unavailable'), observed(at=NOW - 901)):
+        for gateway in (dict(observed(), status='error', error='usage_unavailable'),
+                        dict(observed(at=NOW - 901), windows=[dict(kind='seven_day', used=10, resets_at=NOW)])):
             result = self.select(runtime(gateway))
             self.assertEqual(result['usage_source'], 'watch')
             self.assertEqual(result['checked_at'], usage.stamp(NOW - 100))
             self.assertEqual(result['usage_checked_at'], result['checked_at'])
             self.assertEqual(result['gateway_checked_at'], gateway['checked_at'])
         result = self.select(runtime(observed(at=NOW - 901)), watched=[])
-        self.assertEqual((result['usage_source'], result['status']), ('gateway', 'stale'))
+        self.assertEqual((result['usage_source'], result['status']), ('gateway', 'ok'))
+
+    def test_newer_successful_gateway_overrides_active_watch_error(self):
+        watched = dict(primary_watch(), status='error', error='http_429', checked_at=usage.stamp(NOW - 10800))
+        result = self.select(watched=[watched])
+        self.assertEqual((result['usage_source'], result['error'], result['status']), ('gateway', None, 'ok'))
+        self.assertEqual(result['checked_at'], usage.stamp(NOW))
+        self.assertEqual(result['watch_attempted_at'], watched['attempted_at'])
+        old = dict(watched, attempted_at=usage.stamp(NOW - 901))
+        self.assertEqual(self.select(watched=[old])['usage_source'], 'gateway')
+
+    def test_provider_cards_preserve_rate_limit_error_and_attempt_for_both_sources(self):
+        for source in ('watch', 'gateway'):
+            with self.subTest(source=source):
+                failed = dict(observed(at=NOW - 10800), status='error', error='http_429',
+                              attempted_at=usage.stamp(NOW))
+                watched = [dict(primary_watch(), status='error', error='http_429',
+                                checked_at=usage.stamp(NOW - 10800))] if source == 'watch' else []
+                gateway = dict(inventory=[file()], claude_accounts=[runtime(failed)])
+                with patch.object(usage.time, 'time', return_value=NOW):
+                    account, = providers.groups(gateway, watched)[0]['accounts']
+                self.assertEqual(account['usage_source'], source)
+                self.assertEqual(account['error'], 'http_429')
+                self.assertEqual(account['checked_at'], usage.stamp(NOW - 10800))
+                self.assertEqual(account['attempted_at'], usage.stamp(NOW))
+                self.assertTrue(account['watch_observed'])
 
     def test_unique_provider_email_only_and_casefold_match(self):
         row = runtime(observed(False))
@@ -406,10 +612,16 @@ class WiringTests(unittest.TestCase):
             if path == '/config':
                 return {'routing': {}}
             self.assertEqual(path, '/api-call')
+            if body['url'].endswith('/profile'):
+                return dict(status_code=200, body={})
             calls.append(body)
             return dict(status_code=200, body=claude_body() if body['url'] == usage.CLAUDE_URL else
                         {'config': {'creditUsagePercent': 20}})
-        with patch.object(server, 'api', side_effect=call):
+        state.usage_cache = usage.UsageCache(wall_clock=lambda: NOW, jitter=lambda: 0)
+        state.profiles = server.subscriptions.Profiles(wall_clock=lambda: NOW, jitter=lambda: 0)
+        with patch.object(server, 'api', side_effect=call), patch.object(server, 'watch_accounts', return_value=[]), \
+                patch.object(server.time, 'time', return_value=NOW), \
+                patch.object(server, 'utcnow', return_value=usage.stamp(NOW)):
             state._fetch_locked()
             first = copy.deepcopy(state.data)
             state._fetch_locked()
@@ -423,6 +635,35 @@ class WiringTests(unittest.TestCase):
         network.assert_not_called()
         (_, body), = t3_usage.accounts(cached, usage.epoch(state.data['checked_at']))
         self.assertEqual(body['five_hour']['utilization'], 12.5)
+
+    def test_gateway_fetch_defers_only_account_with_active_primary_watch(self):
+        rows = [file(), file(suffix='b'), file('xai')]
+        watched = [primary_watch(), dict(watch(), email=rows[1]['email'])]
+        state = server.GatewayState(resets=Mock(), notices=Mock(), fast_modes=Mock())
+        state.access.reconcile = Mock(return_value=[])
+        state.usage_cache = usage.UsageCache(wall_clock=lambda: NOW, jitter=lambda: 0)
+        calls = []
+        def call(path, body=None, **kw):
+            if path == '/auth-files':
+                return {'files': rows}
+            if path == '/config':
+                return {'routing': {}}
+            self.assertEqual(path, '/api-call')
+            if body['url'].endswith('/profile'):
+                return dict(status_code=200, body={})
+            calls.append(body['auth_index'])
+            return dict(status_code=200, body=claude_body() if body['url'] == usage.CLAUDE_URL else
+                        {'config': {'creditUsagePercent': 20}})
+        with patch.object(server, 'api', side_effect=call), \
+                patch.object(server, 'watch_accounts', return_value=watched), \
+                patch.object(server, 'move_available', return_value=False), \
+                patch.object(usage.time, 'time', return_value=NOW):
+            state._fetch_locked()
+            groups = providers.groups(state.data, watched)
+        self.assertTrue(state.data['online'])
+        self.assertCountEqual(calls, [rows[1]['auth_index'], rows[2]['auth_index']])
+        claude, = [group for group in groups if group['id'] == 'claude']
+        self.assertEqual([a['usage_source'] for a in claude['accounts']], ['watch', 'gateway'])
 
 
 if __name__ == '__main__':

@@ -21,6 +21,8 @@ MODEL = 'gpt-6-luna'
 def save_json(path, obj):
     if path.name == 'policy.json':
         obj = {'version': 1, 'updated_at': '2026-10-02T23:59:00Z', **obj}
+        if any('level' in entry for group in ('accounts', 'files') for entry in obj.get(group, {}).values()):
+            obj['version'] = 2
     temp = path.with_suffix('.tmp')
     with temp.open('w') as stream:
         stream.write(json.dumps(obj, indent=2)+'\n'); stream.flush(); os.fsync(stream.fileno())
@@ -127,7 +129,7 @@ if __name__=='__main__':
     RUN=pathlib.Path(tempfile.mkdtemp(prefix='fast-mode-isolated-', dir=args.scratch))
     EVIDENCE=RUN/'evidence'; EVIDENCE.mkdir()
     artifacts=RUN/'plugins/linux/amd64'; artifacts.mkdir(parents=True)
-    shutil.copyfile(args.library, artifacts/'fast-mode-policy-v0.1.2.so')
+    shutil.copyfile(args.library, artifacts/'fast-mode-policy-v0.2.0.so')
     status=RUN/'status.json'
     cert=RUN/'mock-cert.pem'; key=RUN/'mock-key.pem'
     subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','2','-keyout',str(key),'-out',str(cert),'-subj','/CN=chatgpt.com','-addext','subjectAltName=DNS:chatgpt.com'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=15)
@@ -141,7 +143,7 @@ if __name__=='__main__':
         save_json(auth/f'account-{name}.json',{'type':'codex','email':f'spike-{name.lower()}@example.invalid','plan_type':'plus','access_token':f'spike-dummy-{name}', 'prefix':name, 'websockets':True, 'proxy_url':f'http://127.0.0.1:{server.server_port}'})
     policy=RUN/'policy.json'
     save_json(policy,{'files':{'account-A.json':{'allow_fast':True,'supports_ultrafast':False},'account-B.json':{'allow_fast':False,'supports_ultrafast':True}}})
-    cfg={'host':'127.0.0.1','port':port,'auth-dir':str(auth),'api-keys':['spike-client-dummy'],'remote-management':{'secret-key':'spike-management-dummy','disable-control-panel':True,'disable-auto-update-panel':True}, 'routing':{'strategy':'fill-first','session-affinity':False},'request-retry':0,'max-retry-credentials':2,'disable-cooling':True, 'codex':{'response-steering':True},'plugins':{'enabled':False,'dir':str(RUN/'plugins'),'configs':{'fast-mode-policy':{'enabled':True,'priority':100,'policy_path':str(policy),'status_path':str(status),'store':{'version':'0.1.2'},'map_unsupported_ultrafast':False,'audit':True}}}}
+    cfg={'host':'127.0.0.1','port':port,'auth-dir':str(auth),'api-keys':['spike-client-dummy'],'remote-management':{'secret-key':'spike-management-dummy','disable-control-panel':True,'disable-auto-update-panel':True}, 'routing':{'strategy':'fill-first','session-affinity':False},'request-retry':0,'max-retry-credentials':2,'disable-cooling':True, 'codex':{'response-steering':True},'plugins':{'enabled':False,'dir':str(RUN/'plugins'),'configs':{'fast-mode-policy':{'enabled':True,'priority':100,'policy_path':str(policy),'status_path':str(status),'store':{'version':'0.2.0'},'map_unsupported_ultrafast':False,'audit':True}}}}
     cfg.pop('codex')
     cfg['upstream']={'codex':{'response-steering':args.response_steering=='true'}}
     config_path=RUN/'config.yaml'; config_path.write_text(yaml.safe_dump(cfg))
@@ -173,6 +175,23 @@ if __name__=='__main__':
                     if message.get('type')=='response.completed': break
                     if message.get('type')=='error': raise RuntimeError(message)
         return records[start:]
+    def request_format(kind,model,tier):
+        # Chat Completions and Claude Messages reach the same Codex upstream through other translators.
+        if kind=='chat':
+            path,body='/v1/chat/completions',{'model':model,'messages':[{'role':'user','content':'spike'}],'stream':False}
+        else:
+            path,body='/v1/messages',{'model':model,'max_tokens':16,'messages':[{'role':'user','content':'spike'}],'stream':False}
+        if tier is not None: body['service_tier']=tier
+        req=urllib.request.Request(f'http://127.0.0.1:{port}{path}',data=json.dumps(body).encode(),headers={'Authorization':'Bearer spike-client-dummy','x-api-key':'spike-client-dummy','anthropic-version':'2023-06-01','Content-Type':'application/json'})
+        try:
+            with HTTP.open(req,timeout=15) as response: response.read()
+        except urllib.error.HTTPError as error:
+            raise RuntimeError(error.read().decode()) from error
+    def run_format_case(stage,kind,account,tier,expected,model=None):
+        start=len(records); request_format(kind,account+'/'+(model or MODEL),tier); observed=records[start:]
+        assert len(observed)==1,observed
+        actual=observed[0]['tier']; assert actual==expected,(stage,kind,account,tier,actual,expected)
+        summary['matrix'].append({'stage':stage,'format':kind,'account':account,'input':tier if tier is not None else '<absent>','outbound':actual})
     def run_case(stage,account,tier,expected):
         start=len(records); request(account+'/'+MODEL,tier); observed=records[start:]
         assert len(observed)==1,observed
@@ -217,8 +236,9 @@ if __name__=='__main__':
         cfg=yaml.safe_load(config_path.read_bytes())
         cfg['plugins']['enabled']=True; hot_reload()
         live=json.loads(status.read_text())
-        assert live['plugin']=='fast-mode-policy' and live['version']=='0.1.2' and live['pid']==proc.pid,live
+        assert live['plugin']=='fast-mode-policy' and live['version']=='0.2.0' and live['pid']==proc.pid,live
         assert live['policy_path']==str(policy) and not live['map_unsupported_ultrafast'],live
+        assert live['policy_schema']==2,live
         assert status.stat().st_mode & 0o777 == 0o640
         for account in ['A','B']:
             for tier in ['fast','priority','ultrafast','default',None]:
@@ -243,6 +263,22 @@ if __name__=='__main__':
                     expected=('<absent>' if value in ['default',None] or (not allow and value in ['fast','priority','ultrafast'])
                               else 'priority' if value=='fast' or (value=='ultrafast' and not supports) else value)
                     run_case(f'contract-allow={allow}-supports={supports}','A',value,expected)
+        # Schema 2 levels. The allowlist names this run's model with a thinking suffix to prove normalization.
+        for level in ['normal','fast','ultrafast']:
+            for allowed in [True,False]:
+                models=[MODEL.upper()+'(high)'] if allowed else ['some-other-model']
+                save_json(policy,{'files':{'account-A.json':{'level':level,'ultrafast_models':models,'allow_fast':level!='normal','supports_ultrafast':False}}})
+                for value in ['fast','priority','ultrafast','default',None]:
+                    fast=value in ['fast','priority','ultrafast']
+                    expected=('<absent>' if not fast or level=='normal' else
+                              'ultrafast' if level=='ultrafast' and allowed else 'priority')
+                    run_case(f'v2-level={level}-allowed={allowed}','A',value,expected)
+                    if value in ['priority','ultrafast']:
+                        run_format_case(f'v2-level={level}-allowed={allowed}','chat','A',value,expected)
+                        # Claude-format requests never upgrade: their translator drops ultrafast.
+                        run_format_case(f'v2-level={level}-allowed={allowed}','claude','A',value,
+                                        '<absent>' if level=='normal' else 'priority')
+        summary['schema2_levels']=True
         policy.write_text('invalid JSON'); run_case('invalid-policy','A','priority','priority')
         policy.unlink(); run_case('missing-policy','B','priority','priority')
         expected_indexes={name:hashlib.sha256(('codex:'+str(auth/f'account-{name}.json')).encode()).hexdigest()[:16] for name in ['A','B']}
@@ -268,7 +304,7 @@ if __name__=='__main__':
         # Load a separate file copy under a new path without restarting the gateway.
         # This proves replacement mechanics, not a changed plugin implementation.
         update_dir=RUN/'plugin-update'; update_dir.mkdir(exist_ok=True)
-        shutil.copyfile(args.library,update_dir/'fast-mode-policy-v0.1.2.so')
+        shutil.copyfile(args.library,update_dir/'fast-mode-policy-v0.2.0.so')
         cfg['plugins']['dir']=str(update_dir); hot_reload()
         run_case('library-path-update','A','priority','<absent>')
         assert 'pluginhost: plugin hot reloaded' in (EVIDENCE/'gateway.log').read_text()

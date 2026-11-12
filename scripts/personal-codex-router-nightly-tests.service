@@ -1,0 +1,11 @@
+[Unit]
+Description=Run all router source tests and notify only on failure
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/personal-codex-router/nightly-tests.py
+UMask=0077
+# heavy may wait for other tasks before the finite test run starts.
+TimeoutStartSec=6h
+Nice=10
+NoNewPrivileges=true

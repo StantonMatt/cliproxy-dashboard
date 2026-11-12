@@ -20,7 +20,7 @@ Prerequisites: Linux with systemd, Python 3.11+ with `PyYAML` and `bcrypt`, Node
    Devices require signed-in Tailscale, peers owned by the same Tailscale user, and an active `tailscale-host-guard.service` with `/etc/tailscale/host-guard.nft` in the [private-preview layout](docs/private-previews.md). The installer checks these before writing files; it does not provision a firewall from scratch.
 3. Download the pinned [Management Center v1.24.2 asset](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/download/v1.24.2/management.html) to `references/management.html` (ignored by Git). Run `sudo python3 scripts/enable-dashboard.py`; it checks the digest, creates the key and updates the gateway config. Verify hot reload. Activation is one-time and refuses to replace existing keys.
 4. Inspect `python3 scripts/install-operations.py`, then run `sudo python3 scripts/install-operations.py --apply`. Use `--site-config /path/to/site.json` for a scratch dry run; full apply saves its resolved settings to the canonical site file. Use a full install for host-setting changes. Run from your desktop session; enable user lingering if Claude watchers should continue after logout.
-5. Open **http://127.0.0.1:8320/** and add accounts through the dashboard's account sign-in (delivered by the companion onboarding change). Configured devices use `http://<your-tailscale-hostname-or-IP>:8409/`. Management stays on loopback; other computers can use SSH forwarding.
+5. Open **http://127.0.0.1:8320/** and add accounts through the dashboard's account sign-in (delivered by the companion onboarding change). Configured devices use `https://<your-full-tailscale-DNS-name>:8409/`. Management stays on loopback; other computers can use SSH forwarding. A browser sign-in (Claude, for example) finishes by itself only in a browser on the gateway computer. From any other device it ends on a `localhost` page that can't load. That is expected: copy that page's full address into the dashboard's sign-in dialog and continue.
 
 Installation files and private state:
 
@@ -39,9 +39,9 @@ Claude usage reads existing `~/.claude/.credentials.json`; the optional second w
 
 Existing deployment without `site.json`: **do not copy the empty example over it**. The first full install imports devices/DNS from `previews.json`, Claude B email/plan from its installed user unit, and the invoking/checkout user. It saves these to `site.json` and retains preview registrations and friendly aliases. Run this full migration before scoped installs. The remaining notes describe the original deployment, not new-machine defaults.
 
-Shared dashboard: **[http://router:8409/](http://router:8409/)** over Tailscale. MagicDNS is enabled. The name is verified in Linux Chrome, and the user confirmed it works on the phone and Mac. The existing computer-only address `http://router.localhost/` retains full management controls through loopback/SSH.
+Shared dashboard: **[https://router.tailnet-example.ts.net:8409/](https://router.tailnet-example.ts.net:8409/)** over Tailscale. MagicDNS is enabled. The TLS proxy uses the full Tailscale name; old HTTP bookmarks redirect to it. For preview TLS upgrades, use `python3 scripts/install-operations.py --preview-only`, then `sudo -n python3 scripts/install-operations.py --preview-only --apply`; see [certificate renewal and rollback](docs/private-previews.md). The existing computer-only address `http://router.localhost/` retains full management controls through loopback/SSH.
 
-September 24 operations: [daily backups and recovery](docs/backups-and-recovery.md), [compact health and account notifications](docs/health-and-notifications.md), and [private phone previews](docs/private-previews.md) run on Linux independently of the Mac. **Shared dashboard: http://router:8409/**. Project previews: **http://router:8400/**. Accepted limitation: backups in `/var/lib/personal-codex-router-backups/` contain credentials on the same disk as the originals, so disk loss or compromise affects both. Linux desktop notifications continue; the dashboard no longer shows notice tiles.
+September 24 operations: [daily backups and recovery](docs/backups-and-recovery.md), [compact health and account notifications](docs/health-and-notifications.md), and [private phone previews](docs/private-previews.md) run on Linux independently of the Mac. **Shared dashboard: https://router.tailnet-example.ts.net:8409/**. Project previews: **https://router.tailnet-example.ts.net:8400/**. Accepted limitation: backups in `/var/lib/personal-codex-router-backups/` contain credentials on the same disk as the originals, so disk loss or compromise affects both. Linux desktop notifications continue; the dashboard no longer shows notice tiles.
 
 Project on Linux: `/home/user/Projects/personal-codex-router`.
 
@@ -69,7 +69,7 @@ Claude routing retains all five choices, including either Claude email. Split ro
 
 ## Everyday access
 
-Open **[http://router:8409/](http://router:8409/)** with Tailscale connected and Tailscale DNS enabled. The shared address shows accounts, usage, health and resets, and allows data refresh, routing changes, automatic reset policy changes, reset redemption, Codex account sign-in, and per-account routing switches. It uses the same private device restrictions as the original IP address; raw gateway management routes are not forwarded.
+Open **[https://router.tailnet-example.ts.net:8409/](https://router.tailnet-example.ts.net:8409/)** with Tailscale connected and Tailscale DNS enabled. The shared address shows accounts, usage, health and resets, and allows data refresh, routing changes, automatic reset policy changes, reset redemption, Codex account sign-in, and per-account routing switches. It uses the same private device restrictions as the original IP address; raw gateway management routes are not forwarded.
 
 For computer access through loopback/SSH, use **http://router.localhost/**. On the Mac, an automatic SSH tunnel carries the connection privately to the Linux desktop over Tailscale. On Linux, the local address reaches the dashboard directly. This `.localhost` address does not work on the phone because it refers to the device opening it. Advanced gateway management uses the separate Management Center described below.
 
@@ -79,7 +79,7 @@ Fallback addresses:
 
 - Mac: `http://router.localhost:18320/`
 - Linux: `http://127.0.0.1:8320/`
-- Shared dashboard with Tailscale: `http://router.tailnet-example.ts.net:8409/` or `http://100.64.0.10:8409/`. The IP fallback does not depend on DNS.
+- Shared dashboard with Tailscale: `https://router.tailnet-example.ts.net:8409/`. Old HTTP short-name/IP bookmarks redirect to HTTPS and require Tailscale DNS at the destination.
 
 ## Pages
 
@@ -142,19 +142,23 @@ The official panel is pinned to v1.24.2 and checked against its release SHA-256.
 
 Export a committed tree without private identifiers or Git history with `python3 scripts/export-public.py --out /path/to/empty/export`; scan it again with `python3 scripts/export-public.py --check /path/to/export`.
 
-Source files are in `dashboard/`; installed runtime copies live under `/opt/personal-codex-router`. For dashboard/watch changes, preview `python3 scripts/install-operations.py --claude-watch-only`, then deploy with `sudo -n python3 scripts/install-operations.py --claude-watch-only --apply`; this backs up replaced runtime files and watch snapshots. Collect B immediately with `systemctl --user start personal-codex-router-claude-b-usage.service`. Restart only `personal-codex-router-dashboard` for backend changes. Static assets do not require a service restart. Avoid restarting the model gateway for dashboard work.
+Source files are in `dashboard/`; installed runtime copies live under `/opt/personal-codex-router`. For dashboard/watch changes, preview `python3 scripts/install-operations.py --claude-watch-only`, then deploy with `sudo -n python3 scripts/install-operations.py --claude-watch-only --apply`; this backs up replaced runtime files and watch snapshots. Run B's watch with `systemctl --user start personal-codex-router-claude-b-usage.service`; it reads only when a read is due. Restart only `personal-codex-router-dashboard` for backend changes. Static assets do not require a service restart. Avoid restarting the model gateway for dashboard work.
 
-Run the Python suite and JavaScript checks with:
+Run every Python and Node test (continuing after failures and printing a summary):
 
 ```sh
-heavy python3 -m unittest discover -s tests -q
-heavy bash -c 'for testfile in tests/test_*_ui.cjs; do node "$testfile" || exit; done'
-heavy env TZ=America/Fortaleza node tests/test_billing_dates.cjs
-heavy env TZ=America/New_York node tests/test_billing_dates.cjs
-node --check dashboard/static/app.js
-node --check scripts/router-preview.mjs
+~/.local/bin/heavy python3 scripts/run-tests.py
 git diff --check
 ```
+
+The full operations installer also includes daily verified raw-usage retention
+(at least 90 days of detail, permanent hourly totals), weekly anonymous gateway
+release checks with dashboard notices, and a nightly desktop-user test timer.
+Nightly tests use `site.json`'s `source_checkout` through `heavy`, keep the last
+14 logs in `~/.cache/personal-codex-router/test-runs/`, and notify only on failure.
+See [operations automation](docs/operations-automation.md) for archive verification,
+history boundaries, timer behavior and failure handling. These jobs never upgrade
+or restart the gateway.
 
 For account-access changes, preview `python3 scripts/install-operations.py --account-access-only`, then apply with `sudo -n python3 scripts/install-operations.py --account-access-only --apply`. This explicit manifest backs up replaced files, installs the dashboard unit (write access to the Codex auth dir for sign-in), reloads systemd and restarts only the dashboard and Tailscale preview proxy, never the gateway. Both this scope and `--claude-watch-only` ship the credential writer, dashboard backend and static assets, preview proxy and updated `router-backup.py` (mode `0755`), so scheduled backups skip unfinished credential writes. Sign-in sessions and outcomes are in memory; restarting the dashboard interrupts pending sign-ins. See [account access](docs/account-access.md) for the isolated visual fixture and security limits.
 

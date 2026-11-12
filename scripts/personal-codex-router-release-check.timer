@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly CLIProxyAPI stable release check
+
+[Timer]
+OnCalendar=Mon *-*-* 10:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=personal-codex-router-release-check.service
+
+[Install]
+WantedBy=timers.target

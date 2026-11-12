@@ -366,6 +366,7 @@ class SigninTests(unittest.TestCase):
     def test_overview_snapshot_never_serializes_credentials_or_device_secret(self):
         self.start()
         state = app.GatewayState(resets=Mock(), notices=Mock(), fast_modes=Mock())
+        state.notices.claude_view.return_value = dict(low=[], out=None, recovered=None)
         self.addCleanup(state.signins.close)
         state.signins = self.manager
         state.resets.view.return_value = {}

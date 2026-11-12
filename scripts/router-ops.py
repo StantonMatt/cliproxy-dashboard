@@ -123,6 +123,14 @@ def daemon_health():
         return {'status': 'unknown'}
 
 
+URGENCY = {'low': 0, 'normal': 1, 'critical': 2}
+
+
+def gvariant_string(value):
+    """Quote text as a GVariant string literal for gdbus call."""
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"'
+
+
 def deliver():
     # One canonical outbox survives dashboard restarts and browser reloads.
     req = Request('http://127.0.0.1:8320/api/overview', headers={'X-Router-Request': '1'})
@@ -137,20 +145,28 @@ def deliver():
             return
         uid = pwd.getpwnam(USER).pw_uid
         for item in notices.get('items', []):
-            if item['id'] in delivered:
+            delivery_id = ('gateway-release:' if item.get('kind') == 'gateway_release' else '') + item['id']
+            if delivery_id in delivered or item['id'] in delivered:
                 continue
             urgency = item.get('urgency') if item.get('urgency') in ('low', 'normal', 'critical') else 'normal'
+            # gdbus, not notify-send: Ubuntu's notify-send AppArmor profile denies the
+            # session bus from this unit's private mount namespace ("disconnected path").
             result = subprocess.run([
                 '/usr/sbin/runuser', '-u', USER, '--', '/usr/bin/env',
                 f'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus',
-                '/usr/bin/notify-send', '--app-name=Personal Router', '--urgency=' + urgency,
-                '--expire-time=15000', '--', 'Personal Router · ' + item['email'], item['message']],
+                '/usr/bin/gdbus', 'call', '--session', '--dest', 'org.freedesktop.Notifications',
+                '--object-path', '/org/freedesktop/Notifications',
+                '--method', 'org.freedesktop.Notifications.Notify',
+                gvariant_string('Personal Router'), '0', gvariant_string(''),
+                gvariant_string('Personal Router · ' + item['email']), gvariant_string(item['message']), '[]',
+                "{'urgency': <byte %d>}" % URGENCY[urgency], '0' if urgency == 'critical' else '15000'],
                 capture_output=True, timeout=5, check=False)
             if result.returncode == 0:
-                delivered[item['id']] = dt.datetime.now(dt.timezone.utc).isoformat()
+                delivered[delivery_id] = dt.datetime.now(dt.timezone.utc).isoformat()
                 write(path, delivered, 0o600)
         cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=90)
-        kept = {k: v for k, v in delivered.items() if dt.datetime.fromisoformat(v) >= cutoff}
+        kept = {k: v for k, v in delivered.items() if k.startswith('gateway-release:')
+                or dt.datetime.fromisoformat(v) >= cutoff}
         if kept != delivered:
             write(path, kept, 0o600)
     except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
