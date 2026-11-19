@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'dashboard'))
+import providers
 import quota_headers
 import server
 import subscriptions
@@ -28,7 +29,7 @@ def traffic(at=NOW, used=.25):
     return dict(observed_at=usage.stamp(at), signals={
         'Anthropic-Ratelimit-Unified-5h-Utilization': str(used),
         'Anthropic-Ratelimit-Unified-5h-Reset': str(NOW + 3000),
-        'Anthropic-Ratelimit-Unified-7d-Utilization': '.1',
+        'Anthropic-Ratelimit-Unified-7d-Utilization': '.2',
         'Anthropic-Ratelimit-Unified-7d-Reset': str(NOW + 500000)})
 
 
@@ -100,11 +101,11 @@ class HeaderTests(unittest.TestCase):
             inventory=[self.row], claude_accounts=runtime), watch_accounts=[])
         import routing_policy
         candidates, _ = routing_policy.eligible_accounts(overview, self.now, provider='claude', inventory=[self.row])
-        self.assertEqual(candidates[self.row['email']]['remaining'], 90)
+        self.assertEqual(candidates[self.row['email']]['remaining'], 80)
         import t3_usage
         body = t3_usage.claude_body(view, self.now)
         self.assertNotIn('five_hour', body)
-        self.assertEqual(body['seven_day']['utilization'], 10)
+        self.assertEqual(body['seven_day']['utilization'], 20)
         for key, value in [('Utilization', 'bad'), ('Status', 'rejected'), ('Reset', None)]:
             signals['Anthropic-Ratelimit-Unified-5h-' + key] = value
             self.assertIsNone(quota_headers.payload(self.row, self.now))
@@ -475,6 +476,171 @@ class HeaderTests(unittest.TestCase):
         self.assertEqual(set(candidates), {self.row['email']})
         self.assertEqual(self.cache.cached(self.row)['windows'][-1]['measured_at'], usage.stamp(NOW))
 
+
+    def fable_traffic(self, used='.05', status='allowed', **changes):
+        quota = traffic(self.now)
+        quota['signals'].update({'Anthropic-Ratelimit-Unified-7d_oi-Utilization': used,
+                                 'Anthropic-Ratelimit-Unified-7d_oi-Reset': str(NOW + 500000),
+                                 'Anthropic-Ratelimit-Unified-7d_oi-Status': status}, **changes)
+        return quota
+
+    def fable(self, view):
+        return next(w for w in view['windows'] if w.get('model') == 'Fable')
+
+    def test_fable_response_headers_update_the_fable_window_and_other_responses_keep_it(self):
+        first = self.cache.fetch(self.row, self.call)
+        self.assertEqual((self.fable(first)['used'], self.fable(first)['usage_source']), (90, 'gateway'))
+        self.now += 60
+        self.row['quota'] = self.fable_traffic()
+        view = self.cache.fetch(self.row, self.call)
+        self.assertEqual([w['kind'] for w in view['windows']], ['five_hour', 'seven_day', 'weekly_model'])
+        row = self.fable(view)
+        self.assertEqual((row['used'], row['remaining'], row['status'], row['usage_source'], row['measured_at']),
+                         (5, 95, 'allowed', 'headers', usage.stamp(self.now)))
+        self.assertEqual(row['resets_at'], NOW + 500000)
+        # A response for another model carries no Fable slot and must not bring the old figure back.
+        self.now += 60
+        self.row['quota'] = traffic(self.now)
+        later = self.fable(self.cache.fetch(self.row, self.call))
+        self.assertEqual((later['used'], later['measured_at']), (5, row['measured_at']))
+        self.assertEqual(self.fable(self.cache.cached(self.row))['used'], 5)
+        self.call.assert_called_once()
+
+    def test_fable_headers_alone_update_a_card_whose_primary_readings_are_current(self):
+        self.cache.fetch(self.row, self.call)
+        self.now += 60
+        self.row['quota'] = traffic(self.now)
+        self.cache.fetch(self.row, self.call)
+        # The same observation again, now seen with its Fable slot: only the Fable row is new.
+        self.row['quota'] = self.fable_traffic()
+        view = self.cache.fetch(self.row, self.call)
+        self.assertEqual(self.fable(view)['used'], 5)
+        self.assertEqual(len([w for w in view['windows'] if w.get('model') == 'Fable']), 1)
+        self.call.assert_called_once()
+
+    def test_older_fable_headers_do_not_replace_a_newer_endpoint_reading(self):
+        self.now -= 60
+        self.row['quota'] = self.fable_traffic()
+        self.now += 60
+        view = self.cache.fetch(self.row, self.call)
+        self.assertEqual((self.fable(view)['used'], self.fable(view)['usage_source']), (90, 'gateway'))
+        # A later endpoint reading replaces a header reading too.
+        self.now += 60
+        self.row['quota'] = self.fable_traffic()
+        self.assertEqual(self.fable(self.cache.fetch(self.row, self.call))['used'], 5)
+        self.now += 60
+        self.body['seven_day_overage_included']['utilization'] = 40
+        view = self.cache.fetch(self.row, self.call, force=True)
+        self.assertEqual((self.fable(view)['used'], self.fable(view)['usage_source']), (40, 'gateway'))
+
+    def test_rejected_fable_slot_reads_as_exhausted_and_a_bad_one_is_left_out(self):
+        self.row['quota'] = self.fable_traffic('.97', 'rejected')
+        body, _ = quota_headers.payload(self.row, self.now)
+        self.assertEqual(body['seven_day_overage_included'],
+                         dict(utilization=100, resets_at=usage.stamp(NOW + 500000), status='rejected'))
+        self.cache.fetch(self.row, self.call)
+        self.now += 60
+        self.row['quota'] = self.fable_traffic('.97', 'rejected')
+        row = self.fable(self.cache.fetch(self.row, self.call))
+        self.assertEqual((row['used'], row['remaining'], row['status']), (100, 0, 'rejected'))
+        for changes in ({'Anthropic-Ratelimit-Unified-7d_oi-Utilization': 'much'},
+                        {'Anthropic-Ratelimit-Unified-7d_oi-Utilization': '1.5'},
+                        {'Anthropic-Ratelimit-Unified-7d_oi-Utilization': 5},
+                        {'Anthropic-Ratelimit-Unified-7d_oi-Reset': str(self.now - 1)},
+                        {'Anthropic-Ratelimit-Unified-7d_oi-Reset': 'soon'},
+                        {'Anthropic-Ratelimit-Unified-7d_oi-Status': 'unknown'}):
+            with self.subTest(changes=changes):
+                self.row['quota'] = self.fable_traffic(**changes)
+                body, _ = quota_headers.payload(self.row, self.now)
+                self.assertEqual(sorted(body), ['five_hour', 'seven_day'])
+
+    def test_weekly_usage_falling_inside_its_window_reads_usage_once(self):
+        self.cache.fetch(self.row, self.call)
+        # Rounding and ordinary traffic: equal, higher or slightly lower figures start no read.
+        for used in ('.2', '.25', '.21'):
+            self.now += 60
+            self.row['quota'] = traffic(self.now)
+            self.row['quota']['signals']['Anthropic-Ratelimit-Unified-7d-Utilization'] = used
+            self.cache.fetch(self.row, self.call)
+        self.call.assert_called_once()
+        # A redeemed reset: the weekly figure drops and the Fable figure is read again.
+        self.body['seven_day']['utilization'] = 1
+        self.body['seven_day_overage_included']['utilization'] = 0
+        self.now += 60
+        self.row['quota'] = traffic(self.now)
+        self.row['quota']['signals']['Anthropic-Ratelimit-Unified-7d-Utilization'] = '.01'
+        view = self.cache.fetch(self.row, self.call)
+        self.assertEqual(self.call.call_count, 2)
+        self.assertEqual(self.fable(view)['used'], 0)
+        for _ in range(3):
+            self.now += 60
+            self.row['quota'] = traffic(self.now)
+            self.row['quota']['signals']['Anthropic-Ratelimit-Unified-7d-Utilization'] = '.01'
+            self.cache.fetch(self.row, self.call)
+        self.assertEqual(self.call.call_count, 2)
+
+    def dropped(self, watch=True):
+        self.row['quota'] = traffic(self.now)
+        self.row['quota']['signals']['Anthropic-Ratelimit-Unified-7d-Utilization'] = '.01'
+        watched = [dict(id='claude', email=self.row['email'], independent_windows=False,
+                        attempted_at=usage.stamp(self.now), checked_at=usage.stamp(self.now))] if watch else []
+        return self.cache.fetch(self.row, self.call, runtime_rows=[self.row], watched=watched)
+
+    def test_weekly_drop_reads_usage_while_the_watch_owns_polling(self):
+        self.cache.fetch(self.row, self.call)
+        self.now += 60
+        self.dropped()
+        self.assertEqual(self.call.call_count, 2)
+        self.now += 60
+        self.dropped()
+        self.assertEqual(self.call.call_count, 2)
+
+    def test_weekly_drop_read_waits_for_a_usage_rate_limit_hold(self):
+        self.cache.fetch(self.row, self.call)
+        self.call.return_value = dict(status_code=429, header={'Retry-After': ['600']})
+        self.cache.fetch(self.row, self.call, force=True)
+        self.assertEqual(self.call.call_count, 2)
+        self.call.return_value = dict(status_code=200, body=self.body)
+        for delta in (60, 660, 3500):
+            self.now = NOW + delta
+            self.dropped()
+            self.assertEqual(self.call.call_count, 2)
+        self.now = NOW + 3660
+        self.dropped()
+        self.assertEqual(self.call.call_count, 3)
+        self.now += 60
+        self.dropped()
+        self.assertEqual(self.call.call_count, 3)
+
+    def test_weekly_drop_is_not_read_again_while_the_endpoint_still_reports_the_old_figure(self):
+        self.cache.fetch(self.row, self.call)
+        for _ in range(4):
+            self.now += 60
+            view = self.dropped(watch=False)
+        # The endpoint answered 20 each time; the newer header figure stays on the card.
+        self.assertEqual(self.call.call_count, 2)
+        self.assertEqual(next(w for w in view['windows'] if w['kind'] == 'seven_day')['used'], 1)
+
+    def test_weekly_drop_across_the_window_reset_is_not_a_redeemed_reset(self):
+        self.body['seven_day']['resets_at'] = usage.stamp(NOW + 30)
+        self.cache.fetch(self.row, self.call)
+        self.now += 60
+        self.dropped(watch=False)
+        # The weekly reset itself lowers the figure; its own post-reset read is separate.
+        self.call.assert_called_once()
+        self.assertEqual(self.cache.entries[('claude', 'a')]['weekly_header']['used'], 1)
+
+    def test_headers_older_than_the_card_reading_are_not_a_weekly_drop(self):
+        self.row['quota'] = traffic(self.now - 60)
+        self.row['quota']['signals']['Anthropic-Ratelimit-Unified-7d-Utilization'] = '.01'
+        cache = usage.UsageCache(clock=lambda: self.now - NOW, wall_clock=lambda: self.now,
+                                 jitter=lambda: 0, daily_jitter=lambda: 0, headers=False)
+        cache.fetch(self.row, self.call)
+        cache.headers = True
+        for _ in range(2):
+            self.now += 60
+            cache.fetch(self.row, self.call)
+        self.call.assert_called_once()
 
 class ClaudeWarningTests(unittest.TestCase):
     def setUp(self):
@@ -1406,6 +1572,256 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(call.call_args.args, ('/reset-quota', {'auth_index': 'a'}))
 
 
+class ModelCooldownRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.now = NOW
+        self.cache = usage.UsageCache(clock=lambda: self.now - NOW, wall_clock=lambda: self.now,
+                                      jitter=lambda: 0, daily_jitter=lambda: 0)
+        self.row = dict(file(), unavailable=False, cooldowns=[dict(scope='model',
+            model_key='claude-fable-5-2', reason='quota', http_status=429,
+            retry_at=usage.stamp(NOW + 500000))])
+        self.body = dict(seven_day=dict(utilization=0, resets_at=usage.stamp(NOW + 500000)),
+                        seven_day_overage_included=dict(utilization=100, resets_at=usage.stamp(NOW + 500000)))
+        self.read = Mock(side_effect=lambda *args: dict(status_code=200, body=copy.deepcopy(self.body)))
+        self.profile = dict(current=True, state='ok', subscription_status='active', entitled=True)
+        self.reset = Mock(return_value={'status': 'ok'})
+        self.cache.fetch(self.row, self.read)
+
+    def refreshed(self):
+        self.now += 60
+        self.body['seven_day_overage_included']['utilization'] = 0
+        self.cache.fetch(self.row, self.read, manual=True)
+
+    def test_reset_restores_model_on_active_account_with_older_exhausted_watch(self):
+        self.refreshed()
+        old_watch = dict(kind='weekly_model', model='Fable', remaining=0,
+                         resets_at=NOW + 500000, measured_at=usage.stamp(NOW - 100))
+        result = self.cache.recover(self.row, self.profile, self.reset, extra_windows=[old_watch])
+        self.assertIsNotNone(result)
+        self.assertEqual(result['outcome'], 'cleared')
+        self.cache.recover(self.row, self.profile, self.reset)
+        self.reset.assert_called_once()
+
+    def test_shared_allowance_alone_cannot_clear_model_block(self):
+        self.body.pop('seven_day_overage_included')
+        self.now += 60
+        self.cache.entries[('claude', 'a')]['view']['windows'] = []
+        self.cache.fetch(self.row, self.read, manual=True)
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.reset.assert_not_called()
+
+    def test_exhausted_or_old_model_evidence_does_not_clear(self):
+        self.now += 60
+        self.cache.fetch(self.row, self.read, manual=True)
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.refreshed()
+        model = next(w for w in self.cache.entries[('claude', 'a')]['view']['windows']
+                     if w.get('model') == 'Fable')
+        model['measured_at'] = usage.stamp(NOW)
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.reset.assert_not_called()
+
+    def test_other_model_or_nonquota_block_prevents_all_model_reset(self):
+        self.refreshed()
+        for changes in (dict(model_key='claude-opus-5-5'), dict(reason='not_found', http_status=404)):
+            with self.subTest(changes=changes):
+                self.row['cooldowns'].append(dict(self.row['cooldowns'][0], **changes))
+                self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+                self.row['cooldowns'].pop()
+        self.reset.assert_not_called()
+
+    def test_equally_recent_exhausted_watch_still_blocks_recovery(self):
+        self.refreshed()
+        watch = dict(kind='weekly_model', model='Fable', remaining=0,
+                     resets_at=NOW + 500000, measured_at=usage.stamp(self.now))
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset, extra_windows=[watch]))
+        self.reset.assert_not_called()
+
+    def test_elapsed_positive_model_reading_cannot_clear_active_cooldown(self):
+        self.refreshed()
+        model = next(w for w in self.cache.entries[('claude', 'a')]['view']['windows']
+                     if w.get('model') == 'Fable')
+        model['resets_at'] = self.now - 1
+        self.assertFalse(usage.window_fresh(model, usage.stamp(self.now), self.now))
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.reset.assert_not_called()
+
+    def test_new_model_cooldown_starts_new_episode_and_obeys_provider_retry(self):
+        entry = self.cache.entries[('claude', 'a')]
+        original = entry['episode']
+        self.read.side_effect = None
+        self.read.return_value = dict(status_code=429, header={'Retry-After': '7200'})
+        self.now += 60
+        self.cache.fetch(self.row, self.read, manual=True)
+        self.row['cooldowns'][0]['retry_at'] = usage.stamp(NOW + 600000)
+        self.now += 1
+        self.cache.fetch(self.row, self.read)
+        self.assertIsNot(entry['episode'], original)
+        self.assertEqual(entry['episode']['started_at'], self.now)
+        self.assertEqual(self.read.call_count, 2)
+
+    def test_live_recheck_rejects_new_block_but_accepts_same_model_block(self):
+        self.refreshed()
+        state = server.GatewayState(Mock(), Mock(), Mock())
+        self.addCleanup(state.signins.close)
+        state.usage_cache = self.cache
+        episode = self.cache.entries[('claude', 'a')]['episode']
+        reserved = dict(episode=episode, episode_started_at=episode['started_at'])
+        changed = copy.deepcopy(self.row)
+        changed['cooldowns'].append(dict(changed['cooldowns'][0], model_key='claude-opus-5-5'))
+        call = Mock(return_value={'files': [changed]})
+        with patch.object(server.time, 'time', return_value=self.now):
+            self.assertEqual(state.reset_cooldown(self.row, call, 'a', **reserved)['status'], 'account_changed')
+        call.assert_called_once_with('/auth-files')
+        call = Mock(side_effect=[{'files': [self.row]}, {'status': 'ok'}])
+        with patch.object(server.time, 'time', return_value=self.now):
+            self.assertEqual(state.reset_cooldown(self.row, call, 'a', **reserved), {'status': 'ok'})
+        self.assertEqual(call.call_args.args, ('/reset-quota', {'auth_index': 'a'}))
+
+        changed = dict(self.row, unavailable=True, status='error', next_retry_after=usage.stamp(NOW + 10000))
+        call = Mock(return_value={'files': [changed]})
+        with patch.object(server.time, 'time', return_value=self.now):
+            self.assertEqual(state.reset_cooldown(self.row, call, 'a', **reserved)['status'], 'account_changed')
+        call.assert_called_once_with('/auth-files')
+
+    def blocked_until(self, at):
+        return [dict(scope='model', model_key='claude-fable-5-2', reason='quota', http_status=429,
+                     retry_at=usage.stamp(at))]
+
+    def test_unproven_model_block_is_released_after_the_hold_and_not_before(self):
+        self.now += usage.MODEL_BLOCK_RETRY - 1
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.reset.assert_not_called()
+        self.now += 1
+        result = self.cache.recover(self.row, self.profile, self.reset)
+        self.assertEqual(result['outcome'], 'retried')
+        self.assertEqual(self.reset.call_args.args, ('/reset-quota', {'auth_index': 'a'}))
+        # A retry is not evidence of allowance, so the card keeps no "cleared" notice.
+        self.assertIsNone(self.cache.recovery_view(self.row))
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.reset.assert_called_once()
+
+    def test_block_returning_after_a_retry_is_retried_again_without_new_usage_reads(self):
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.cache.recover(self.row, self.profile, self.reset)
+        self.row['cooldowns'] = []
+        self.now += 30
+        self.cache.fetch(self.row, self.read)
+        self.row['cooldowns'] = self.blocked_until(NOW + 500007)
+        self.now += 30
+        self.cache.fetch(self.row, self.read)
+        self.assertEqual(self.read.call_count, 1)
+        self.now += usage.MODEL_BLOCK_RETRY - 1
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.now += 1
+        self.assertEqual(self.cache.recover(self.row, self.profile, self.reset)['outcome'], 'retried')
+        self.assertEqual(self.reset.call_count, 2)
+
+    def poll(self):
+        self.cache.fetch(self.row, self.read)
+        return self.cache.recover(self.row, self.profile, self.reset)
+
+    def test_block_that_stays_away_after_a_retry_reads_usage_once(self):
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.cache.recover(self.row, self.profile, self.reset)
+        self.row['cooldowns'] = []
+        self.now += usage.MODEL_BLOCK_QUIET
+        self.poll()
+        self.poll()
+        self.assertEqual(self.read.call_count, 1)
+        self.now += 1
+        self.poll()
+        self.poll()
+        self.assertEqual(self.read.call_count, 2)
+        self.now += 60
+        self.poll()
+        self.poll()
+        self.assertEqual(self.read.call_count, 2)
+
+    def test_identical_block_set_again_before_the_next_poll_is_retried_again(self):
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.assertEqual(self.cache.recover(self.row, self.profile, self.reset)['outcome'], 'retried')
+        self.now += 60
+        self.assertIsNone(self.poll())
+        self.assertEqual(self.read.call_count, 1)
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.assertEqual(self.poll()['outcome'], 'retried')
+        self.assertEqual(self.reset.call_count, 2)
+
+    def test_returning_block_after_a_retry_starts_no_profile_or_usage_read(self):
+        profiles = subscriptions.Profiles(clock=lambda: self.now - NOW, wall_clock=lambda: self.now,
+                                          jitter=lambda: 0, daily_jitter=lambda: 0)
+        api = Mock(side_effect=lambda path, body: dict(status_code=200, body=profile()
+            if body['url'] == subscriptions.PROFILE else copy.deepcopy(self.body)))
+
+        def poll():
+            profiles.fetch(self.row, api, self.cache)
+            self.cache.fetch(self.row, api)
+            return self.cache.recover(self.row, profiles.view(self.row), self.reset)
+        poll()
+        reads = api.call_count
+        self.assertGreaterEqual(reads, 2)
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.assertEqual(poll()['outcome'], 'retried')
+        self.row['cooldowns'] = []
+        self.now += 30
+        poll()
+        self.row['cooldowns'] = self.blocked_until(NOW + 500007)
+        self.now += 30
+        self.assertIsNone(poll())
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.assertEqual(poll()['outcome'], 'retried')
+        self.assertEqual(api.call_count, reads)
+
+    def test_different_or_late_block_after_a_retry_is_a_new_event(self):
+        for later, model in ((30, 'claude-opus-5-5'), (usage.MODEL_BLOCK_QUIET + 1, 'claude-fable-5-2')):
+            with self.subTest(later=later, model=model):
+                self.setUp()
+                self.now += usage.MODEL_BLOCK_RETRY
+                self.cache.recover(self.row, self.profile, self.reset)
+                self.row['cooldowns'] = []
+                self.cache.fetch(self.row, self.read)
+                reads = self.read.call_count
+                self.row['cooldowns'] = [dict(self.blocked_until(NOW + 500007)[0], model_key=model)]
+                self.now += later
+                self.cache.fetch(self.row, self.read)
+                self.assertEqual(self.read.call_count, reads + 1)
+
+    def test_only_model_quota_blocks_on_a_routable_account_are_retried(self):
+        self.now += usage.MODEL_BLOCK_RETRY
+        for changes in (dict(cooldowns=self.row['cooldowns'] + [dict(self.row['cooldowns'][0], reason='not_found',
+                                                                     http_status=404)]),
+                        dict(unavailable=True), dict(status='error'), dict(disabled=True),
+                        dict(next_retry_after=usage.stamp(self.now + 60)),
+                        dict(type='codex')):
+            with self.subTest(changes=changes):
+                self.assertFalse(usage.model_blocks_only(dict(self.row, **changes), self.now))
+        self.row['cooldowns'].append(dict(self.row['cooldowns'][0], reason='not_found', http_status=404))
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.row['cooldowns'].pop()
+        self.assertIsNone(self.cache.recover(dict(self.row, next_retry_after=usage.stamp(self.now + 60)),
+                                             self.profile, self.reset))
+        self.reset.assert_not_called()
+        self.assertTrue(usage.model_blocks_only(self.row, self.now))
+
+    def test_failed_release_is_attempted_again_after_another_hold(self):
+        self.reset.return_value = {'status': 'account_changed'}
+        self.now += usage.MODEL_BLOCK_RETRY
+        self.assertEqual(self.cache.recover(self.row, self.profile, self.reset)['outcome'], 'failed')
+        self.now += usage.MODEL_BLOCK_RETRY - 1
+        self.assertIsNone(self.cache.recover(self.row, self.profile, self.reset))
+        self.reset.return_value = {'status': 'ok'}
+        self.now += 1
+        self.assertEqual(self.cache.recover(self.row, self.profile, self.reset)['outcome'], 'retried')
+        self.assertEqual(self.reset.call_count, 2)
+
+    def test_proven_allowance_still_clears_at_once_and_is_published(self):
+        self.refreshed()
+        result = self.cache.recover(self.row, self.profile, self.reset)
+        self.assertEqual(result['outcome'], 'cleared')
+        self.assertEqual(self.cache.recovery_view(self.row)['outcome'], 'cleared')
+
+
 class BillingTests(unittest.TestCase):
     def post_billing(self, path, rows, value, headers=None):
         raw = json.dumps(value).encode()
@@ -1629,6 +2045,89 @@ class BillingTests(unittest.TestCase):
                 self.assertFalse(path.exists())
                 self.assertEqual(post(), 200)
 
+
+class InferredRenewalTests(unittest.TestCase):
+    ZONE = usage.dt.timezone.utc
+
+    def billing(self, date='2026-11-15'):
+        return dict(renewal_date=date, confirmed=True, source='user_confirmed', verified_at='2026-10-31T00:48:10+00:00')
+
+    def subscription(self, checked='2026-11-16T12:00:00+00:00', **changes):
+        return dict(dict(plan='Max', subscription_status='active', state='ok', current=True, entitled=True,
+                         checked_at=checked), **changes)
+
+    def roll(self, billing=None, **subscription):
+        return subscriptions.inferred_renewal(billing or self.billing(), self.subscription(**subscription), self.ZONE)
+
+    def test_passed_date_on_a_subscription_still_active_a_later_day_shows_next_month_as_an_estimate(self):
+        self.assertEqual(self.roll(), dict(renewal_date='2026-12-15', confirmed=False, source='renewal_inferred',
+            entered_date='2026-11-15', inferred_at='2026-11-16T12:00:00+00:00',
+            verified_at='2026-10-31T00:48:10+00:00'))
+
+    def test_date_is_kept_until_the_subscription_is_seen_active_after_it(self):
+        for checked in ('2026-11-14T23:59:59+00:00', '2026-11-15T23:59:59+00:00'):
+            self.assertEqual(self.roll(checked=checked), self.billing())
+        self.assertEqual(self.roll(checked='2026-11-16T00:00:00+00:00')['renewal_date'], '2026-12-15')
+        # The check's calendar day is the dashboard host's, not UTC's.
+        west = usage.dt.timezone(usage.dt.timedelta(hours=-3))
+        early = self.subscription(checked='2026-11-16T02:00:00+00:00')
+        self.assertEqual(subscriptions.inferred_renewal(self.billing(), early, west), self.billing())
+
+    def test_only_a_current_active_reading_rolls_a_date_the_user_set(self):
+        for changes in (dict(subscription_status='past_due'), dict(subscription_status='canceled', state='ended'),
+                        dict(subscription_status='trialing'), dict(state='unknown'), dict(current=False),
+                        dict(checked_at=None), dict(checked_at='soon')):
+            with self.subTest(changes=changes):
+                self.assertEqual(self.roll(**changes), self.billing())
+        self.assertEqual(subscriptions.inferred_renewal(self.billing(), {}, self.ZONE), self.billing())
+        self.assertEqual(subscriptions.inferred_renewal(self.billing(), None, self.ZONE), self.billing())
+        self.assertEqual(subscriptions.inferred_renewal({}, self.subscription(), self.ZONE), {})
+        plan_only = {'plan': 'Pro'}
+        self.assertEqual(subscriptions.inferred_renewal(plan_only, self.subscription(), self.ZONE), plan_only)
+        other = dict(self.billing(), source='chatgpt_billing')
+        self.assertEqual(subscriptions.inferred_renewal(other, self.subscription(), self.ZONE), other)
+
+    def test_later_months_keep_the_day_the_user_set(self):
+        self.assertEqual(self.roll(checked='2026-12-15T12:00:00+00:00')['renewal_date'], '2026-12-15')
+        self.assertEqual(self.roll(checked='2026-12-16T12:00:00+00:00')['renewal_date'], '2027-01-15')
+        end = self.billing('2026-01-31')
+        for checked, expected in (('2026-02-01', '2026-02-28'), ('2026-03-01', '2026-03-31'),
+                                  ('2026-04-01', '2026-04-30'), ('2027-02-01', '2027-02-28'),
+                                  ('2028-02-01', '2028-02-29')):
+            self.assertEqual(self.roll(end, checked=checked + 'T12:00:00+00:00')['renewal_date'], expected)
+
+    def test_overview_rolls_claude_dates_and_never_rewrites_the_saved_one(self):
+        billing, subscription = self.billing(), self.subscription()
+        before = copy.deepcopy(billing)
+        subscriptions.inferred_renewal(billing, subscription, self.ZONE)
+        self.assertEqual(billing, before)
+        row = file()
+        record = dict(renewal_date='2026-11-15', source='user_confirmed', verified_at='2026-10-31T00:48:10+00:00',
+                      name=row['name'], email=row['email'])
+        records = {'claude:a': record}
+        state = server.GatewayState(Mock(), Mock(), Mock())
+        self.addCleanup(state.signins.close)
+        state.resets.view.return_value = {}
+        state.notices.claude_view.return_value = {}
+        state.profiles.view = Mock(return_value=subscription)
+        state.data.update(claude_accounts=[dict(key=row['name'], auth_index='a', email=row['email'],
+                                                disabled=False, routing_id='r')],
+                          inventory=providers.inventory_view([row]))
+        with patch.object(server, 'billing_records', return_value=records), \
+                patch.object(server, 'watch_accounts', return_value=[]), \
+                patch.object(server, 'preference_status', return_value=None), \
+                patch.object(server.routing_policy, 'routing_linked', return_value=False):
+            gateway = state.snapshot()
+        expected = (subscriptions.inferred_renewal(dict(self.billing()), subscription)['renewal_date'],
+                    False, 'renewal_inferred', '2026-11-15')
+        # The gateway row feeds notices; the provider groups, with and without fresh records, feed the cards.
+        cards = [next(g for g in providers.groups(gateway, [], billing=source) if g['id'] == 'claude')['accounts'][0]
+                 for source in (records, None)]
+        for shown in [gateway['claude_accounts'][0]['billing']] + [card['billing'] for card in cards]:
+            self.assertEqual((shown['renewal_date'], shown['confirmed'], shown['source'], shown['entered_date']), expected)
+        self.assertEqual({card['email'] for card in cards}, {row['email']})
+        self.assertEqual(records, {'claude:a': dict(renewal_date='2026-11-15', source='user_confirmed',
+            verified_at='2026-10-31T00:48:10+00:00', name=row['name'], email=row['email'])})
 
 if __name__ == '__main__':
     unittest.main()

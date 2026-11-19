@@ -1,26 +1,119 @@
-# Personal Router
+# cliproxy-dashboard
 
-Setting this up on Windows? See [the Windows setup guide](docs/windows-setup.md).
+A local dashboard and operations layer for [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), a separate open-source gateway installed from its official releases. This repository is not a fork of the gateway. Requests flow from **T3 Code, Codex CLI or Claude Code → gateway on port 8317 → one of your pooled subscription accounts**. The dashboard runs on loopback port 8320 and provides account sign-in, per-account allowance, request history and routing controls. Collectors, minute-by-minute routing reconciliation, backups and health notices run as services.
+
+Pooling lets several of your own ChatGPT/Codex or Claude subscriptions serve one local endpoint; each account keeps its own allowance. Four routing modes choose among eligible accounts: **round-robin** distributes new sessions; **earliest-weekly-reset** prefers the allowance that resets first; **highest-remaining-quota** prefers the largest remaining weekly percentage; **preferred-account** favours a selected account with eligible fallback. Healthy conversations keep their account through session affinity. See [Claude routing](docs/claude-routing.md) and the [reset preference record](docs/reset-preference.md).
+
+Pooling subscription accounts through a proxy is not officially supported by the providers. Each user accepts that risk.
+
+The private working repository is `cliproxy-dashboard-private`; its scrubbed public copy is `cliproxy-dashboard`. Installed paths and unit names retain `personal-codex-router`, including `/opt/personal-codex-router`, `/etc/personal-codex-router` and `personal-codex-router-*`.
 
 ## Set up on your own machine
 
-Prerequisites: Linux with systemd, Python 3.11+ with `PyYAML` and `bcrypt`, Node.js 18+, and an [official CLIProxyAPI release](https://github.com/router-for-me/CLIProxyAPI/releases). Tailscale and Claude Code are optional.
+For the coding agent doing the installation: finish with a loopback-only gateway on 8317, dashboard on 8320, at least two signed-in accounts per provider you use, and a verified request from each client. Keep keys, credentials, databases and backups outside the checkout. Preserve existing tool configuration before changing it.
 
-1. Install CLIProxyAPI from its official Linux release and configure `cliproxyapi.service` with a `cliproxyapi` user/group, `/etc/cliproxyapi/config.yaml`, and `/var/lib/cliproxyapi/auth`. Keep management loopback-only (`allow-remote: false`), initially with an empty secret. Bind inference to loopback unless you have a private firewall. Use a gateway build supported by dashboard sign-in (version notes below).
-2. Clone this repo, install the Python dependencies, and create your root-owned site config:
+Only the human can:
+
+- Supply sudo authorization if the machine does not have passwordless sudo.
+- Complete browser sign-ins for each subscription account.
+- Approve changes to how their existing tools sign in.
+
+Prerequisites: Kubuntu with systemd, Python 3.11+, and Node.js 22 or a newer supported LTS at `/usr/bin/node` (the optional preview unit uses that path). Kubuntu packages: `git curl ca-certificates tar python3 python3-yaml python3-bcrypt nodejs`; `openssh-client` for SSH access and `libglib2.0-bin` for desktop notices through `gdbus`. Install Codex CLI, Claude Code and T3 Code from their official distributions if those clients are wanted. Clone this repository and run the following commands from its root. Nightly tests also require the desktop user's `~/.local/bin/heavy` scheduler, which this repository does not supply. If it is unavailable, after step 4 run `systemctl --user disable --now personal-codex-router-nightly-tests.timer` until it is provisioned.
+
+1. **Install the gateway.** Download the Linux archive matching `uname -m` from the [official 8.0.47 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.47). Verify its SHA-256 against the checksum asset on that release page before extracting. This is the example version; dashboard sign-in is validated on 8.0.30, 8.0.43 and 8.0.47, not arbitrary newer releases.
+
+   On a new host, create the system user/group and directories:
+
+   ```sh
+   sudo useradd --system --user-group --home-dir /var/lib/cliproxyapi --shell /usr/sbin/nologin cliproxyapi
+   sudo install -d -o root -g root -m 755 /opt/cliproxyapi/8.0.47
+   sudo install -d -o root -g cliproxyapi -m 750 /etc/cliproxyapi
+   sudo install -d -o cliproxyapi -g cliproxyapi -m 700 /var/lib/cliproxyapi /var/lib/cliproxyapi/auth
+   sudo install -o root -g cliproxyapi -m 660 config/gateway.example.yaml /etc/cliproxyapi/config.yaml
+   sudo install -o root -g root -m 644 config/cliproxyapi.example.service /etc/systemd/system/cliproxyapi.service
+   ```
+
+   Install the extracted `cli-proxy-api` executable at `/opt/cliproxyapi/8.0.47/cli-proxy-api`, owned by root, mode 0755. Read the [example config](config/gateway.example.yaml) and [unit](config/cliproxyapi.example.service); keep the empty management secret for step 3. Config mode 0660 and the unit's `ReadWritePaths` let management save changes. Start this new service with `sudo systemctl daemon-reload` then `sudo systemctl enable --now cliproxyapi.service`. Do not overwrite an existing installation or restart an active gateway blindly.
+
+   Check: `systemctl is-active cliproxyapi.service` says `active`; `ss -ltn` shows only `127.0.0.1:8317` for this port. `/v1/models` refuses an unauthenticated request (401). Management routes are absent while the secret is empty.
+
+2. **Set host settings.** Create the root-owned site config:
 
    ```sh
    sudo install -d -m 755 /etc/personal-codex-router
    sudo install -o root -g root -m 644 config/site.example.json /etc/personal-codex-router/site.json
-   sudoedit /etc/personal-codex-router/site.json
    ```
 
-   The example is loopback-only. `desktop_user` defaults to `SUDO_USER`, then the checkout owner; set it explicitly for automation. Optional `devices` entries have `name` and `tailscale_ip` (IPv4); `tailscale_hostname` sets the private DNS name. Optional `claude_b` has `email` and `plan`, such as `{"email":"account-b@example.com","plan":"Max (20x)"}`. Omitted devices disable the proxy; omitted `claude_b` disables its watch timer. Store no credentials here.
+   The [example](config/site.example.json) has `devices: []` for local access. Set `desktop_user` to the existing desktop login if automatic detection is unsuitable; it defaults to `SUDO_USER`, then the checkout owner. Optional `devices` entries contain `name` and `tailscale_ip`; `tailscale_hostname` supplies private DNS. Optional `claude_b` contains `email` and `plan` for the separate second allowance watcher. No credentials belong here; [allowed fields](scripts/site_config.py) are validated.
 
-   Devices require signed-in Tailscale, peers owned by the same Tailscale user, and an active `tailscale-host-guard.service` with `/etc/tailscale/host-guard.nft` in the [private-preview layout](docs/private-previews.md). The installer checks these before writing files; it does not provision a firewall from scratch.
-3. Download the pinned [Management Center v1.24.2 asset](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/download/v1.24.2/management.html) to `references/management.html` (ignored by Git). Run `sudo python3 scripts/enable-dashboard.py`; it checks the digest, creates the key and updates the gateway config. Verify hot reload. Activation is one-time and refuses to replace existing keys.
-4. Inspect `python3 scripts/install-operations.py`, then run `sudo python3 scripts/install-operations.py --apply`. Use `--site-config /path/to/site.json` for a scratch dry run; full apply saves its resolved settings to the canonical site file. Use a full install for host-setting changes. Run from your desktop session; enable user lingering if Claude watchers should continue after logout.
-5. Open **http://127.0.0.1:8320/** and add accounts through the dashboard's account sign-in (delivered by the companion onboarding change). Configured devices use `https://<your-full-tailscale-DNS-name>:8409/`. Management stays on loopback; other computers can use SSH forwarding. A browser sign-in (Claude, for example) finishes by itself only in a browser on the gateway computer. From any other device it ends on a `localhost` page that can't load. That is expected: copy that page's full address into the dashboard's sign-in dialog and continue.
+   Check: `python3 scripts/install-operations.py --site-config /etc/personal-codex-router/site.json` prints a plan with the intended desktop user and zero devices for a local install. It writes nothing without `--apply`.
+
+3. **Activate management once.** Download the pinned, untracked panel asset into the checkout:
+
+   ```sh
+   curl --fail --location --output references/management.html https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/download/v1.24.2/management.html
+   sudo python3 scripts/enable-dashboard.py
+   ```
+
+   The script checks the [recorded digest](references/management-release.json), installs the panel, generates a private management key, enables usage collection and edits the config in place. It requires `management.allow-remote: false`, an empty secret and no existing dashboard key; it is not a repeatable updater. The management key is separate from client keys.
+
+   Check: `http://127.0.0.1:8317/management.html` loads; a management API call without its key returns 401 after hot reload. Verify an authenticated management read using the private key without printing it. If reload has not taken effect, diagnose the watched file before proceeding; see [hot reload](docs/standard-management-setup.md#maintenance-and-rollback).
+
+4. **Install the dashboard and operations.** From the intended desktop user's session, review the full plan, then apply:
+
+   ```sh
+   python3 scripts/install-operations.py
+   sudo python3 scripts/install-operations.py --apply
+   ```
+
+   A full install means no scope flag. `--preview-only`, `--claude-watch-only`, `--account-access-only` and `--t3-usage-only` update selected components on an existing installation. The full installer adds services/timers, backups and desktop-user jobs; it does not install the gateway. User lingering is needed if user jobs must survive logout. The Tailscale host guard is optional and only needed for access from other devices: configuring devices requires signed-in, same-owner peers and the existing [private-preview guard layout](docs/private-previews.md); the installer does not create that firewall from scratch.
+
+   Check: `personal-codex-router-dashboard.service` is active on `127.0.0.1:8320`; the dashboard reports the gateway online. Check the usage and preference timers with `systemctl list-timers 'personal-codex-router-*'`.
+
+5. **Pool accounts.** Open `http://127.0.0.1:8320/` and use Add account to sign in two or more distinct accounts for each provider you want to pool. The human completes each browser sign-in. If a remote sign-in ends at an unreachable `localhost` callback, paste that full callback address into the dashboard's sign-in dialog. See [account access](docs/account-access.md).
+
+   Check: each account appears under the correct provider, is enabled for routing and reports allowance or an explicit unavailable state. Choose a routing mode in Overview; split the selectors for independent provider choices. Check that the saved choice is applied by the next minute tick. Quota-based modes hold when allowance is uncertain; round-robin needs no quota observation.
+
+6. **Create a client key.** The dashboard's API-key account feature adds upstream provider credentials ([contract](docs/api-keys-backend.md)); it does not issue gateway client keys. Generate a random key into a private file, without displaying it:
+
+   ```sh
+   python3 -c 'import os,secrets; from pathlib import Path; p=Path.home()/".config/personal-codex-router/claude-gateway.key"; fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); os.write(fd,(secrets.token_urlsafe(36)+"\n").encode()); os.close(fd)'
+   ```
+
+   Replace the example entry under `access.api-keys` in `/etc/cliproxyapi/config.yaml` with that value through a private edit; preserve the file's inode, owner and mode, then flush/fsync. Do not put it in shell arguments, logs or Git. The gateway watches the config and hot-reloads client-key changes without a restart; verify this rather than assuming an atomic file replacement is noticed. Separate client keys may be added as further list entries.
+
+   Check: `/v1/models` returns 200 with the new key and 401 without it or with the removed example key. Read the key inside the checking script; never print request headers.
+
+7. **Connect Codex CLI.** With the human's approval, merge this into the Codex home's `config.toml` (normally `~/.codex/config.toml`), inserting the client key privately and keeping the file mode 0600:
+
+   ```toml
+   model_provider = "personal_codex_gateway"
+
+   [model_providers.personal_codex_gateway]
+   name = "Local gateway"
+   base_url = "http://127.0.0.1:8317/v1"
+   wire_api = "responses"
+   supports_websockets = true
+   requires_openai_auth = true
+   experimental_bearer_token = "<gateway-client-key>"
+   ```
+
+   Select a model returned by the gateway. Optional retries from the working setup are `request_max_retries = 8` and `stream_max_retries = 8` within the provider table. WebSocket transport also needs gateway account metadata; follow [Codex WebSockets](docs/codex-websockets.md) before enabling that transport on accounts.
+
+   Check: ask Codex for a short reply and find the request, provider and account in the dashboard's requests list.
+
+8. **Connect Claude Code.** The key file from step 6 is read by `python3 scripts/claude-gateway.py`; pass normal Claude arguments after the script. Use a shell function with an absolute checkout path if desired. The launcher requires mode 0600, sets `ANTHROPIC_BASE_URL=http://127.0.0.1:8317` and `ANTHROPIC_AUTH_TOKEN` for that process, clears conflicting provider credentials and leaves direct allowance collectors alone.
+
+   Check: launch a short Claude conversation through the script and find its request and Claude account in the dashboard's requests list.
+
+9. **Connect T3 Code.** Configure provider instances through T3 settings, preserving other instances. The settings live at `~/.t3/userdata/settings.json` under `providerInstances`: the `codex` instance's `config.homePath` must name the Codex home from step 7; `config.binaryPath` selects the Codex executable and `config.launchArgs` holds its arguments. The `claudeAgent` instance needs environment rows for `ANTHROPIC_BASE_URL=http://127.0.0.1:8317`, `ANTHROPIC_AUTH_TOKEN=<gateway-client-key>` marked sensitive, `ENABLE_TOOL_SEARCH=true`, `CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING=1`, `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, and `NO_PROXY=127.0.0.1,localhost`. Clear conflicting direct-provider auth/backend variables as the [Claude launcher](scripts/claude-gateway.py) does.
+
+   Check: start a new conversation with each T3 provider and find both requests and their accounts in the dashboard's requests list. A configured endpoint alone does not prove the client uses it.
+
+- Optional: [T3 usage hub](docs/t3-usage-hub.md) adds separately keyed, read-only allowance reporting.
+- Optional: [Tailscale access](docs/private-previews.md) provides private access from other devices; SSH forwarding keeps gateway management on loopback.
+- Optional: [backups and recovery](docs/backups-and-recovery.md) explains verification and off-machine copies; local backups are included in the full install.
+- Optional: [notifications](docs/health-and-notifications.md) explains health and account notices included in the full install.
 
 Installation files and private state:
 
@@ -34,6 +127,72 @@ Installation files and private state:
 | `/var/lib/personal-codex-router/`, `/var/lib/personal-codex-router-routing/`, `/var/lib/personal-codex-router-ops/`, `/var/lib/personal-codex-router-watch/` | Usage SQLite/spool, controls, routing choices, health and watch snapshots created as services run. |
 | `~/.local/state/personal-codex-router/`, `/run/personal-codex-router-move-request/` | Private Claude operation state/socket and temporary conversation-move requests. |
 | `/var/lib/cliproxyapi-dashboard-backups/`, `/var/lib/personal-codex-router-backups/`, `docs/activation.json` | Activation/deployment backups and activation manifest. Backups contain secrets; keep them private and off the repo. |
+
+What has been tested: this setup runs daily on the original Kubuntu machine. The example was checked with CLIProxyAPI 8.0.47 as an unprivileged scratch process: loopback-only listener, authenticated model listing, unauthenticated inference refusal and inaccessible management with an empty secret; startup left the config unchanged. In-place management activation and client-key replacement hot-reloaded under the same PID. The example unit passed `systemd-analyze verify`. The minimal Codex provider snippet above produced a real reply through the running gateway from a throwaway Codex home. A clean-machine installation has not been run end to end. The installer requires Linux with systemd; Windows and macOS hosts are not supported by it.
+
+## Pages
+
+- **Overview:** accounts grouped by provider, remaining allowance, reset windows, routing controls, health, today's recorded tokens and recent requests. Unconfirmed billing dates are labelled; see [billing renewals](docs/billing-renewals.md).
+- **Usage:** today, the last seven days or all recorded history, with account/model totals and a request chart. All-history charts show up to the latest 30 days.
+- **System:** gateway status, routing and affinity settings, recording status and advanced management.
+- The theme button switches between dark and light and remembers the browser's preference.
+
+Unknown allowance is shown as unavailable. Refresh failures preserve and label the last known reading. Recorded usage refreshes every 15 seconds.
+
+## Everyday access
+
+Open `http://127.0.0.1:8320/` on the gateway machine. The dashboard relies on the local/private connection for access and needs no management-key login; raw management routes and upstream tokens are not forwarded to its browser. For other computers, use SSH forwarding or the optional [private preview](docs/private-previews.md). A `.localhost` address always refers to the device opening it.
+
+Advanced management is the separate pinned Management Center at `http://127.0.0.1:8317/management.html`. Its key is stored at `~/.config/personal-codex-router/management-key`; it is different from a gateway client key. Automatic panel updates are disabled.
+
+## Subscription allowance versus token history
+
+The provider reports each account’s current allowance and reset window independently. These are not added into a single interchangeable quota. Window lengths can differ by plan; the dashboard shows the windows reported for each account.
+
+Token history begins when your collector starts recording. Cached input can form much of a request's token total. These are operational records, not a dollar bill or a calculation of subscription allowance.
+
+The upstream usage queue removes records when read. Records already collected persist in SQLite, but a crash during dequeue/commit or expired uncollected records can leave gaps. Treat this as best-effort operational history. Run only one queue consumer.
+
+## Components
+
+| Component | Location / service |
+| --- | --- |
+| Separate model gateway | `cliproxyapi.service`, example CLIProxyAPI 8.0.47, loopback 8317 |
+| Dashboard backend and static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, loopback 8320 |
+| Usage collector | `personal-codex-router-usage.timer`, every 15 seconds; SQLite at `/var/lib/personal-codex-router/usage.sqlite3` |
+| Routing controller | `personal-codex-router-preference.timer`, every minute; [routing contracts](docs/claude-routing.md) |
+| Operations | Backup, health, retention, release-check and desktop-user timers; [automation](docs/operations-automation.md) |
+| Optional private access | Preview proxy and SSH forwarding; [private previews](docs/private-previews.md) |
+
+Per-account fast mode requires the separate [plugin policy setup](docs/fast-mode-policy.md).
+
+## Development and validation
+
+The public copy, `cliproxy-dashboard`, is generated from the private repository, `cliproxy-dashboard-private`, by `.github/workflows/update-shareable-copy.yml` after every push to `main`. Do not edit the public copy directly: the next update overwrites it. The workflow is kept in the private repository and omitted from the public copy. Rehearse locally with `python3 scripts/export-public.py --out <empty dir>` followed by `python3 scripts/export-public.py --check <dir>`; export uses the committed tree and scrubs personal identifiers and Git history.
+
+Source files are in `dashboard/`; installed runtime copies live under `/opt/personal-codex-router`. Preview installer plans before applying scoped updates. Backend changes need a dashboard restart; static assets do not. Dashboard work should not restart the gateway. See [account access](docs/account-access.md) for scope and sign-in interruption limits.
+
+Run focused checks for touched code. The complete Python and Node runner continues after failures and prints a summary:
+
+```sh
+~/.local/bin/heavy python3 scripts/run-tests.py
+git diff --check
+```
+
+The full operations installer also includes daily verified raw-usage retention
+(at least 90 days of detail, permanent hourly totals), weekly anonymous gateway
+release checks with dashboard notices, and a nightly desktop-user test timer.
+Nightly tests use `site.json`'s `source_checkout` through `heavy`, keep the last
+14 logs in `~/.cache/personal-codex-router/test-runs/`, and notify only on failure.
+See [operations automation](docs/operations-automation.md) for archive verification,
+history boundaries, timer behavior and failure handling. These jobs never upgrade
+or restart the gateway.
+
+Dated operational evidence is retained in `docs/` and below. It records the original deployment, not a clean-machine acceptance test.
+
+## Notes on the original deployment
+
+These records are preserved from the original machine, including dated version, network and account details. Some describe earlier states; use the setup above for a new installation.
 
 Claude usage reads existing `~/.claude/.credentials.json`; the optional second watch reads `~/.config/personal-codex-router/claude-b.token` (0600), provisioned separately through Claude Code's setup-token flow. Installers create neither token; these differ from gateway sign-in credentials.
 
@@ -51,7 +210,7 @@ Personal Router shows the configured Codex Pro account (`account-a@example.com`)
 
 [Claude subscription usage](docs/claude-usage.md) shows both Claude subscriptions with independent gateway routing. The allowance collectors use Claude Code's current token for A (Max 20x, with confirmed limit resets) and a long-lived setup-token for B, on Max (20x). Inference uses separate gateway-owned Claude credentials.
 
-## Earned reset credits
+### Earned reset credits
 
 Click Resets at the bottom of the Codex account card to open its modal. It lists expiry dates, changes Use reset to Confirm on the same control, and includes automatic expiry redemption settings. Only the earliest-expiring available credit can be redeemed; the server also enforces this against a fresh balance. The remaining Codex account retains its saved automatic expiry redemption setting.
 
@@ -67,7 +226,7 @@ Choose routing from the shared Overview dropdown to apply the same choice to Cod
 
 Claude routing retains all five choices, including either Claude email. Split routing to prefer Claude B, whose email is no longer a configured Codex identity. It defaults to Claude A; the timer leaves Claude priorities untouched until a selection is saved. Claude cards have the same Use for routing switch as Codex, including confirmation before disabling the last routable account. The same minute timer reconciles saved choices independently, using Claude's local usage snapshots (5-hour and weekly windows, at most 15 minutes old). Missing, stale, or uncertain usage on enabled accounts holds the existing priorities until fresh observations arrive. Disabled accounts are excluded. Conversation moves always release both providers. Claude state lives separately under `/var/lib/personal-codex-router-routing/claude/`; Codex priorities, credentials, affinity, and extra-usage settings are independent.
 
-## Everyday access
+### Everyday access
 
 Open **[https://router.tailnet-example.ts.net:8409/](https://router.tailnet-example.ts.net:8409/)** with Tailscale connected and Tailscale DNS enabled. The shared address shows accounts, usage, health and resets, and allows data refresh, routing changes, automatic reset policy changes, reset redemption, Codex account sign-in, and per-account routing switches. It uses the same private device restrictions as the original IP address; raw gateway management routes are not forwarded.
 
@@ -81,7 +240,7 @@ Fallback addresses:
 - Linux: `http://127.0.0.1:8320/`
 - Shared dashboard with Tailscale: `https://router.tailnet-example.ts.net:8409/`. Old HTTP short-name/IP bookmarks redirect to HTTPS and require Tailscale DNS at the destination.
 
-## Pages
+### Pages
 
 - **Overview:** the Codex account and both Claude account cards together at the top, in a **Codex accounts** group and a **Claude accounts** group: side by side on desktop, stacked below 1180px, one card per row on phones. Codex cards show billing renewal date and countdown, remaining allowance, allowance reset countdown and routing availability; Claude A and Claude B cards show usage by email, with a Claude routing selector in their section. Below the cards, the **Codex** region holds routing, health, today’s recorded tokens and requests, cached input, and recent requests. Billing dates include a two-day review buffer; unconfirmed dates are visibly labeled. See `docs/billing-renewals.md` for sources and maintenance.
 - **Usage:** **Codex usage**, for today, the last seven days, or all recorded history; account and model totals; a request chart. All-history totals include all records, while its chart shows up to the latest 30 days.
@@ -90,22 +249,16 @@ Fallback addresses:
 
 Codex quotas refresh every minute, with a manual refresh button. Recorded usage refreshes every 15 seconds. Unknown or unavailable data is shown as unavailable, rather than as a zero allowance. Provider refresh failures preserve and label the last known quota.
 
-## Subscription allowance versus token history
-
-The provider reports each account’s current allowance and reset window independently. These are not added into a single interchangeable quota. Window lengths can differ by plan; the dashboard shows the windows reported for each account.
-
 Usage history starts with the collector’s first recorded request on September 22, 2026. A request can contain many cached input tokens. Token totals are operational records, not a dollar bill or a calculation of subscription allowance.
 
-The upstream usage queue removes records when read. Records already collected persist in SQLite, but a crash during dequeue/commit or expired uncollected records can leave gaps. Treat this as best-effort operational history. Run only one queue consumer.
-
-## Components
+### Components
 
 | Component | Location / service |
 | --- | --- |
 | Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.30 live; 8.0.47 installed and staged ([preparation](docs/gateway-upgrade-8.0.47-2026-10-29.md)), `*:8317` behind the host firewall |
 | Overview backend + static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, Linux loopback 8320 |
 | Linux friendly address | `personal-codex-router-url.socket` and `.service`, loopback port 80 |
-| Claude gateway routing | Active for both subscriptions; T3 `claudeAgent_gateway` on Linux and Mac, Linux shell `claude` via `scripts/claude-gateway.py` ([routing](docs/claude-routing.md), [activation and acceptance](docs/claude-gateway-2026-10-15.md)) |
+| Claude gateway routing | Active for both subscriptions; T3 `claudeAgent` on Linux and Mac, Linux shell `claude` via `scripts/claude-gateway.py` ([routing](docs/claude-routing.md), [activation and acceptance](docs/claude-gateway-2026-10-15.md)) |
 | Usage collector | `personal-codex-router-usage.timer`, every 15 seconds |
 | Usage database | `/var/lib/personal-codex-router/usage.sqlite3` |
 | Mac overview tunnel | `~/Library/LaunchAgents/com.user.personal-router.plist`, loopback 18320 → Linux 8320 |
@@ -127,7 +280,7 @@ The Mac system launch daemon reserves port 80 but runs its forwarding process as
 
 Linux services and the Mac address helper/tunnels start automatically through systemd and launchd. No DNS/hosts-file edits, public exposure, exit node, or new inbound tailnet firewall rules are required. Chrome resolves the `.localhost` address locally.
 
-## Advanced management
+### Advanced management
 
 The original Management Center remains available:
 
@@ -138,27 +291,7 @@ It uses a separate management key, stored privately at `~/.config/personal-codex
 
 The official panel is pinned to v1.24.2 and checked against its release SHA-256. Automatic panel updates remain disabled.
 
-## Development and validation
-
-Export a committed tree without private identifiers or Git history with `python3 scripts/export-public.py --out /path/to/empty/export`; scan it again with `python3 scripts/export-public.py --check /path/to/export`.
-
 Source files are in `dashboard/`; installed runtime copies live under `/opt/personal-codex-router`. For dashboard/watch changes, preview `python3 scripts/install-operations.py --claude-watch-only`, then deploy with `sudo -n python3 scripts/install-operations.py --claude-watch-only --apply`; this backs up replaced runtime files and watch snapshots. Run B's watch with `systemctl --user start personal-codex-router-claude-b-usage.service`; it reads only when a read is due. Restart only `personal-codex-router-dashboard` for backend changes. Static assets do not require a service restart. Avoid restarting the model gateway for dashboard work.
-
-Run every Python and Node test (continuing after failures and printing a summary):
-
-```sh
-~/.local/bin/heavy python3 scripts/run-tests.py
-git diff --check
-```
-
-The full operations installer also includes daily verified raw-usage retention
-(at least 90 days of detail, permanent hourly totals), weekly anonymous gateway
-release checks with dashboard notices, and a nightly desktop-user test timer.
-Nightly tests use `site.json`'s `source_checkout` through `heavy`, keep the last
-14 logs in `~/.cache/personal-codex-router/test-runs/`, and notify only on failure.
-See [operations automation](docs/operations-automation.md) for archive verification,
-history boundaries, timer behavior and failure handling. These jobs never upgrade
-or restart the gateway.
 
 For account-access changes, preview `python3 scripts/install-operations.py --account-access-only`, then apply with `sudo -n python3 scripts/install-operations.py --account-access-only --apply`. This explicit manifest backs up replaced files, installs the dashboard unit (write access to the Codex auth dir for sign-in), reloads systemd and restarts only the dashboard and Tailscale preview proxy, never the gateway. Both this scope and `--claude-watch-only` ship the credential writer, dashboard backend and static assets, preview proxy and updated `router-backup.py` (mode `0755`), so scheduled backups skip unfinished credential writes. Sign-in sessions and outcomes are in memory; restarting the dashboard interrupts pending sign-ins. See [account access](docs/account-access.md) for the isolated visual fixture and security limits.
 
@@ -166,7 +299,7 @@ The tests cover device sign-in, identity validation, the locked credential write
 
 The initial setup record is in `docs/standard-management-setup.md`. Dated evidence is in `docs/`. Model streaming was verified for both accounts during the management setup. On September 22, automatic account failover passed in both directions in an isolated instance of then-installed 7.3.11 using that date's production routing/retry policy. Each test invalidated a copied credential after establishing session affinity; the same request recovered through the other account and the following request stayed there. That test did not cover real quota exhaustion or mid-stream failures; see `docs/failover-verification.json`. The [8.0.47 preparation](docs/gateway-upgrade-8.0.47-2026-10-29.md) separately records synthetic 429/503 failover checks. Phone pairing requirements are in `docs/mobile-remote.md`.
 
-## Stop or roll back the overview
+### Stop or roll back the overview
 
 Stopping the overview does not change the model gateway or either account’s authentication.
 

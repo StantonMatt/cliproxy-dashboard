@@ -951,11 +951,15 @@ class GatewayState:
         # action and a background refresh cannot race through this final check.
         with self.lifecycle_lock:
             rows = routing_policy.inventory_snapshot(call)
+            now = time.time()
             matches = [r for r in rows if r.get('type') == file.get('type')
                        and r.get('auth_index') == file.get('auth_index')]
             if (len(matches) != 1 or matches[0].get('name') != file.get('name')
                     or matches[0].get('email') != file.get('email')
-                    or not usage_adapters.cooled_down(matches[0], time.time())):
+                    or not usage_adapters.cooled_down(matches[0], now)
+                    or usage_adapters.model_cooldowns(matches[0], now) != usage_adapters.model_cooldowns(file, now)
+                    or usage_adapters.model_cooldowns(file, now) and any(
+                        matches[0].get(k) != file.get(k) for k in ('unavailable', 'status', 'next_retry_after'))):
                 return {'status': 'account_changed'}
             with self.usage_cache.lock:
                 entry = self.usage_cache.entries.get((file.get('type'), auth_index), {})
@@ -1340,7 +1344,8 @@ class GatewayState:
         for account in result.get('claude_accounts', []):
             file = dict(account, type='claude', name=account.get('key', account.get('name')))
             account['subscription'] = self.profiles.view(file)
-            account['billing'] = subscriptions.billing_view(file, records)
+            account['billing'] = subscriptions.inferred_renewal(
+                subscriptions.billing_view(file, records), account['subscription'])
         watched = watch_accounts() if result.get('claude_accounts') else []
         for account in result.get('claude_accounts', []):
             observed = usage_adapters.claude_observation(account, result['claude_accounts'], watched)

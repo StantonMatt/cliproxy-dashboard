@@ -19,6 +19,12 @@ INTERVAL = 300
 MAX_AGE = 900
 PRIMARY_WATCH_MAX_AGE = 900
 PRIMARY_WATCH_MAX_COOLDOWN = 86400
+# A Claude model quota block is held this long before live traffic may test it again.
+MODEL_BLOCK_RETRY = 180
+# A block that returns within this long of a retry is the same block, not a new event.
+MODEL_BLOCK_QUIET = 900
+# Weekly usage must fall this many points to count as a redeemed reset; less can be rounding.
+RESET_DROP = 5
 CLAUDE_URL = 'https://api.anthropic.com/api/oauth/usage'
 XAI_URL = 'https://cli-chat-proxy.grok.com/v1/billing?format=credits'
 XAI_HEADERS = {
@@ -120,10 +126,41 @@ def observation_fresh(view, now, checked_field='checked_at'):
         checked, now, view.get('fresh_until'), primary=True) for w in rows)
 
 
+def reset_gap(view, now, grace=600):
+    """The reset a reading just ended at, or None. The next reading arrives within minutes; that gap is not a fault."""
+    checked = view.get('checked_at')
+    rows = [w for w in view.get('windows', []) if w.get('kind') in ('five_hour', 'seven_day')]
+    passed = [w for w in rows if number(w.get('resets_at')) and not w.get('invalid_reset')
+              and (epoch(w.get('measured_at', checked)) or now) < w['resets_at'] <= now]
+    if (view.get('error') or not passed or any(now - w['resets_at'] > grace for w in passed)
+            or not all(window_fresh(w, checked, now, view.get('fresh_until'), primary=True)
+                       for w in rows if not any(w is p for p in passed))):
+        return None
+    return min(w['resets_at'] for w in passed)
+
+
+def model_cooldowns(file, now):
+    if file.get('type') != 'claude':
+        return ()
+    return tuple(sorted((str(c.get('model_key', '')), str(c.get('reason', '')),
+                         str(c.get('http_status', '')), str(c.get('retry_at', '')))
+                        for c in (file.get('cooldowns') or []) if isinstance(c, dict)
+                        and c.get('scope') == 'model' and (epoch(c.get('retry_at')) or 0) > now))
+
+
+def model_blocks_only(file, now):
+    """Quota blocks on Claude models, on an account that is otherwise routable."""
+    models = model_cooldowns(file, now)
+    return (bool(models) and all(reason == 'quota' and status == '429' for _, reason, status, _ in models)
+            and not file.get('disabled') and file.get('unavailable') is not True
+            and file.get('status') not in ('disabled', 'error', 'unavailable')
+            and (epoch(file.get('next_retry_after')) or 0) <= now)
+
+
 def cooled_down(file, now):
     return (not file.get('disabled') and file.get('status') != 'disabled' and
             (file.get('unavailable') is True or file.get('status') in ('error', 'unavailable')
-             or (epoch(file.get('next_retry_after')) or 0) > now))
+             or (epoch(file.get('next_retry_after')) or 0) > now or bool(model_cooldowns(file, now))))
 
 
 def record(value):
@@ -303,6 +340,8 @@ class UsageCache:
         self.lock = threading.Lock()
         self.entries = {}
         self.pending = set()
+        # Released model blocks by key: (blocked models, time). Profiles shares the usage cache's.
+        self.model_retries = {}
         self.interval, self.headers, self.allow_empty = interval, headers, allow_empty
 
     def _headers(self, file, view, normalize):
@@ -315,6 +354,18 @@ class UsageCache:
             # Traffic that succeeded after the failed read proves the credential works again.
             view = {k: v for k, v in view.items() if k != 'auth_state'}
         normalized = (normalize or normalize_claude)(body)
+        reported = [row for row in normalized['windows'] if row.get('kind') == 'weekly_model']
+        normalized['windows'] = [row for row in normalized['windows'] if row.get('kind') != 'weekly_model']
+        # A Fable response also reports the Fable window. Any other response leaves the last reading in place.
+        models = [copy.deepcopy(w) for w in view.get('windows', []) if w.get('kind') == 'weekly_model']
+        for row in reported:
+            previous = next((w for w in models if w.get('model', '').casefold() == row.get('model', '').casefold()), None)
+            if previous is None or (epoch(previous.get('measured_at', view.get('checked_at'))) or 0) < epoch(measured):
+                status = body.get('seven_day_overage_included', {}).get('status')
+                models = [w for w in models if w is not previous] + [dict(
+                    row, measured_at=measured, usage_source='headers', **({'status': status} if status else {}))]
+                view = dict(view, windows=[w for w in view.get('windows', [])
+                                           if w.get('kind') != 'weekly_model'] + models)
         windows = []
         used_headers = False
         for row in normalized['windows']:
@@ -364,8 +415,8 @@ class UsageCache:
                     usage_endpoint_error=view.get('error') or view.get('usage_endpoint_error')), True
             return view, True
         measured = max(w['measured_at'] for w in windows)
-        # Primary traffic cannot refresh optional model/spend/reset observations.
-        windows += [copy.deepcopy(w) for w in view.get('windows', []) if w.get('kind') == 'weekly_model']
+        # Primary traffic cannot refresh spend/reset observations, or a model window it did not report.
+        windows += models
         safe = {k: v for k, v in normalized.items() if k not in ('windows', 'extra_usage', 'recovery_windows')}
         return dict(view, **safe, windows=windows, status='ok', error=None,
                     checked_at=measured, usage_checked_at=measured,
@@ -375,6 +426,26 @@ class UsageCache:
                             epoch(w.get('resets_at')) is not None for w in windows
                             if w.get('kind') != 'weekly_model') else None), True
 
+    def _reset_redeemed(self, entry, file, before):
+        """Called under the cache lock: weekly usage fell inside one window, which only a redeemed reset does.
+
+        Headers are compared with the previous headers, so an endpoint that still
+        reports the old figure cannot make the read repeat.
+        """
+        import quota_headers
+        evidence = (quota_headers.payload(file, self.wall_clock())
+                    if self.headers and file.get('type') == 'claude' else None)
+        if evidence is None:
+            return False
+        weekly = evidence[0]['seven_day']
+        # Without earlier headers, compare with a card reading these headers are newer than.
+        old = entry.get('weekly_header') or next((w for w in before.get('windows', [])
+            if w.get('kind') == 'seven_day' and (epoch(w.get('measured_at', before.get('checked_at'))) or 0)
+            < epoch(evidence[1])), {})
+        entry['weekly_header'] = dict(used=weekly['utilization'], resets_at=weekly['resets_at'])
+        return bool(number(old.get('used')) and weekly['utilization'] <= old['used'] - RESET_DROP
+                    and (epoch(old.get('resets_at')) or 0) > self.wall_clock())
+
     def _events(self, key, entry, file, windows):
         """Called under the cache lock; consume each episode/reset edge once."""
         now = self.wall_clock()
@@ -382,12 +453,19 @@ class UsageCache:
             entry['episode'] = None
             return
         episode = entry.get('episode')
-        trigger = episode is None
+        models = model_cooldowns(file, now)
+        trigger = episode is None or episode.get('model_cooldowns', ()) != models
         if trigger:
-            episode = dict(started_at=now, resets=set(), consumed=set(), recovery=None)
+            episode = dict(started_at=now, resets=set(), consumed=set(), recovery=None,
+                           model_cooldowns=models)
             entry['episode'] = episode
+            # The same block returning straight after a retry needs no new usage or profile read.
+            retried = self.model_retries.get(key)
+            trigger = not (retried and model_blocks_only(file, now) and 0 <= now - retried[1] <= MODEL_BLOCK_QUIET
+                           and retried[0] == tuple(model[:3] for model in models))
         deadlines = [epoch(w.get('resets_at')) for w in windows]
         deadlines.append(epoch(file.get('next_retry_after')))
+        deadlines.extend(epoch(model[3]) for model in models)
         episode['resets'].update(at for at in deadlines if at is not None and at > episode['started_at'])
         passed = {at for at in episode['resets'] if at <= now} - episode['consumed']
         if passed:
@@ -444,58 +522,42 @@ class UsageCache:
             return copy.deepcopy(entry.get('last_recovery'))
 
     def recover(self, file, profile, call, extra_windows=()):
-        """Reserve one attempt per observed episode before calling loopback management."""
+        """Reserve an attempt before calling loopback management.
+
+        Proven allowance clears a cooldown once per observed episode. A Claude
+        model quota block is also released every MODEL_BLOCK_RETRY seconds, so
+        the next request for that model tests it against the provider again.
+        """
         key = (file.get('type'), file.get('auth_index'))
         now = self.wall_clock()
         with self.lock:
             entry = self.entries.get(key, {})
+            retried = self.model_retries.get(key)
+            if retried and not 0 <= now - retried[1] <= MODEL_BLOCK_QUIET:
+                del self.model_retries[key]
+                if not cooled_down(file, now) and entry.get('binding') == (file.get('name'), file.get('email')):
+                    # The released block stayed away: read the allowance it now has, once.
+                    self.pending.add(key)
+                    entry['due'] = entry.get('provider_due', 0)
+                    entry['invalidated'] = entry['inflight']
             episode, view = entry.get('episode'), entry.get('view', {})
-            if (not episode or episode.get('recovery') is not None or not cooled_down(file, now)
-                    or entry.get('binding') != (file.get('name'), file.get('email'))
-                    or view.get('status') != 'ok' or view.get('error')):
+            if (not episode or not cooled_down(file, now)
+                    or entry.get('binding') != (file.get('name'), file.get('email'))):
                 return
-            if file.get('type') == 'claude':
-                if (not profile.get('current') or profile.get('state') != 'ok'
-                        or profile.get('subscription_status') in ('canceled', 'cancelled', 'expired',
-                            'incomplete_expired', 'past_due', 'unpaid', 'incomplete')
-                        or not (profile.get('subscription_status') in ('active', 'trialing')
-                                or profile.get('entitled') is True)):
-                    return
-                primary = [w for w in view.get('windows', []) if w.get('kind') in ('five_hour', 'seven_day')]
-                if ([w.get('kind') for w in primary].count('seven_day') != 1
-                        or [w.get('kind') for w in primary].count('five_hour') > 1):
-                    return
-            elif file.get('type') == 'codex':
-                primary = [w for w in view.get('windows', []) if w.get('slot') in ('primary_window', 'secondary_window')]
-                if (sorted(w.get('slot') for w in primary) != ['primary_window', 'secondary_window']
-                        or any(w.get('status') != 'allowed' for w in primary)):
-                    return
-            else:
+            previous = episode.get('recovery')
+            proven = previous is None and self._allowance_proven(
+                file, profile, episode, view, now, extra_windows) is True
+            if not proven and not (
+                    model_blocks_only(file, now) and now - episode['started_at'] >= MODEL_BLOCK_RETRY
+                    and (previous is None or previous.get('outcome') in ('failed', 'superseded')
+                         and now - (epoch(previous.get('attempted_at')) or 0) >= MODEL_BLOCK_RETRY)):
                 return
-            for row in primary:
-                measured = epoch(row.get('measured_at', view.get('checked_at')))
-                if (measured is None or not episode['started_at'] < measured <= now
-                        or not window_fresh(row, view.get('checked_at'), now, primary=True)
-                        or not number(row.get('remaining')) or not 0 < row['remaining'] <= 100
-                        or row.get('status') == 'rejected'):
-                    return
-            for row in list(view.get('windows', [])) + view.get('recovery_windows', []) + list(extra_windows):
-                if row in primary or row.get('kind') in ('five_hour', 'seven_day'):
-                    continue
-                # Malformed evidence is ambiguous. An elapsed model block is harmless;
-                # an unexpired exhausted model blocks this all-model management API.
-                remaining, reset = row.get('remaining'), epoch(row.get('resets_at'))
-                measured = epoch(row.get('measured_at', view.get('checked_at')))
-                if (not number(remaining) or not 0 <= remaining <= 100 or row.get('invalid_reset')
-                        or measured is None or measured > now
-                        or remaining == 0 and (reset is None or reset > now)
-                        or remaining > 0 and (reset is None or reset > now)
-                        and not window_fresh(row, view.get('checked_at'), now)):
-                    return
+            blocked = tuple(model[:3] for model in model_cooldowns(file, now))
             result = dict(episode_started_at=stamp(episode['started_at']),
                           attempted_at=stamp(now), outcome='pending')
             episode['recovery'] = result
-            entry['last_recovery'] = result
+            if proven:
+                entry['last_recovery'] = result
         response = None
         try:
             response = call('/reset-quota', {'auth_index': key[1]},
@@ -505,8 +567,84 @@ class UsageCache:
             ok = False
         with self.lock:
             result.update(outcome='superseded' if isinstance(response, dict) and response.get('status') == 'superseded'
-                          else 'cleared' if ok else 'failed', completed_at=stamp(self.wall_clock()))
+                          else ('cleared' if proven else 'retried') if ok else 'failed',
+                          completed_at=stamp(self.wall_clock()))
+            if ok and not proven:
+                self.model_retries[key] = (blocked, self.wall_clock())
+                # An identical block set again before the next poll must start a new episode.
+                if entry.get('episode') is episode:
+                    entry['episode'] = None
         return copy.deepcopy(result)
+
+    @staticmethod
+    def _allowance_proven(file, profile, episode, view, now, extra_windows):
+        """Called under the cache lock: True when fresh readings show allowance for every blocked limit."""
+        if view.get('status') != 'ok' or view.get('error'):
+            return
+        if file.get('type') == 'claude':
+            if (not profile.get('current') or profile.get('state') != 'ok'
+                    or profile.get('subscription_status') in ('canceled', 'cancelled', 'expired',
+                        'incomplete_expired', 'past_due', 'unpaid', 'incomplete')
+                    or not (profile.get('subscription_status') in ('active', 'trialing')
+                            or profile.get('entitled') is True)):
+                return
+            primary = [w for w in view.get('windows', []) if w.get('kind') in ('five_hour', 'seven_day')]
+            if ([w.get('kind') for w in primary].count('seven_day') != 1
+                    or [w.get('kind') for w in primary].count('five_hour') > 1):
+                return
+        elif file.get('type') == 'codex':
+            primary = [w for w in view.get('windows', []) if w.get('slot') in ('primary_window', 'secondary_window')]
+            if (sorted(w.get('slot') for w in primary) != ['primary_window', 'secondary_window']
+                    or any(w.get('status') != 'allowed' for w in primary)):
+                return
+        else:
+            return
+        for row in primary:
+            measured = epoch(row.get('measured_at', view.get('checked_at')))
+            if (measured is None or not episode['started_at'] < measured <= now
+                    or not window_fresh(row, view.get('checked_at'), now, primary=True)
+                    or not number(row.get('remaining')) or not 0 < row['remaining'] <= 100
+                    or row.get('status') == 'rejected'):
+                return
+        optional = list(view.get('windows', [])) + view.get('recovery_windows', []) + list(extra_windows)
+        if file.get('type') == 'claude':
+            # A retained watch reading must not veto a newer model allowance.
+            latest = {}
+            for row in optional:
+                if row.get('kind') == 'weekly_model':
+                    name = str(row.get('model', '')).casefold()
+                    measured = epoch(row.get('measured_at', view.get('checked_at'))) or 0
+                    previous = (epoch(latest[name][0].get('measured_at', view.get('checked_at'))) or 0
+                                if name in latest else -1)
+                    if measured > previous:
+                        latest[name] = [row]
+                    elif measured == previous:
+                        latest[name].append(row)
+            for model, reason, status, _ in model_cooldowns(file, now):
+                name = next((name for name in ('fable', 'opus', 'sonnet', 'haiku')
+                             if model.startswith('claude-' + name + '-')), None)
+                rows = latest.get(name, [])
+                if (reason != 'quota' or status != '429' or not rows or any(
+                        not episode['started_at'] < (epoch(row.get('measured_at', view.get('checked_at'))) or 0) <= now
+                        or not window_fresh(row, view.get('checked_at'), now)
+                        or not number(row.get('remaining')) or not 0 < row['remaining'] <= 100
+                        or row.get('status') == 'rejected' for row in rows)):
+                    return
+            optional = [r for r in optional if r.get('kind') != 'weekly_model'] + [r for rows in latest.values() for r in rows]
+        for row in optional:
+            if row in primary or row.get('kind') in ('five_hour', 'seven_day'):
+                continue
+            # Malformed evidence is ambiguous. An elapsed model block is harmless;
+            # an unexpired exhausted model blocks this all-model management API.
+            remaining, reset = row.get('remaining'), epoch(row.get('resets_at'))
+            measured = epoch(row.get('measured_at', view.get('checked_at')))
+            if (not number(remaining) or not 0 <= remaining <= 100 or row.get('invalid_reset')
+                    or measured is None or measured > now
+                    or remaining == 0 and (reset is None or reset > now)
+                    or remaining > 0 and (reset is None or reset > now)
+                    and not window_fresh(row, view.get('checked_at'), now)):
+                return
+        return True
 
     def cached(self, file):
         with self.lock:
@@ -538,6 +676,7 @@ class UsageCache:
                 entry.update(binding=binding, view=empty, episode=None, last_recovery=None,
                              due=entry['due'], failures=0)
                 entry.pop('invalidated', None)
+                entry.pop('weekly_header', None)
             if (entry and entry['binding'] == binding and not cooled_down(file, self.wall_clock())):
                 entry['episode'] = None
         if (not (manual or force) and not pending and not cooled_down(file, self.wall_clock())
@@ -557,7 +696,13 @@ class UsageCache:
             entry = self.entries.setdefault(key, dict(view=empty, binding=binding,
                                                        due=0, inflight=False, failures=0))
             if entry['binding'] == binding:
-                entry['view'], has_headers = self._headers(file, entry['view'], normalize)
+                before = entry['view']
+                entry['view'], has_headers = self._headers(file, before, normalize)
+                if self._reset_redeemed(entry, file, before):
+                    # Every other figure, Fable included, is out of date too.
+                    self.pending.add(key)
+                    entry['due'] = entry.get('provider_due', 0)
+                    entry['invalidated'] = entry['inflight']
             else:
                 has_headers = False
             pending = key in self.pending
@@ -712,6 +857,12 @@ def claude_observation(runtime, runtime_rows, watched, now=None):
     view.update(usage_source=source, usage_checked_at=view.get('checked_at'))
     if view.get('status') == 'ok' and not observation_fresh(view, now):
         view['status'] = 'stale'
+    # The gateway's own reading can show the gap when an older watch reading was selected in its place.
+    gaps = [gap for gap in (reset_gap(reading, now) for reading in (selected, gateway) if reading) if gap]
+    # A gateway usage read that failed after the reset is a fault, not a gap.
+    failed = gateway.get('error') or gateway.get('usage_endpoint_error') and gaps and (
+        epoch(gateway.get('attempted_at')) or 0) >= min(gaps)
+    view['just_reset'] = view.get('status') == 'stale' and bool(gaps) and not failed
     if watch is not None:
         view.update(watch_checked_at=watch.get('checked_at'), watch_attempted_at=watch.get('attempted_at'),
                     watch_id=watch.get('id'))

@@ -1,0 +1,49 @@
+# CLIProxyAPI 8.0.47; replace the example client key before connecting clients.
+config-version: 8
+server:
+  host: 127.0.0.1
+  port: 8317
+management:
+  allow-remote: false
+  # enable-dashboard.py requires an empty secret on first activation.
+  secret-key: ""
+  disable-control-panel: false
+  # The dashboard installer supplies a digest-checked panel.
+  disable-auto-update-panel: true
+access:
+  api-keys:
+    - example-replace-with-your-own-random-client-key
+oauth:
+  auth-dir: /var/lib/cliproxyapi/auth
+  # A missing model may work on another account; overload belongs to the client retry loop.
+  request-scoped-errors:
+    claude:
+      - status: 404
+        match: [not_found_error]
+        action: continue
+      - status: 502
+        match: [overloaded_error]
+        action: stop
+      - status: 529
+        match: [overloaded_error]
+        action: stop
+routing:
+  strategy: round-robin
+  # Keep healthy conversations on their assigned account.
+  session-affinity: true
+  session-affinity-ttl: 1h0m0s
+  session-affinity-subagents: true
+  retry:
+    request-retry: 5
+    max-retry-interval: 45
+  cooldown:
+    # Keep transient cooldowns within the retry interval.
+    transient-error-cooldown-seconds: 15
+observability:
+  usage:
+    # Required by the dashboard's usage collector.
+    usage-statistics-enabled: true
+upstream:
+  claude:
+    # A model-specific quota refusal must not cool every model on the account.
+    model-level-cooling: true

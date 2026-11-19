@@ -524,6 +524,8 @@ function watchState(a) {
   const updated = a.independent_windows===true ? (Number.isFinite(checked) ? relative(checked) : '')
     : (a.checked_at ? relative(a.checked_at) : '');
   if (a.error === 'http_429') return {text: 'Rate-limited' + (updated ? ' · ' + updated.charAt(0).toLowerCase() + updated.slice(1) : ''), tone: 'warn'};
+  // A reading ends at its reset and the next arrives within minutes; the server marks that gap, which is not a fault.
+  if (a.just_reset === true) return {text: 'Just reset · updating', tone: 'ok'};
   if (a.status === 'stale' || (a.status === 'ok' && !Number.isFinite(checked)) ||
       (a.status === 'ok' || Number.isFinite(checked) && Date.now()-checked>900000) && !primaryUsageFresh(a)) return {text: 'Stale' + (updated ? ' · ' + updated.charAt(0).toLowerCase() + updated.slice(1) : ''), tone: 'warn'};
   if (a.status === 'ok') return {text: updated || 'Waiting for first read', tone: 'ok'};
@@ -668,7 +670,9 @@ function claudeReadiness(a) {
   if (enabled == null) return 'unknown';
   if (!enabled) return 'off';
   if (a.runtime_available === false) return 'unavailable';
-  if (a.runtime_available !== true || !claudeUsageFresh(a)) return 'unknown';
+  if (a.runtime_available !== true) return 'unknown';
+  if (a.just_reset === true) return 'resetting';
+  if (!claudeUsageFresh(a)) return 'unknown';
   return a.windows.every(w => (w.remaining ?? (w.used === 0 ? 100 : 0)) > 0) ? 'ready' : 'limited';
 }
 function claudeRoutable(a) {
@@ -696,6 +700,9 @@ function subscriptionHtml(a) {
 // A renewal date the user set, for providers that don't report one (billing_editable). Other providers' cards keep a
 // "Renews —" spot (placeholder) until one is set.
 function renewalHtml(a, placeholder=false) {
+  // A date the server rolled forward (renewal_inferred) is an estimate and says what it rests on.
+  if(a.billing?.source==='renewal_inferred'){const b=BillingDates.describe(a.billing), set=BillingDates.describe({renewal_date:a.billing.entered_date}).date;
+    return renewalBlock(b,b.label,`You set ${set}, and the subscription was still active ${dateTime(a.billing.inferred_at)}. Set the date again to correct it.`);}
   if(a.billing?.renewal_date)return renewalBlock(BillingDates.describe(a.billing),'Renews',`Set by you ${dateTime(a.billing.verified_at)}.`);
   return placeholder ? `<div class="reset-block billing-renewal"${accountActions() ? ' title="Set it from the account menu"' : ''}><span>Renews</span><strong>—</strong></div>` : '';
 }
@@ -841,7 +848,8 @@ function renderWatchContent(data) {
   $('claude-account-count').textContent = Array.isArray(routes) && routes.length
     ? `${routes.filter(r => !r.disabled && r.status !== 'disabled').length+activeKeys} / ${routes.length+keys.length}`
     : accounts.length || keys.length ? `${accounts.filter(a => a.status === 'ok').length+activeKeys} / ${accounts.length+keys.length}` : '—';
-  const ready = accounts.filter(claudeRoutable).length;
+  // An account whose allowance just reset counts as ready here; the last-ready confirmations stay strict.
+  const ready = accounts.filter(a => ['ready','resetting'].includes(claudeReadiness(a))).length;
   const checked = Date.parse(data.gateway?.checked_at);
   const unknown = failed || data.gateway?.online !== true || !Number.isFinite(checked) || Date.now()-checked < -30000 || Date.now()-checked > 180000 ||
     accounts.some(a => claudeReadiness(a) === 'unknown');

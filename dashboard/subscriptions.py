@@ -1,4 +1,5 @@
 """OAuth subscription observations and private, user-confirmed billing details."""
+import calendar
 import datetime as dt
 import json
 import os
@@ -64,6 +65,8 @@ class Profiles:
                 value['plan_change'] = previous['plan_change']
             return value
         usage_view = usage_cache.cached(file) or {}
+        # A model block returning after a retry must not start a profile read either.
+        self.cache.model_retries = usage_cache.model_retries
         event_due = usage_cache.event_due(file)
         try:
             view = self.cache.fetch(file, call, manual=manual, force=force or event_due,
@@ -266,6 +269,37 @@ def billing_view(file, records):
     except (TypeError, ValueError, KeyError):
         pass
     return result
+
+
+def add_months(date, months):
+    """The same day of a later month, or that month's last day."""
+    index = date.month - 1 + months
+    year, month = date.year + index // 12, index % 12 + 1
+    return date.replace(year=year, month=month, day=min(date.day, calendar.monthrange(year, month)[1]))
+
+
+def inferred_renewal(billing, subscription, zone=None):
+    """Roll a passed date the user set to the next month once the subscription outlives it.
+
+    Claude reports no charge date. A subscription still active on a later day was
+    renewed, so the same day of a following month is shown, marked as an estimate.
+    The saved date stays the anchor and is never rewritten.
+    """
+    checked = usage.epoch((subscription or {}).get('checked_at'))
+    if (billing.get('source') != 'user_confirmed' or not billing.get('renewal_date') or checked is None
+            or subscription.get('state') != 'ok' or subscription.get('current') is not True
+            or subscription.get('subscription_status') != 'active'):
+        return billing
+    entered = dt.date.fromisoformat(billing['renewal_date'])
+    seen = dt.datetime.fromtimestamp(checked, zone).date()
+    if seen <= entered:
+        return billing
+    months = 1
+    while add_months(entered, months) < seen:
+        months += 1
+    return dict(billing, renewal_date=add_months(entered, months).isoformat(), confirmed=False,
+                source='renewal_inferred', entered_date=billing['renewal_date'],
+                inferred_at=subscription['checked_at'])
 
 
 _UNSET = object()

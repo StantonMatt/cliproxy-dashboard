@@ -1,0 +1,37 @@
+[Unit]
+Description=Local multi-account gateway (CLIProxyAPI)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cliproxyapi
+Group=cliproxyapi
+ExecStart=/opt/cliproxyapi/8.0.47/cli-proxy-api -config /etc/cliproxyapi/config.yaml
+WorkingDirectory=/var/lib/cliproxyapi
+StateDirectory=cliproxyapi
+StateDirectoryMode=0700
+RuntimeDirectory=cliproxyapi
+RuntimeDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# Management saves must retain write access to the watched config file.
+ReadWritePaths=/etc/cliproxyapi/config.yaml
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

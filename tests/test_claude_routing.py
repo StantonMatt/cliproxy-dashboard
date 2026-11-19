@@ -366,6 +366,74 @@ class ClaudeRoutingTests(unittest.TestCase):
             self.assertEqual(self.reconcile({'mode': 'preferred-account', 'preferred_email': A}, data)['preferred_email'], B)
             self.rows[2]['disabled'] = False
 
+    def test_account_with_only_a_model_allowance_spent_still_routes(self):
+        data = overview()
+        data['watch_accounts'][0]['windows'].append(
+            dict(kind='weekly_model', model='Fable', remaining=0, resets_at=NOW+100000))
+        # The last-ready guards use the default: an account that cannot serve every model is not ready.
+        candidates, excluded = p.eligible_accounts(data, NOW, provider='claude')
+        self.assertEqual((set(candidates), excluded), ({B}, {A: 'no remaining allowance'}))
+        # A resets first and B has more left, as without the Fable row.
+        self.assertEqual(p.choose(data, NOW, 'earliest-weekly-reset', provider='claude')['preferred_email'], A)
+        self.assertEqual(p.choose(data, NOW, 'highest-remaining-quota', provider='claude')['preferred_email'], B)
+        result = self.reconcile({'mode': 'preferred-account', 'preferred_email': A}, data)
+        self.assertEqual((result['preferred_email'], result['intended_priorities']), (A, {A: 100, B: 0}))
+        self.assertIsNone(result['reason'])
+        # The all-model weekly allowance spent as well leaves nothing to serve here.
+        data['watch_accounts'][0]['windows'][1]['remaining'] = 0
+        result = self.reconcile({'mode': 'preferred-account', 'preferred_email': A}, data)
+        self.assertEqual(result['preferred_email'], B)
+        self.assertIn('no remaining allowance', result['reason'])
+
+    def test_reading_gap_after_a_reset_keeps_the_applied_plan_without_a_hold(self):
+        def after_reset(age, account=0):
+            data = overview()
+            row = data['watch_accounts'][account]
+            row['checked_at'] = p.stamp(NOW - age - 60)
+            row['windows'][1]['resets_at'] = NOW - age
+            return data
+        choice = {'mode': 'earliest-weekly-reset'}
+        self.assertEqual(self.reconcile(choice)['status'], 'active')
+        self.writes.clear()
+        result = self.reconcile(data=after_reset(60))
+        self.assertEqual((result['status'], result['hold_reason'], result['preferred_email']), ('active', None, A))
+        self.assertEqual(self.writes, [])
+        # A reading that still has not come after ten minutes is a real hold.
+        self.assertEqual(self.reconcile(data=after_reset(601))['hold_reason'], f'quota unavailable for {A}')
+        # Another account's fault is reported, and a new choice made in the gap is not shown as applied.
+        self.assertEqual(self.reconcile(choice)['status'], 'active')
+        broken = after_reset(60)
+        broken['watch_accounts'][1]['error'] = 'network'
+        self.assertEqual(self.reconcile(data=broken)['hold_reason'], f'quota unavailable for {B}')
+        self.assertEqual(self.reconcile(choice)['status'], 'active')
+        result = self.reconcile({'mode': 'highest-remaining-quota'}, after_reset(60))
+        self.assertEqual((result['status'], result['hold_reason']),
+                         ('held', f'waiting for the new reading after a reset for {A}'))
+        # An offline gateway is not a gap either.
+        self.assertEqual(self.reconcile({'mode': 'earliest-weekly-reset'})['status'], 'active')
+        offline = after_reset(60)
+        offline['gateway']['online'] = False
+        self.assertEqual(self.reconcile(data=offline)['hold_reason'], f'quota unavailable for {A}')
+
+    def test_reset_gap_is_read_from_the_gateway_reading_and_not_past_a_failed_read(self):
+        def observed(watch_reset=NOW - 86400, **gateway):
+            usage = dict(provider='claude', key='claude0', auth_index='claude0', email=A, status='ok',
+                         checked_at=p.stamp(NOW - 120), windows=[dict(kind='seven_day', remaining=47, resets_at=NOW - 60)])
+            runtime = dict(name='claude0', auth_index='claude0', email=A, _gateway_usage=dict(usage, **gateway))
+            # By default the watch last read a window that ended a day ago.
+            watch = dict(id='claude', provider='claude', email=A, status='ok', checked_at=p.stamp(NOW - 200000),
+                         windows=[dict(kind='seven_day', remaining=10, resets_at=watch_reset)])
+            return p.usage_adapters.claude_observation(runtime, [runtime], [watch], NOW)
+        self.assertEqual((observed()['usage_source'], observed()['just_reset']), ('watch', True))
+        self.assertFalse(observed(error='http_429')['just_reset'])
+        self.assertFalse(observed(usage_endpoint_error='http_429', attempted_at=p.stamp(NOW - 30))['just_reset'])
+        self.assertTrue(observed(usage_endpoint_error='http_429', attempted_at=p.stamp(NOW - 3600))['just_reset'])
+        self.assertFalse(observed(windows=[dict(kind='seven_day', remaining=47, resets_at=NOW - 601)])['just_reset'])
+        # A watch reading that ended at the same reset does not excuse the gateway's failed read.
+        self.assertTrue(observed(watch_reset=NOW - 60)['just_reset'])
+        for failure in (dict(error='http_429'), dict(usage_endpoint_error='http_429', attempted_at=p.stamp(NOW - 30))):
+            self.assertFalse(observed(watch_reset=NOW - 60, **failure)['just_reset'])
+
     def test_unstarted_five_hour_window_routes_live_quota_case(self):
         data = overview()
         windows = data['watch_accounts'][0]['windows']

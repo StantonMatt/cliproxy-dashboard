@@ -94,6 +94,23 @@ last known with measurement times on hover. Routing and T3 omit expired primary
 readings. An unused Claude weekly allowance with no reset sorts after known
 resets; no future reset is invented.
 
+The Fable window has two more sources (2026-11-16), so its bar no longer waits
+for the daily read after a reset is redeemed in the Claude app:
+
+- **Fable response headers.** A response to a Fable request also carries the
+  Fable weekly window (`anthropic-ratelimit-unified-7d_oi-*`). The gateway
+  keeps only the last response's headers per account, so the dashboard takes
+  the Fable figure whenever the response it samples was a Fable one, and keeps
+  that reading when later responses are for other models. A newer endpoint
+  reading still replaces it. A `rejected` slot reads as fully used; a malformed
+  slot is left out and does not discard the primary readings.
+- **A read after a redeemed reset.** Weekly usage only falls inside a window
+  when a reset is redeemed. When the all-model weekly figure in the headers
+  falls by five points or more (`RESET_DROP`) before the window's reset time,
+  the dashboard reads the usage endpoint once, on the existing budget and
+  behind any provider Retry-After. The comparison is with the previous headers,
+  so an endpoint that still reports the old figure cannot repeat the read.
+
 Claude profiles read all `has_claude_*` flags, organization plan/tier, subscription status
 and recognized billing type. Inventory email must match profile email. Ended
 statuses, or a non-active/non-trialing status with no true entitlement flag, show

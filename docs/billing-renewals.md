@@ -16,7 +16,9 @@ When no live ChatGPT date is shown, the Codex card menu offers **Set renewal dat
 {"accounts":{"account@example.com":{"renewal_date":"2026-10-14","verified_at":"2026-09-23T12:00:00Z","source":"chatgpt_billing"}}}
 ```
 
-Sources are `chatgpt_billing`, `account_metadata` (estimate), and `user_confirmed`. The browser receives only date, source, confirmation state, verification time, and editability. Billing adds no browser identifiers, identity token, access token, refresh token, or management key.
+Claude reports no charge date: its profile gives only the subscription status and creation time. So a Claude date is one set by hand, and since 2026-11-16 it rolls forward as an estimate. When that date has passed and a current profile reading taken on a later calendar day (dashboard host time) still shows `subscription_status: active`, the card shows the same day of the next month that is not before that reading, clamped to the month's last day, as **Expected renewal** with source `renewal_inferred`. The saved date is the anchor and is never rewritten; the browser also receives it (`entered_date`) and the reading's time (`inferred_at`) for the tooltip. Any other status, a stale or failed profile reading, or a reading taken on or before the date leaves the passed date marked **Check date**. Setting the date again from the card menu replaces the anchor. An annual plan would be estimated a month ahead, not a year; set the date by hand in that case. Live ChatGPT dates and Codex estimates still never advance by assuming recurrence.
+
+Sources are `chatgpt_billing`, `account_metadata` (estimate), `user_confirmed`, and `renewal_inferred` (estimate). The browser receives only date, source, confirmation state, verification time, and editability. Billing adds no browser identifiers, identity token, access token, refresh token, or management key.
 
 Changes to cancellation or auto-renewal are checked at the billing refresh cadence; confirm them in ChatGPT billing when needed. The link opens the browser's currently signed-in account, so check its email.
 

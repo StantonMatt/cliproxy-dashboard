@@ -72,6 +72,10 @@ class DataHold(Hold):
     """Quota data cannot safely select an account."""
 
 
+class ResetHold(DataHold):
+    """The only missing data is the first reading after a reset that just passed."""
+
+
 @contextmanager
 def controller_flock(timeout=10, state_dir=None):
     state_dir = STATE if state_dir is None else state_dir
@@ -158,6 +162,7 @@ def claude_observations(overview, now):
         observed = usage_adapters.claude_observation(runtime, runtime_rows, watched, now)
         accounts.append(dict(observed, email=email, _runtime=runtime))
     result = []
+    resetting = None
     for account in accounts:
         label = account['email']
         runtime = account['_runtime']
@@ -173,6 +178,10 @@ def claude_observations(overview, now):
             continue
         if not account.get('id'):
             result.append(dict(email=account['email'], active=False, availability={'state': 'no_data'}))
+            continue
+        if account.get('just_reset'):
+            # Any other account's fault is still reported first.
+            resetting = resetting or label
             continue
         if account.get('status') != 'ok' or account.get('error'):
             raise DataHold(f'quota unavailable for {label}')
@@ -214,11 +223,19 @@ def claude_observations(overview, now):
         result.append(dict(email=account['email'], active=not disabled,
                            disabled=disabled, windows=windows, quota_checked_at=checked,
                            usage_source=account.get('usage_source'), fresh_until=account.get('fresh_until')))
+    if resetting:
+        # An offline or stale gateway snapshot is reported as before.
+        quiet = gateway.get('online') and fresh(gateway.get('checked_at'), now)
+        raise (ResetHold(f'waiting for the new reading after a reset for {resetting}') if quiet
+               else DataHold(f'quota unavailable for {resetting}'))
     # Each allowance was checked independently against its measured reset.
     return {'gateway': {**gateway, 'accounts': result}}
 
 
-def eligible_accounts(overview, now, provider='codex', inventory=None):
+def eligible_accounts(overview, now, provider='codex', inventory=None, model_spent_ok=False):
+    """Accounts with allowance. Routing passes model_spent_ok: a Claude account with only a model's own
+    allowance spent still serves its other models, since the gateway blocks just that model there
+    (model-level cooling) and sends it to the next account."""
     inventory = inventory_for(overview) if inventory is None else inventory
     if provider == 'claude':
         overview = claude_observations(overview, now)
@@ -285,7 +302,10 @@ def eligible_accounts(overview, now, provider='codex', inventory=None):
                 raise DataHold(f'waiting for the next weekly reset observation for {label}')
         if any(not finite(w.get('remaining')) or not 0 <= w['remaining'] <= 100 for w in windows):
             raise DataHold(f'account allowance is not reported for {label}')
-        if reason or any(w['remaining'] <= 0 for w in windows):
+        spent = [w for w in windows if w['remaining'] <= 0]
+        if model_spent_ok and provider == 'claude':
+            spent = [w for w in spent if w.get('kind') != 'weekly_model']
+        if reason or spent:
             excluded[email] = reason or 'no remaining allowance'
             continue
         candidates[email] = {'remaining': ranked['remaining'], 'reset': reset, 'secondary': secondary}
@@ -306,7 +326,7 @@ def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='
         raise ValueError('Choose an automatic routing mode')
     if len(identities(provider, inventory)) <= 1:
         return priority_plan(None, reason='Fewer than two accounts are configured', provider=provider, inventory=inventory)
-    candidates, _ = eligible_accounts(overview, now, provider, inventory)
+    candidates, _ = eligible_accounts(overview, now, provider, inventory, model_spent_ok=True)
     if not candidates:
         raise Hold('No account currently reports available allowance')
     # Never compare a weekly percentage with a longer window's percentage.
@@ -533,7 +553,7 @@ def selected_plan(selected, overview, now, current=None, provider='codex', inven
         return choose(overview, now, selected['mode'], current, provider, inventory)
     if selected['mode'] == 'round-robin':
         return priority_plan(None, provider=provider, inventory=inventory)
-    candidates, excluded = eligible_accounts(overview, now, provider, inventory)
+    candidates, excluded = eligible_accounts(overview, now, provider, inventory, model_spent_ok=True)
     email = selected['preferred_email']
     if email in candidates:
         return priority_plan(email, provider=provider, inventory=inventory)
@@ -637,6 +657,12 @@ def reconcile(overview, selected=None, call=request, state_dir=None, provider='c
         try:
             plan = selected_plan(wanted, overview, now, current, provider, inventory)
         except Hold as error:
+            if (isinstance(error, ResetHold) and selected is None and previous.get('status') == 'active'
+                    and previous.get('policy') == wanted['mode']
+                    and previous.get('selected_email') == wanted['preferred_email']):
+                # The applied plan stands through the few minutes a reading takes to follow a reset.
+                write_json(state_dir / 'status.json', status)
+                return public_status(status)
             held_since = status.get('held_since') or stamp(now)
             status.update(status='held', hold_reason=str(error), held_since=held_since,
                           reason=str(error))

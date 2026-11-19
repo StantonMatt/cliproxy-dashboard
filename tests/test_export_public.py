@@ -167,6 +167,14 @@ class PublicExportTests(unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(list(out.iterdir()), [])
 
+    def test_github_files_are_excluded_and_gitignore_is_kept(self):
+        out, result = self.export({'.github/workflows/x.yml': b'private workflow',
+                                   '.gitignore': b'__pycache__/\n'})
+        self.assertFalse(result)
+        self.assertFalse((out / '.github').exists())
+        self.assertEqual((out / '.gitignore').read_bytes(), b'__pycache__/\n')
+        self.assertEqual(list(out.iterdir()), [out / '.gitignore'])
+
     def test_references_are_retained(self):
         out, result = self.export({'references/management-release.json': b'{}',
                                    'references/README.md': b'MIT attribution'})

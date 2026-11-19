@@ -119,7 +119,7 @@ def scrub(text):
 
 def instruction_file(path):
     parts = PurePosixPath(path).parts
-    return (any(part.lower() in {'.claude', '.codex', '.agents', '.git'} for part in parts)
+    return (any(part.lower() in {'.claude', '.codex', '.agents', '.git', '.github'} for part in parts)
             or parts[-1].lower() in {'agents.md', 'agents.override.md', 'claude.md', 'claude.local.md'})
 
 
@@ -248,7 +248,7 @@ def export(repo, ref, out):
                 target.write_bytes(data)
                 target.chmod(0o755 if entry.mode & 0o111 else 0o644)
     print(f'Export: committed tree {tree}; {changed} scrubbed files; '
-          f'{excluded} agent instruction files excluded')
+          f'{excluded} agent instruction and GitHub files excluded')
     return scan(out)
 
 

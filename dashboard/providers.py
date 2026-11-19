@@ -157,6 +157,8 @@ def groups(gateway, watched, usage=None, billing=None):
             if provider != 'codex':
                 public['billing'] = (subscriptions.billing_view(file, billing) if billing is not None
                                      else public.get('billing', {}))
+                if provider == 'claude':
+                    public['billing'] = subscriptions.inferred_renewal(public['billing'], public.get('subscription'))
                 fetched_plan = public.get('plan')
                 public['billing_editable'] = dict(renewal=True, plan=not bool(fetched_plan))
                 if not fetched_plan and public['billing'].get('plan'):

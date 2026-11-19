@@ -17,7 +17,7 @@ const icon=n=>`<svg aria-hidden="true"><use href="#${n}"/></svg>`;
 const ranges=[['today','Today'],['week','7 days'],['month','30 days'],['all','All recorded']];
 const sizes=[[3,'1/4'],[4,'1/3'],[6,'1/2'],[8,'2/3'],[9,'3/4'],[12,'Full']];
 const S={layout:null,overview:null,active:null,lastHash:location.hash,customizing:false,snapshot:null,saving:false,error:'',overlay:null,started:false};
-let packQueued=false;
+let packQueued=false,renderDeferred=false;
 let uid=0, toastTimer, toastRemaining=0, toastAt=0, toastUndo, overlayCleanup, opener, deferredLeave, drag, resize, renderQueued=false, lastServer='';
 const app=()=>window.RouterApp;
 const accountFamily=t=>t==='accounts'||t==='account-card';
@@ -159,20 +159,41 @@ function packWidgets(list,width,natural=()=>0){
   return {cols,tracks:tracks.join(' '),items,holes,lines};
 }
 function queuePack(){if(packQueued)return;packQueued=true;requestAnimationFrame(()=>{packQueued=false;if(S.started&&!drag){applyPacking();if(resize)resizeReadout();}});}
-// Measure an inert, unconstrained copy of the inner content at the same width.
-// Its height never comes from the stretched live frame, so row growth cannot
-// feed back into the next measurement. No renderer or observer runs on the copy.
-function measureNatural(m){
-  if(!m?.frame.isConnected||m.w.height!=='auto'||!m.body.childElementCount)return;
-  const probe=m.frame.cloneNode(true);probe.classList.remove('edit','fixed-height','mixed-auto','lifted','resizing','resize-settling');probe.classList.add('natural-probe');probe.dataset.height='auto';
-  probe.removeAttribute('id');for(const el of $$('[id]',probe))el.removeAttribute('id');
-  Object.assign(probe.style,{width:m.frame.getBoundingClientRect().width+'px',height:'auto',gridRow:'',gridColumn:''});
-  $('.w-strip',probe)?.remove();for(const el of $$('.resize-grip,.height-grip,.corner-grip,.size-readout,.widget-tools',probe))el.remove();
-  probe.inert=true;probe.setAttribute('aria-hidden','true');m.frame.parentElement.append(probe);
-  const height=$('.w-body',probe).getBoundingClientRect().height;probe.remove();
-  if(height>0&&Math.abs(height-(m.natural||0))>1){m.natural=height;queuePack();}
+// Keep the last unconstrained height by content and width. Intrinsic content
+// resizes and font/theme changes invalidate it even if the markup is unchanged.
+// Probe in phases: live widths, detached copies, all appends, all height reads,
+// then removals/packing. No renderer or observer runs on an inert copy.
+const naturalPending=new Set();let naturalQueued=false,naturalEpoch=0;
+function measureNatural(ms){
+  const reads=(Array.isArray(ms)?ms:[ms]).filter(m=>m?.frame.isConnected&&m.w.height==='auto'&&m.body.childElementCount).map(m=>({m,width:m.frame.getBoundingClientRect().width}));
+  const probes=[];
+  for(const {m,width} of reads){
+    const key=JSON.stringify([width,window.innerWidth,S.customizing,naturalEpoch,m.frame.dataset.density,m.w.title,m.w.options,m.body.outerHTML]);
+    if(m.naturalKey===key)continue;
+    const probe=m.frame.cloneNode(true);probe.classList.remove('edit','fixed-height','mixed-auto','lifted','resizing','resize-settling');probe.classList.add('natural-probe');probe.dataset.height='auto';
+    probe.removeAttribute('id');for(const el of $$('[id]',probe))el.removeAttribute('id');
+    Object.assign(probe.style,{width:width+'px',height:'auto',gridRow:'',gridColumn:''});
+    $('.w-strip',probe)?.remove();for(const el of $$('.resize-grip,.height-grip,.corner-grip,.size-readout,.widget-tools',probe))el.remove();
+    probe.inert=true;probe.setAttribute('aria-hidden','true');probes.push({m,probe,key});
+  }
+  for(const {m,probe} of probes)m.frame.parentElement.append(probe);
+  const heights=probes.map(({probe})=>$('.w-body',probe).getBoundingClientRect().height);
+  for(const {probe} of probes)probe.remove();
+  probes.forEach(({m,key},i)=>{const height=heights[i];if(height>0){m.naturalKey=key;if(Math.abs(height-(m.natural||0))>1){m.natural=height;queuePack();}}});
 }
-function queueNatural(m){if(accountFamily(m.w.type))queueFit();if(m.measuring||resize?.w===m.w||m.frame.__resizeSettle)return;m.measuring=true;requestAnimationFrame(()=>{m.measuring=false;if(mounted.get(m.w.id)===m&&resize?.w!==m.w&&!m.frame.__resizeSettle)measureNatural(m);});}
+function queueNatural(m,invalidate=false){
+  if(invalidate)delete m.naturalKey;
+  if(accountFamily(m.w.type))queueFit();naturalPending.add(m);
+  // Keep pending requests through motion; release reconciliation and neighbour landings
+  // drain them at their final widths instead of probing every intermediate box.
+  if(naturalQueued||drag?.phase==='drag'||resize||m.frame.__resizeSettle)return;
+  naturalQueued=true;requestAnimationFrame(()=>{
+    naturalQueued=false;if(drag?.phase==='drag'||resize)return;
+    const ready=[];for(const m of naturalPending){if(mounted.get(m.w.id)!==m)naturalPending.delete(m);else if(!m.frame.__resizeSettle){naturalPending.delete(m);ready.push(m);}}
+    measureNatural(ready);
+  });
+}
+function invalidateNatural(){naturalEpoch++;for(const m of mounted.values())queueNatural(m);}
 // Accounts never scroll or clip. In a capped box (a fixed height, or Auto on a line with one) cards too tall for it condense,
 // full → snug → compact; the line's condensed widgets share the first density at which all of them fit, so they read as one.
 // Each density is tried in place within one task, every Accounts widget at once, so the measure includes the rows cards
@@ -249,7 +270,7 @@ function update(data){
   if(!S.active||!S.layout.boards.some(b=>b.id===S.active))route();render();
 }
 function activeWidgets(){return (board()?.widgets||[]).filter(w=>S.customizing||!accountFamily(w.type)||(w.type==='account-card'?!!accountOf(w):providers().some(p=>p.id===w.options.provider&&p.accounts?.length)));}
-function destroyOne(id){const m=mounted.get(id);if(!m)return;m.frame.__resizeSettle?.clear();try{defs.get(m.w.type)?.destroy?.(m.body);}catch(_){}m.observer?.disconnect();m.contentObserver?.disconnect();m.contentResizeObserver?.disconnect();m.frame.remove();mounted.delete(id);}
+function destroyOne(id){const m=mounted.get(id);if(!m)return;naturalPending.delete(m);m.frame.__resizeSettle?.clear();try{defs.get(m.w.type)?.destroy?.(m.body);}catch(_){}m.observer?.disconnect();m.contentObserver?.disconnect();m.contentResizeObserver?.disconnect();m.frame.remove();mounted.delete(id);}
 function unmount(){for(const id of mounted.keys())destroyOne(id);}
 function queueRender(){if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;render();});}
 function accountControls(host){
@@ -262,6 +283,7 @@ function accountControls(host){
 function renderWidget(m){
   if(!m)return;
   if(drag||resize?.w===m.w||m.frame.__resizeSettle){m.pending=true;return;}
+  m.pending=false;
   const {w,body}=m,d=defs.get(w.type);const generation=++m.generation;
   if(!d){m.unavailable=true;body.innerHTML='<div class="wcard"><div class="card-eyebrow">Unavailable widget</div><div class="empty-state">This widget is unavailable.</div></div>';return;}
   if(m.unavailable){body.replaceChildren();m.unavailable=false;}const ownAsync=['tokens','usage-accounts','usage-models'].includes(w.type);if(ownAsync){if(!body.childElementCount)state(body,'loading');else body.classList.add('refetch');}
@@ -271,8 +293,10 @@ function renderWidget(m){
 }
 function strip(w,i,n){return `<button class="grip" data-board-action="grip" aria-label="Move ${esc(label(w))}, ${i+1} of ${n}" aria-describedby="boards-reorder-help">${icon('grip')}</button><button class="mv-btn icon-sm" data-board-action="move" data-dir="-1" aria-label="Move ${esc(name(w))} up" ${i===0?'disabled':''}>↑</button><button class="mv-btn icon-sm" data-board-action="move" data-dir="1" aria-label="Move ${esc(name(w))} down" ${i===n-1?'disabled':''}>↓</button><span class="w-name" title="${esc(label(w))}">${esc(typeName(w)||w.type)} <em>· ${esc(name(w))}</em></span><button class="size-btn" data-board-action="width" aria-label="Size: ${esc(sizeLabel(w))} wide, ${w.height==='auto'?'auto height':w.height+' rows tall'}" aria-haspopup="menu">${sizeLabel(w)}${w.height!=='auto'?' × '+w.height:''} ${icon('chevron')}</button><button class="icon-sm" data-board-action="settings" aria-label="Settings for ${esc(name(w))}" aria-haspopup="dialog">${icon('gear')}</button><button class="icon-sm danger" data-board-action="remove" aria-label="Remove ${esc(label(w))}">${icon('x')}</button>`;}
 function renderTools(m){const over=resolveRange(m.w,find(m.w.id).b);$('.widget-tools',m.frame).innerHTML=`${over.overridden?`<span class="chip">${esc(over.label.toUpperCase())}</span>`:''}${!S.customizing&&m.w.type!=='account-card'?`<button class="w-menu" data-board-action="widget-menu" aria-label="More for ${esc(name(m.w))}" aria-haspopup="menu">${icon('more')}</button>`:''}`;}
-function render(resizing=false){
-  if(!S.started||!S.layout||drag||resize&&!resizing)return;
+function render(){
+  if(!S.started||!S.layout)return;
+  if(drag||resize){renderDeferred=true;return;}
+  renderDeferred=false;
   const b=board();if(!b)return;
   const system=location.hash==='#system';document.body.classList.toggle('customizing',S.customizing);
   $('#boards-view').hidden=system;$('#overview-view').hidden=true;$('#system-view').hidden=!system;
@@ -296,7 +320,7 @@ function render(resizing=false){
       frame.innerHTML='<div class="w-strip"></div><div class="widget-tools"></div><div class="w-body"></div><div class="resize-grip" data-board-action="resize" aria-hidden="true"></div><div class="height-grip" data-board-action="resize-height" aria-hidden="true"></div><div class="corner-grip" data-board-action="resize-corner" aria-hidden="true"></div>';
       m={frame,body:$('.w-body',frame),w,board:b.id,generation:0};mounted.set(w.id,m);
       m.size={width:0,height:0};m.observer=new ResizeObserver(entries=>{const next=entries[0].contentRect;if(Math.abs(next.width-m.size.width)>4||Math.abs(next.height-m.size.height)>4){m.size={width:next.width,height:next.height};if(mounted.get(w.id)===m&&resize?.w!==m.w&&!m.frame.__resizeSettle){renderWidget(m);queueNatural(m);}}});m.observer.observe(m.body);
-      m.contentResizeObserver=new ResizeObserver(()=>queueNatural(m));
+      m.contentResizeObserver=new ResizeObserver(()=>queueNatural(m,true));
       const observeContent=()=>{m.contentResizeObserver.disconnect();for(const child of m.body.children)m.contentResizeObserver.observe(child);queueNatural(m);};
       m.contentObserver=new MutationObserver(observeContent);m.contentObserver.observe(m.body,{childList:true,subtree:true,characterData:true});
     }
@@ -314,6 +338,22 @@ function render(resizing=false){
   app()?.levelHeads?.();
   // Anchor exclusion also covers asynchronous content refreshes below this render.
   if(scroll&&(window.scrollX!==scroll.x||window.scrollY!==scroll.y))window.scrollTo({left:scroll.x,top:scroll.y,behavior:'instant'});
+}
+// A reorder changes placement and strip positions, not widget content or board
+// controls. A refresh requested during motion still needs the full render.
+function reconcileReorder(){
+  if(!S.started||!S.layout)return;
+  if(renderDeferred){render();return;}
+  const b=board(),grid=$('#board-grid'),ws=activeWidgets();let prev=null;
+  for(const w of ws){
+    const m=mounted.get(w.id),st=$('.w-strip',m.frame),markup=S.customizing?strip(w,b.widgets.indexOf(w),b.widgets.length):'';
+    if(st.__markup!==markup){st.innerHTML=markup;st.__markup=markup;}
+    let before=prev?prev.nextElementSibling:grid.firstElementChild;while(before&&['w-gap','guides','row-guides'].includes(before.className))before=before.nextElementSibling;
+    placeNode(grid,m.frame,before);prev=m.frame;
+  }
+  applyPacking(ws);app()?.levelHeads?.();
+  for(const m of mounted.values())if(m.pending)renderWidget(m);
+  for(const m of naturalPending)queueNatural(m);
 }
 function renderTabs(){
   const nav=$('.topbar nav'),addAnchor=$('.nav-add',nav);const system=$('[data-view="system"]',nav), existing=new Map($$('[data-board-tab]',nav).map(a=>[a.dataset.boardTab,a]));
@@ -547,7 +587,8 @@ function start(){
   window.addEventListener('beforeunload',e=>{if(dirty()){e.preventDefault();e.returnValue='';}});
   window.addEventListener('hashchange',()=>{const target=location.hash;if(dirty()&&(target==='#system'||target==='#usage/requests')){history.replaceState(null,'',location.pathname+location.search+(S.lastHash||'#'+S.active));leave(()=>{location.hash=target;});return;}S.lastHash=target;closeOverlay(false);route();render();if(target==='#usage/requests')openRequests();});
   window.addEventListener('resize',()=>{stopPointer(true);for(const m of mounted.values())m.frame.__resizeSettle?.clear();queueRender();positionOverlay();});window.addEventListener('scroll',()=>{positionOverlay();if(drag?.phase==='drag'){drag.homes=layoutRects($('#board-grid'),dragItems());follow();}},{passive:true});
-  new MutationObserver(()=>{for(const m of mounted.values())renderWidget(m);if(S.overlay?.type==='settings')renderPreview();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  new MutationObserver(()=>{invalidateNatural();for(const m of mounted.values())renderWidget(m);if(S.overlay?.type==='settings')renderPreview();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  document.fonts?.addEventListener('loadingdone',invalidateNatural);
   const t=$('#boards-toast');t.addEventListener('pointerenter',pauseToast);t.addEventListener('pointerleave',resumeToast);t.addEventListener('focusin',pauseToast);t.addEventListener('focusout',resumeToast);
   document.addEventListener('dblclick',e=>{const handle=e.target.closest?.('.height-grip,.corner-grip');if(handle&&S.customizing&&innerWidth>=1180){e.preventDefault();stopPointer(true);setHeight(handle.closest('[data-wid]').dataset.wid,'auto');}});
   document.addEventListener('pointerdown',pointerStart);document.addEventListener('pointermove',pointerMove,{passive:false});document.addEventListener('pointerup',()=>stopPointer());document.addEventListener('pointercancel',()=>stopPointer(true));window.addEventListener('blur',()=>stopPointer(true));
@@ -596,14 +637,23 @@ function resizeReadout(){const r=resize;if(!r)return;const n=spanOf(r.w),b=heigh
   if(neighbours.length){const line=document.createElement('i');line.className='match';Object.assign(line.style,{top:fr.bottom-gr.top+'px',left:left-gr.left-6+'px',width:right-left+12+'px'});box.append(line);}grid.append(box);r.rowGuides=box;
 }
 function updateResize(r){const e=r.latest;if(!e)return;r.latest=null;const dx=e.clientX-r.start,dy=e.clientY-r.startY,min=defs.get(r.w.type)?.min||1,bounds=heightBounds(r.w);
-    if(r.kind!=='height')r.frame.style.width=Math.max(min*r.step-20,Math.min(r.maxSpan*r.step-20,r.rect.width+dx))+'px';
-    if(r.kind!=='width')r.frame.style.height=Math.max(rowPixels(bounds.min),Math.min(rowPixels(bounds.max),r.rect.height+dy))+'px';
     const span=r.kind==='height'?r.w.span:Math.max(min,Math.min(r.maxSpan,Math.round(r.span+dx/r.step)));
     const moved=Math.abs(e.clientY-r.startY)>0||r.kind==='corner'&&Math.abs(e.clientX-r.start)>0,rows=r.kind==='width'||!moved&&r.w.height==='auto'?r.w.height:clampHeight(r.w,Math.round(r.rows+(e.clientY-r.startY)/ROW_STEP));
-    if(span!==r.w.span||rows!==r.w.height){const before=rects(),sizing=rows!==r.w.height?'rows':'width';holdNeighbours();r.w.span=span;r.w.height=rows;render(true);glide(before,sizing);resizeReadout();}
+    const stepped=span!==r.w.span||rows!==r.w.height,before=stepped?rects():null,sizing=rows!==r.w.height?'rows':'width';
+    // Capture the current neighbour boxes before writing the free box or clearing
+    // their tweens. Only packing and this widget's size controls change at a step;
+    // the full reconciliation still runs on release (including cancellation).
+    if(stepped)holdNeighbours();
+    if(r.kind!=='height')r.frame.style.width=Math.max(min*r.step-20,Math.min(r.maxSpan*r.step-20,r.rect.width+dx))+'px';
+    if(r.kind!=='width')r.frame.style.height=Math.max(rowPixels(bounds.min),Math.min(rowPixels(bounds.max),r.rect.height+dy))+'px';
+    if(stepped){r.w.span=span;r.w.height=rows;
+      const b=board(),st=$('.w-strip',r.frame),markup=strip(r.w,b.widgets.indexOf(r.w),b.widgets.length);
+      if(st.__markup!==markup){st.innerHTML=markup;st.__markup=markup;}
+      applyPacking();glide(before,sizing);resizeReadout();
+    }
 }
 function pointerMove(e){if(resize){e.preventDefault();const r=resize;if(e.pointerId!=null&&r.pointer!=null&&e.pointerId!==r.pointer)return;r.latest={clientX:e.clientX,clientY:e.clientY};if(!r.raf)r.raf=requestAnimationFrame(()=>{r.raf=null;if(resize===r)updateResize(r);});return;}
-  const d=drag;if(!d||d.pointer!==e.pointerId)return;d.x=e.clientX;d.y=e.clientY;if(d.phase==='press'){const n=Math.hypot(d.x-d.x0,d.y-d.y0);if(d.timer&&n>8){clearTimeout(d.timer);drag=null;return;}if(!d.timer&&n>4)lift();}if(d.phase==='drag'){e.preventDefault();follow();}}
+  const d=drag;if(!d||d.pointer!==e.pointerId)return;d.x=e.clientX;d.y=e.clientY;if(d.phase==='press'){const n=Math.hypot(d.x-d.x0,d.y-d.y0);if(d.timer&&n>8){clearTimeout(d.timer);drag=null;if(renderDeferred||[...mounted.values()].some(m=>m.pending))queueRender();return;}if(!d.timer&&n>4)lift();}if(d.phase==='drag'){e.preventDefault();follow();}}
 
 function dragItems(){return $$('#board-grid > .w, #board-grid > .w-slot').filter(el=>el!==drag?.frame);}
 // A filler has no neighbouring card to overlap. Use its place in the current
@@ -642,8 +692,8 @@ function stopPointer(cancel=false){
       draw(0);glide(before,r.kind==='width'?'width':'rows');let start;const tick=now=>{if(frame.__resizeSettle!==settle)return;start??=now;const t=Math.max(0,Math.min(1,(now-start)/270));draw(t);if(t<1)settle.raf=requestAnimationFrame(tick);else land();};settle.raf=requestAnimationFrame(tick);
     }else{glide(before,r.kind==='width'?'width':'rows');land();}
     announce(r.kind==='width'?`Width ${spanOf(r.w)} of 12 columns.`:heightAnnouncement(r.w));return;}
-  const d=drag;if(!d)return;drag=null;clearTimeout(d.timer);cancelAnimationFrame(d.scrollFrame);if(d.phase!=='drag')return;
-  const before=rects();d.frame.classList.remove('lifted');for(const key of ['left','top','width','height','translate'])d.frame.style[key]='';if(!cancel){d.slot.before(d.frame);const ids=$$('#board-grid > .w').map(el=>el.dataset.wid);board().widgets.sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id));}else board().widgets=d.order;d.slot.remove();d.guides.remove();document.body.classList.remove('reordering');render();glide(before);focusWidget(d.w.id);announce(`${name(d.w)} moved to position ${board().widgets.indexOf(d.w)+1} of ${board().widgets.length}.`);
+  const d=drag;if(!d)return;drag=null;clearTimeout(d.timer);cancelAnimationFrame(d.scrollFrame);if(d.phase!=='drag'){if(renderDeferred||[...mounted.values()].some(m=>m.pending))render();return;}
+  const before=rects();d.frame.classList.remove('lifted');for(const key of ['left','top','width','height','translate'])d.frame.style[key]='';if(!cancel){d.slot.before(d.frame);const ids=$$('#board-grid > .w').map(el=>el.dataset.wid);board().widgets.sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id));}else board().widgets=d.order;d.slot.remove();d.guides.remove();document.body.classList.remove('reordering');reconcileReorder();glide(before);focusWidget(d.w.id);announce(`${name(d.w)} moved to position ${board().widgets.indexOf(d.w)+1} of ${board().widgets.length}.`);
 }
 async function usageFor(ctx){if(ctx.range.key==='today')return ctx.overview;return ctx.api('/api/overview',{since:ctx.range.since});}
 const rangeField={key:'range',label:'Time range',kind:'range'};
@@ -737,7 +787,7 @@ class Requests {
 }
 const busyRequest=r=>['loading','reloading','more'].includes(r.phase);
 window.RouterBoards={accountControls,register,start,update,api,openRequests,announce,resolveRange,layoutSpans,defaults,cardOrder,
-  get layout(){return S.layout;},get customizing(){return S.customizing;},get active(){return S.active;},
+  get layout(){return S.layout;},get customizing(){return S.customizing;},get active(){return S.active;},get resizing(){return !!resize;},
   // Settings and removed-reference actions can request the same accessible editor.
   settings(id){enter();openOverlay('settings',{wid:id});}};
 })();

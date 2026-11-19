@@ -47,30 +47,48 @@ function yScale(values, unit, height) {
   return {lo: 0, hi, step, ticks};
 }
 
-// One ResizeObserver per host: draws again when its box changes size (charts are drawn at pixel size so text stays crisp).
+// During a board resize, keep the existing chart between coarse redraws. Release/settle and all other size changes
+// use the normal next-frame draw at true pixel size. Keep the latest observer box instead of forcing another layout read.
 function observe(host, draw) {
   const st = host.__rcObs || (host.__rcObs = {});
   st.draw = draw;
   if (st.ro || typeof ResizeObserver !== 'function') return;
-  st.ro = new ResizeObserver(() => {
-    const w = host.clientWidth, h = host.clientHeight;
+  const redraw = () => {
+    st.raf = null;
+    if (host.isConnected) st.draw(st.box);
+  };
+  st.ro = new ResizeObserver(entries => {
+    const box = entries[0].contentRect, w = Math.round(box.width), h = Math.round(box.height);
     if (w === st.w && h === st.h) return;
-    st.w = w; st.h = h;
+    st.w = w; st.h = h; st.box = box;
+    if (window.RouterBoards?.resizing) {
+      if (st.timer == null) st.timer = setTimeout(() => {
+        st.timer = null;
+        cancelAnimationFrame(st.raf);
+        st.raf = requestAnimationFrame(redraw);
+      }, 120);
+      return;
+    }
+    clearTimeout(st.timer); st.timer = null;
     cancelAnimationFrame(st.raf);
-    st.raf = requestAnimationFrame(() => { if (host.isConnected) st.draw(); });
+    st.raf = requestAnimationFrame(redraw);
   });
   st.ro.observe(host);
 }
 function unobserve(host) {
   const st = host?.__rcObs;
-  if (st?.ro) { st.ro.disconnect(); cancelAnimationFrame(st.raf); }
+  if (st?.ro) { st.ro.disconnect(); cancelAnimationFrame(st.raf); clearTimeout(st.timer); }
   if (host) delete host.__rcObs;
 }
-function size(host, minH, fallbackW = 320) {
+function size(host, minH, fallbackW = 320, box) {
   const st = host.__rcObs;
-  const w = host.clientWidth || fallbackW, h = host.clientHeight || 0;
-  if (st) { st.w = host.clientWidth; st.h = host.clientHeight; }
-  return {W: Math.max(120, w), H: Math.max(minH || 0, h)};
+  const w = box ? Math.round(box.width) : host.clientWidth, h = box ? Math.round(box.height) : host.clientHeight;
+  if (st) {
+    st.w = w; st.h = h;
+    // A data-driven draw already used the current layout; do not replay an older queued observer box over it.
+    if (!box) { cancelAnimationFrame(st.raf); clearTimeout(st.timer); st.raf = st.timer = null; st.box = null; }
+  }
+  return {W: Math.max(120, w || fallbackW), H: Math.max(minH || 0, h || 0)};
 }
 // A widget with a fixed height (its board frame has data-height="<rows>") fills that box: plots and lanes size to it instead of
 // their natural height. Read at draw time, so a change of height redraws correctly even without a new render.
@@ -96,13 +114,13 @@ function time(host, cfg) {
   st.cfg = cfg;
   host.classList.add('rc-plot');
   drawTime(host);
-  observe(host, () => drawTime(host));
+  observe(host, box => drawTime(host, box));
   if (!st.wired) wireTime(host);
 }
-function drawTime(host) {
+function drawTime(host, box) {
   const st = host.__rct, cfg = st.cfg;
   const hadFocus = host.contains(document.activeElement) && document.activeElement?.tagName?.toLowerCase() === 'svg';
-  const {W, H} = size(host, fills(host) ? 40 : cfg.height || 120, cfg.width);
+  const {W, H} = size(host, fills(host) ? 40 : cfg.height || 120, cfg.width, box);
   const hidden = cfg.hidden || new Set();
   let keys = cfg.keys.filter(k => !hidden.has(k.key));
   if (!keys.length) keys = cfg.keys.slice();
@@ -522,9 +540,9 @@ function inkFor(css) {
 }
 function treemap(host, parts, opts = {}) {
   host.classList.add('rc-tree');
-  const draw = () => {
+  const draw = box => {
     const list = parts.filter(p => p.value > 0), total = list.reduce((s, p) => s + p.value, 0);
-    const {W, H} = size(host, fills(host) ? 40 : opts.height || 180);
+    const {W, H} = size(host, fills(host) ? 40 : opts.height || 180, 320, box);
     const rects = squarify(list, 0, 0, W, H);
     host.setAttribute('role', 'img');
     host.setAttribute('aria-label', opts.label || 'Share');
@@ -579,10 +597,10 @@ function calendar(host, days, opts = {}) {
 /* ---------- sparkline ---------- */
 function spark(host, values, opts = {}) {
   host.classList.add('rc-spark');
-  const draw = () => {
+  const draw = box => {
     const v = values.map((x, i) => [i, x]).filter(p => isNum(p[1]));
     if (v.length < 2) { host.innerHTML = ''; return; }
-    const {W} = size(host, 0, 160);
+    const {W} = size(host, 0, 160, box);
     const H = fills(host) ? Math.min(120, Math.floor(host.clientHeight - (parseFloat(getComputedStyle(host).paddingTop) || 0))) : opts.height || 30;
     if (H < 16) { host.innerHTML = ''; return; }
     const ys = v.map(p => p[1]);
@@ -615,8 +633,8 @@ function ringSVG({remaining, pace, color, size = 112}) {
    opts: {now, hours, forecast}. A limit whose reset falls past the window runs to the edge with its countdown there. */
 function timeline(host, lanes, opts = {}) {
   host.classList.add('rc-tl');
-  const draw = () => {
-    const {W} = size(host, 0, 520);
+  const draw = box => {
+    const {W} = size(host, 0, 520, box);
     const narrow = W < 520, labW = narrow ? 0 : Math.min(176, Math.max(120, W * .24)), top = 22;
     let laneH = narrow ? 46 : 36;
     // A fixed-height box fits its lanes: they compress (36 → 28 px; below that the name and limit lines would touch), then

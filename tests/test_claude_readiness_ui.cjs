@@ -217,6 +217,15 @@ test('renewal date is attributed to the user and reviews two calendar days befor
   assert.match(html,/title="[^"]*Review by 3 Nov · two days before renewal\. Set by you [^"]+"/);
   h.render();assert.match(h.get('watch-grid').innerHTML,/<div class="account-dates"><div class="reset-block allowance-reset"><span>Allowance resets<\/span>.*?<\/div><div class="reset-block billing-renewal renewal-soon"[^>]*><span>Renews<\/span><strong>5 Nov 2026/);
 });
+test('a renewal date rolled forward from the one the user set reads as an estimate',()=>{
+  const h=harness(),a=h.data.watch_accounts[0];
+  a.billing={renewal_date:'2026-11-15',confirmed:false,source:'renewal_inferred',entered_date:'2026-10-15',
+    inferred_at:new FakeDate(clock).toISOString(),verified_at:new FakeDate(clock-86400000*20).toISOString()};
+  const html=h.c.renewalHtml(a);
+  assert.match(html,/^<div class="reset-block billing-renewal"[^>]*><span>Expected renewal<\/span><strong>15 Nov 2026<\/strong><\/div>$/);
+  assert.match(html,/title="In 16 days\. Estimate · a month after the date you set\. You set 15 Oct 2026, and the subscription was still active [^"]+\. Set the date again to correct it\."/);
+  assert.doesNotMatch(html,/Set by you/);
+});
 test('header provenance survives an old reading until reset, with an old model still known',()=>{
   const h=harness(),a=h.data.watch_accounts[0];
   Object.assign(a,{checked_at:new FakeDate(clock-7200000).toISOString(),usage_source:'headers'});
@@ -239,6 +248,23 @@ test('endpoint primary readings stay current until reset and reject future or mi
   a.windows[0].measured_at=a.checked_at;a.windows[0].resets_at=null;
   assert.equal(h.c.claudeUsageFresh(a),false);
   a.windows[0].resets_at=clock/1000;assert.equal(h.c.claudeUsageFresh(a),false);
+});
+test('the gap after a reset reads as just reset, not as a fault, while the server marks it',()=>{
+  const gap=marked=>{
+    const h=harness(),a=h.data.watch_accounts[1];
+    a.status='stale';a.just_reset=marked;a.checked_at=new FakeDate(clock-120000).toISOString();
+    a.windows[1].resets_at=clock/1000-60;
+    h.render();return {h,a,html:h.get('watch-grid').innerHTML};
+  };
+  let {h,a,html}=gap(true);
+  assert.match(html,/Just reset · updating/);assert.doesNotMatch(html,/Stale · |last known/);
+  assert.match(h.get('claude-status').innerHTML,/status-item ok">All accounts ready/);
+  // The last-ready confirmations still need a measured allowance.
+  assert.equal(h.c.claudeRoutable(a),false);
+  // The server stops marking the gap after ten minutes or a failed read.
+  ({h,html}=gap(false));
+  assert.match(html,/Stale · /);assert.doesNotMatch(html,/Just reset/);
+  assert.match(h.get('claude-status').innerHTML,/Status unavailable · checking/);
 });
 test('automatic recovery result is shown with its completion time',()=>{
   const h=harness(),a=h.data.watch_accounts[0];

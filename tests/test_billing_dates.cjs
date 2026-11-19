@@ -23,6 +23,11 @@ assert.equal(describe(billing, new Date(2026, 9, 15), null).ended, undefined);
 assert.equal(describe({renewal_date:'invalid'}, now, 'free').date, 'Not available');
 assert.equal(describe({...billing, confirmed:false}, now).label, 'Expected renewal');
 assert.match(describe({...billing, confirmed:false}, now).note, /Unconfirmed/);
+// A date rolled forward from one the user set says so, until it passes in turn.
+const inferred = {...billing, confirmed:false, source:'renewal_inferred'};
+assert.equal(describe(inferred, now).label, 'Expected renewal');
+assert.equal(describe(inferred, now).note, 'Estimate · a month after the date you set.');
+assert.match(describe(inferred, new Date(2026, 9, 15)).note, /Date passed/);
 assert.equal(describe({renewal_date:'2026-02-30'}, now).date, 'Not available');
 assert.equal(describe(undefined, now).date, 'Not available');
 assert.match(describe({renewal_date:'2027-01-01', confirmed:true}, now).note, /30 Dec/);

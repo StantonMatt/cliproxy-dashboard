@@ -23,6 +23,7 @@ const BillingDates = (() => {
       badge:days < 0 ? 'Check date' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`,
       urgent:days <= 7, note:''};
     if (days < 0) result.note = 'Date passed · check your current billing settings.';
+    else if (billing.source === 'renewal_inferred') result.note = 'Estimate · a month after the date you set.';
     else if (!confirmed) result.note = 'Unconfirmed · based on account access period.';
     else result.note = `Review by ${format(day - 2 * 86400000)} · two days before renewal`;
     return result;

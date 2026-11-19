@@ -1,7 +1,7 @@
 """Passive v8.0.47 auth-files observations; never scheduler/cooldown evidence.
 
 Contract: sdk/cliproxy/auth/quota_signals.go and management/auth_files.go.
-Claude requires weekly allowance; Codex requires at least one valid slot.
+Claude requires weekly allowance and may add the Fable slot; Codex requires at least one valid slot.
 Present slots must be complete, with distinct window lengths. Unknown namespaces stay out.
 """
 import usage_adapters as usage
@@ -21,22 +21,24 @@ def payload(file, now):
                and isinstance(v, str) and len(v) <= 512 and all(ord(c) >= 32 for c in v)}
     result = {}
     if file.get('type') == 'claude':
-        for slot, kind in (('5h', 'five_hour'), ('7d', 'seven_day')):
+        # Only a Fable response carries 7d_oi, the Fable weekly window.
+        for slot, kind in (('5h', 'five_hour'), ('7d', 'seven_day'), ('7d_oi', 'seven_day_overage_included')):
             prefix = 'anthropic-ratelimit-unified-' + slot + '-'
             # Inspect raw keys so an invalid/dropped 5h header is not mistaken for absence.
-            if slot == '5h' and not any(isinstance(k, str) and k.casefold().startswith(prefix) for k in raw):
+            if slot != '7d' and not any(isinstance(k, str) and k.casefold().startswith(prefix) for k in raw):
                 continue
-            if any(isinstance(k, str) and k.casefold().startswith(prefix) and k.casefold() not in headers for k in raw):
-                return None
             used = usage.numeric(headers.get(prefix + 'utilization'))
             reset = usage.numeric(headers.get(prefix + 'reset'))
-            if (used is None or not 0 <= used <= 1 or
+            status = headers.get(prefix + 'status')
+            if (any(isinstance(k, str) and k.casefold().startswith(prefix) and k.casefold() not in headers for k in raw) or
+                    used is None or not 0 <= used <= 1 or
                     prefix + 'reset' in headers and reset is None or
                     (reset is None and (used != 0 or now - observed > 900)) or
-                    (reset is not None and not now < reset <= observed + 8 * 86400)):
-                return None
-            status = headers.get(prefix + 'status')
-            if status not in (None, 'allowed', 'allowed_warning', 'rejected'):
+                    (reset is not None and not now < reset <= observed + 8 * 86400) or
+                    status not in (None, 'allowed', 'allowed_warning', 'rejected')):
+                if slot == '7d_oi':
+                    # A bad Fable slot is left out; it must not discard the primary readings.
+                    continue
                 return None
             # A rejected response may carry rounded utilization below 1.
             result[kind] = dict(utilization=100 if status == 'rejected' else used * 100,

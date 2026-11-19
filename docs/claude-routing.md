@@ -1,7 +1,7 @@
 # Claude routing
 
 Verified 2026-10-27: both Claude subscriptions route through the live CLIProxyAPI
-8.0.30 gateway. T3's enabled `claudeAgent_gateway` instance uses
+8.0.30 gateway. T3's enabled `claudeAgent` instance carries the gateway environment and uses
 `http://127.0.0.1:8317` on Linux and `http://100.64.0.10:8317` directly over
 Tailscale on the Mac. Linux's interactive shell `claude` function invokes
 `scripts/claude-gateway.py`. Gateway-owned credentials serve inference; the
@@ -43,9 +43,21 @@ windows must also be valid and non-exhausted. The collectors preserve measured
 timestamps. A window with a known reset stays valid until that reset; one without
 a reset ages out after 15 minutes, matching the Claude cards' stale rule.
 Quota errors, missing or expired windows, and stale snapshots for enabled accounts
-hold priorities. Disabled accounts are excluded before checking their usage.
+hold priorities. One case is not reported as a hold (2026-11-16): a reading
+ends at its reset, and the next one arrives a minute or two later. For ten
+minutes after a reset the minute timer leaves the applied plan and its `active`
+status as they are, and the card reads "Just reset · updating" instead of
+"Stale". Nothing is assumed about the new allowance: priorities change only when
+the new reading arrives. A reading that still has not come after ten minutes, a
+read error, or a routing choice made during the gap is held as before. Disabled accounts are excluded before checking their usage.
 Preferred-account mode uses the same eligibility checks and can prefer the other
-account when the selected account is disabled or exhausted. Round-robin needs no
+account when the selected account is disabled or exhausted. One exception
+(2026-11-16): an account whose only used-up allowance is a model's own weekly
+window, such as Fable, still counts for routing in every mode, ranked by its
+all-model weekly window as usual. With `model-level-cooling` the gateway blocks
+just that model there, so its requests go to the other account and every other
+model is served by the account routing prefers. The last-ready confirmations
+still treat such an account as not ready. Round-robin needs no
 quota observations. The existing stability margins apply: five percentage points
 for quota ranking and 15 minutes for reset ranking.
 
@@ -152,3 +164,142 @@ Verified against CLIProxyAPI v8.0.30, commit
 The global strategy remains round-robin with the existing session and subagent
 affinity. No credential, model-route, gateway restart or extra-usage change is part
 of this feature.
+
+## Cooldown scope (2026-11-13)
+
+Two settings in `/etc/cliproxyapi/config.yaml` keep one refusal from removing a
+Claude account, or a model on it, from routing. Both were hot-reloaded on
+CLIProxyAPI 8.0.47 without a restart; keep them across upgrades.
+
+```yaml
+oauth:
+    request-scoped-errors:
+        claude:
+            - status: 404
+              match:
+                - not_found_error
+              action: continue
+upstream:
+    claude:
+        model-level-cooling: true
+```
+
+- **`model-level-cooling: true`**: a Claude 429 cools only the requested model
+  on that account, until the reset the response reports. Before, a Fable-only
+  refusal (`7d_oi` rejected, all-model `7d` still allowed) blocked the whole
+  account: Claude no longer sends 5-hour headers, and 8.0.47's Fable-only check
+  in `helps/claude_ratelimit.go` requires an explicit 5-hour utilization, so the
+  refusal was read as a shared-window rejection. Upstream relaxed that check
+  after 8.0.47 (present in 8.0.69). When the all-model weekly allowance is
+  really exhausted, each model is now cooled on its own first refusal, which
+  costs one failed attempt per model before failover.
+- **404 rule**: a Claude `not_found_error` moves on to the other account without
+  a cooldown. Before, one `not_found_error` for `claude-fable-5-2` from
+  `count_tokens` during an Anthropic overload blocked Fable on that account for
+  12 hours. 8.0.69 still treats an explicit model-not-found from `count_tokens`
+  that way, so an upgrade does not replace this rule. A model that is really
+  gone now returns 404 on every request after both accounts are tried.
+
+Verified on the live gateway with real upstream responses:
+
+- A Fable request routed to Claude A while its Fable window was exhausted got
+  the 429, was served by Claude B in the same request, and left A `active` with
+  one `model`-scope cooldown for `claude-fable-5-2` until the Fable reset. Opus
+  and Haiku requests were then served by A.
+- Requests for the retired `claude-3-5-haiku-20241022`, through both
+  `/v1/messages` and `/v1/messages/count_tokens`, returned 404 from both
+  accounts and recorded no cooldown.
+
+The previous config is saved under
+`/var/lib/cliproxyapi-upgrade-backups/claude-quota-scope-20261113T135728Z/`.
+A stale block can be cleared with `POST /v8/management/routing/cooldown/reset`
+and the credential's `auth_index`.
+
+After a subscription quota reset, the dashboard also checks model-specific
+cooldowns on accounts still marked `active`. A recovery episode makes usage
+due on the existing reader budget; provider `Retry-After` is still respected.
+Clearing requires a current subscription, shared allowance measured after the
+episode began, and positive post-episode allowance for every blocked model.
+Newer model readings supersede older watch readings; equally recent conflicting
+readings still prevent a reset. Unknown models and non-quota blocks are held.
+The gateway reset endpoint clears all model blocks, so the dashboard rechecks
+account identity and the cooldown set immediately before calling it. A new block
+or account-state change cancels that attempt. No gateway restart is needed.
+
+That proof only arrives with a usage read, and a reset redeemed in the Claude
+app causes none: the next read is the daily one, or the card's refresh button.
+So the dashboard also releases a Claude model quota block every three minutes
+without proof (`MODEL_BLOCK_RETRY`), and the next request for that model tests
+it against Claude. If the limit still applies, that request gets the `429`, is
+served by the other account, and the gateway sets the block again; otherwise the
+model simply works. Either way a reset, redeemed or scheduled, takes effect
+within about four minutes with no action, at the cost of one refused upstream
+request per account every three minutes while a model is exhausted and in use.
+The release applies only when every block on the account is a model-scoped
+quota `429` and the account is otherwise routable, and it passes the same final
+recheck. A block that returns within fifteen minutes of a release starts no
+usage or profile read; one that stays away causes a single usage read after
+fifteen minutes so the card shows the new allowance. A release is not shown as
+"Cooldown cleared automatically"; that notice is kept for proven clears.
+Pressing refresh on the account's card after redeeming a reset clears the
+block at once.
+
+### Overload and other transient errors (2026-11-14)
+
+A short upstream failure must not take the only account with allowance out of
+routing. On 2026-11-14 at 06:35 Fable was exhausted on Claude A and Claude B
+answered one request with `overloaded_error`. The gateway blocked Fable on B
+for its default 60 seconds, the client's retry a second later went to A and got
+the quota `429`, and because 60 seconds is longer than `max-retry-interval`
+(45) the gateway returned that `429` instead of waiting. The client reported
+"Usage limit reached" and stopped the turn. The same thing happened at 02:37.
+Overload was the most common Claude upstream failure in the gateway log for
+the week before (17 entries).
+
+Two more settings, hot-reloaded the same way, prevent it:
+
+```yaml
+routing:
+    cooldown:
+        transient-error-cooldown-seconds: 15
+oauth:
+    request-scoped-errors:
+        claude:
+            - status: 502
+              match:
+                - overloaded_error
+              action: stop
+            - status: 529
+              match:
+                - overloaded_error
+              action: stop
+```
+
+- **Overload rules**: Claude's overload is a capacity state, not an account
+  state, so it now blocks nothing. The error goes back to the client as it is,
+  and Claude Code retries it. `502` is how the gateway labels an `error` event
+  inside a stream that already answered `200`; `529` is the status before a
+  stream starts. The action is `stop`, not `continue`, so an overload is never
+  turned into the other account's quota refusal.
+- **`transient-error-cooldown-seconds: 15`**: every other transient failure
+  (`408`, `500`, `502`, `503`, `504`, `520`-`526`) blocks the model for 15
+  seconds instead of 60. That is inside `max-retry-interval`, so a request that
+  finds no other usable account waits for the block to end and is retried,
+  instead of failing. Keep this value below `max-retry-interval`. It applies to
+  every provider, Codex included.
+
+An overload cannot be produced on demand, so these were checked against the
+8.0.47 source with fake upstreams instead of live (15 cases, all passing):
+
+- With the rules, a `502` overload in a stream and a `529` before one leave the
+  model unblocked and return the original error; a `529` is not retried on the
+  other account.
+- Replaying the 06:35 sequence: with the old settings the retry returns A's
+  `429` at once; with the 15-second cooldown alone it waits 16 seconds and is
+  served by B; with the overload rule it is served by B at once and A is never
+  tried.
+
+The reload itself is confirmed in the gateway log (`transient-error-cooldown-seconds:
+0 -> 15`, `oauth-request-scoped-errors[claude]: 1 -> 3 entries`), with no
+restart. The previous config is saved under
+`/var/lib/cliproxyapi-upgrade-backups/claude-overload-scope-20261114T102403Z/`.
