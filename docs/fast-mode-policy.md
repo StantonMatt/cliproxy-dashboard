@@ -77,13 +77,14 @@ The same-account executor's internal retry can reuse its previous decision.
 
 ## Model catalog
 
-The dashboard derives enforced ultrafast support from the catalog, rather than
+The dashboard derives enforced Fast and Ultrafast support from the catalog, rather than
 the plan label. It reads each Codex account's live model catalog through the gateway management
 `/api-call` (GET
 `https://chatgpt.com/backend-api/codex/models?client_version=0.166.0`, with
 `Authorization: Bearer $TOKEN$`, `ChatGPT-Account-Id` and `originator:
 codex_cli_rs`; the gateway substitutes the token). Models whose `service_tiers`
-include id `ultrafast` form the account's `ultrafast_models`. On 2026-11-01 the
+include `priority`, `fast` or `ultrafast` form `fast_models`; those with
+`ultrafast` form `ultrafast_models`. On 2026-11-01 the
 Pro (`promax`) account listed `gpt-6.1-sol` and `gpt-6-astra`; every other model
 offered only `priority`.
 
@@ -93,7 +94,11 @@ read keeps the last good list and waits 15 minutes before retrying. Only model
 ids, display names and tier ids are kept, in
 `/var/lib/personal-codex-router/codex-model-catalog.json` (0640), so a restart
 does not lose the list. An account whose catalog has never loaded has no
-ultrafast models. The plugin does not inspect credentials or guess capability.
+ultrafast models and still offers Normal/Fast. A known catalog with no fast-capable
+model offers only Normal, including after a failed read that retains that list.
+The saved choice stays intact, but the policy uses `level: normal` and
+`allow_fast: false` until a fast-capable model returns. The plugin does not
+inspect credentials or guess capability.
 
 The upstream accepted `service_tier: "ultrafast"` for both models (HTTP 200) but
 echoed `auto`/`default`, as it does for priority. The echo cannot prove the tier,
@@ -119,7 +124,11 @@ At registration and every plugin reconfiguration, the plugin atomically writes
 `policy_schema` is the capability marker: 0.1.x statuses omit it (treated as 1).
 The dashboard offers the ultrafast level only when enforcement is live and the
 status reports `policy_schema` 2 or more, and only for accounts whose catalog
-lists ultrafast models. `POST /api/fast-mode` rejects ultrafast otherwise with
+lists ultrafast models. Views expose `levels`, `fast_available` and
+`fast_unavailable_reason` (`no_fast_models` or null), alongside the Ultrafast
+fields. `level` and `allowed` describe the saved choice. `POST /api/fast-mode`
+rejects Fast and Ultrafast for Normal-only accounts with 409 code
+`no_fast_models`; Normal always works. It rejects ultrafast otherwise with
 409 and a code (`catalog_pending`, `no_models`, `plugin_not_enforced`,
 `plugin_outdated`). A level already saved as ultrafast stays saved if the plugin
 is later rolled back; 0.1.x then enforces its schema 1 mirror.
@@ -127,8 +136,10 @@ is later rolled back; 0.1.x then enforces its schema 1 mirror.
 The dashboard infers the tier each request ran at from its recorded requested
 tier, model, and the level and allowlist in effect at the request timestamp.
 Controls keep a bounded history of level changes, each with the allowlist then in
-effect; while ultrafast is selected, an allowlist change from the catalog adds a
-history entry too. Schema 1 history entries (`allow_fast` only) still read as
+effect; catalog-driven effective-level changes and, while ultrafast runs,
+allowlist changes add entries with reason `catalog` too. These preserve rows
+before and after a Normal-only override without changing the saved choice.
+Schema 1 history entries (`allow_fast` only) still read as
 normal or fast, retaining the old ultrafast pass-through inference for accounts
 with the legacy `(25x)` plan label. That label affects only old history, never
 the enforced policy. Request rows do not record the client format:
@@ -158,7 +169,16 @@ installer. Registration fails if status
 publication fails, and failed registration/reconfiguration clears its owned marker.
 A newly loaded plugin cannot silently claim live enforcement.
 
-Build and deploy from this checkout after the orchestrator's review:
+The full `sudo python3 scripts/install-operations.py --apply` installs the dashboard,
+then builds and hot-loads this plugin. After `git pull`, rerun that full command.
+It reuses an already loaded current version and preserves explicit disables in
+config or status. Scoped installs never touch the plugin;
+`--skip-fast-mode-plugin` also leaves it unchanged. A plan without `--apply`
+only reads state (use sudo if config/status are not readable). A final plugin
+failure exits 4; the rest stays installed. Fix the reported issue and rerun.
+Installation also works before Codex sign-in: the policy stays absent until the dashboard publishes it, with the same default enforcement as an empty policy.
+
+The direct build/deploy route remains available:
 
 ```sh
 plugins/fast-mode-policy/build.sh /tmp/fast-mode-build
@@ -179,7 +199,11 @@ through the schema 1 fields.
 The build supports `GO=/absolute/path/to/go` when Go is outside PATH. Omitting
 `--library` asks the root installer to build as the checkout owner (through
 `runuser`) in a private `/tmp` output directory, using that user's heavy-job slots.
-Go and a C compiler must then be available in the build environment. A root-owned
+A C compiler is required (`sudo apt install gcc libc6-dev`). The build uses `$GO`
+or a sufficient Go on PATH, otherwise downloads official Go 1.26.10, verifies its
+pinned SHA-256 before extraction, and caches it under
+`${XDG_CACHE_HOME:-$HOME/.cache}/personal-codex-router/go/1.26.10/`.
+Downloads never run as root; later builds reuse the verified cache. A root-owned
 checkout requires a separately built `--library`. A dry run builds
 nothing and prints only a public plugin-settings diff, omitting the rest of the
 secret-bearing config. To test it without root or a live gateway, use
@@ -277,7 +301,8 @@ sudo python3 scripts/install-fast-mode-plugin.py --dry-run --disable
 sudo python3 scripts/install-fast-mode-plugin.py --disable
 ```
 
-Keep the immutable library in place. Re-enable by rerunning the deployment command.
+Keep the immutable library in place. Full installs preserve this disable.
+Re-enable explicitly by rerunning the direct deployment command above.
 For an exact rollback to the config before a particular deployment, use its
 printed backup directory:
 

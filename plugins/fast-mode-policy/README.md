@@ -14,13 +14,21 @@ Ultrafast upgrades are allowlist-only (`ultrafast_models`) and limited to the
 See [the policy and deployment guide](../../docs/fast-mode-policy.md) for the
 contract, defaults, status lifecycle and websocket limitation.
 
-Build on Linux amd64 with a C compiler and Go >= 1.26 (0.2.0 built and tested with 1.26.10):
+The full operations installer builds and hot-loads this plugin automatically.
+For a direct build, use Linux amd64 with a C compiler
+(`sudo apt install gcc libc6-dev`):
 
 ```sh
 plugins/fast-mode-policy/build.sh /tmp/fast-mode-build
 ```
 
-`GO=/absolute/path/to/go` selects a toolchain. The script uses `heavy` from `PATH` when available, otherwise builds directly,
+`GO=/absolute/path/to/go` selects a toolchain directly; it must meet the `go.mod` minimum.
+Otherwise the build uses Go on PATH if sufficient, or downloads official Go
+1.26.10 (the tested release) and verifies its pinned SHA-256 from
+[the official listing](https://go.dev/dl/?mode=json&include=all) before extraction.
+It caches the verified toolchain under
+`${XDG_CACHE_HOME:-$HOME/.cache}/personal-codex-router/go/1.26.10/` for reuse.
+Downloads run only as an unprivileged user; failures never fall back silently. The script uses `heavy` from `PATH` when available, otherwise builds directly,
 and prints the resulting
 `fast-mode-policy-v0.2.0.so` path. Its default output is
 `$XDG_CACHE_HOME/personal-codex-router/fast-mode-policy`, or the same directory
@@ -29,7 +37,7 @@ refused; generated headers are discarded. Existing versioned output with
 identical bytes is reused, and different bytes are refused. Use a fresh output
 directory during development. Installed versioned libraries are never replaced.
 
-Tests (the build requires Go to be on PATH, or GO above; unit tests use `go`):
+Tests (use the selected or cached Go binary for `go test`):
 
 ```sh
 (cd plugins/fast-mode-policy && go test -v .)

@@ -9,10 +9,9 @@ case "$out_dir/" in "$repo_dir/"*) echo 'Build output must be outside the reposi
 if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]]; then
   echo 'This build targets Linux amd64.' >&2; exit 1
 fi
-# GO may point to the spike toolchain, or any installed Go >= 1.26 toolchain.
-go_bin=${GO:-go}
+go_bin=$(python3 "$source_dir/toolchain.py")
 version=0.2.0
-export CGO_ENABLED=1 GOOS=linux GOARCH=amd64
+export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local
 stage=$(mktemp -d "$out_dir/.build-XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
 cd -- "$source_dir"

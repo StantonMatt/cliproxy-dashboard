@@ -1156,7 +1156,7 @@ done.catch(error=>{process.stderr.write(String(error));process.exitCode=1;});
         email = 'new-plan@example.test'
         records = {email: {'renewal_date': '2026-10-14', 'source': 'chatgpt_billing',
                            'verified_at': '2026-09-23T12:00:00Z'}}
-        for plan, label in (('prolite', 'Pro 100'), ('future_super_plan', 'Future Super Plan')):
+        for plan, label in (('promax', 'Pro 500'), ('prolite', 'Pro 100'), ('future_super_plan', 'Future Super Plan')):
             for nested in (False, True):
                 with self.subTest(plan=plan, nested=nested):
                     meta = {'plan_type': plan, 'chatgpt_account_id': 'workspace-a'}

@@ -1,4 +1,4 @@
-"""Cached Codex model catalogs: which models each Codex account can run at ultrafast.
+"""Cached Codex model catalogs: which speeds each Codex account's models offer.
 
 The catalog is read through the gateway's /api-call with the account's own
 credential ($TOKEN$ is substituted by the gateway; the dashboard never sees it).
@@ -157,18 +157,21 @@ class CodexCatalog:
         return error is None
 
     def view(self, email):
-        """Public catalog view: ultrafast models, fetch timestamps and state."""
+        """Public catalog view: fast/ultrafast models, fetch timestamps and state."""
         with self.lock:
             self._load()
             entry = copy.deepcopy(self.entries.get(email))
         if not entry:
             return {'status': 'pending', 'fetched_at': None, 'attempted_at': None,
-                    'ultrafast_models': [], 'known': False}
+                    'fast_models': [], 'ultrafast_models': [], 'known': False}
         models = entry.get('models')
         known = isinstance(models, list)
         return {'status': 'error' if entry.get('error') else 'ok' if known else 'pending',
                 'fetched_at': entry.get('fetched_at'), 'attempted_at': entry.get('attempted_at'),
                 'known': known,
+                'fast_models': [dict(id=m['id'], name=m.get('name') or m['id'])
+                                for m in models or []
+                                if any(t in ('priority', 'fast', 'ultrafast') for t in m.get('service_tiers', []))],
                 'ultrafast_models': [dict(id=m['id'], name=m.get('name') or m['id'])
                                      for m in models or [] if 'ultrafast' in m.get('service_tiers', [])]}
 

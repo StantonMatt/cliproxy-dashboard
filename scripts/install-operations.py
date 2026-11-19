@@ -61,6 +61,46 @@ ACCOUNT_ACCESS_FILES = ('series.py', 't3_usage.py', 'providers.py', 'usage_adapt
                         'static/billing.js', 'static/style.css', 'static/boards.js', 'static/boards.css',
                         'static/charts.js', 'static/widgets.js', 'static/charts.css', 'provider_status.py',
                         'fast_mode.py', 'codex_catalog.py')
+FAST_MODE_FAILURE = 4
+
+
+def fast_mode_installer():
+    spec = importlib.util.spec_from_file_location('fast_mode_installer', ROOT / 'scripts/install-fast-mode-plugin.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def fast_mode_step(*, apply=False, skip=False, gateway_pid=None):
+    """Last full-install step; failures leave the completed operations install intact."""
+    if skip:
+        print('Fast-mode plugin: skipped (--skip-fast-mode-plugin).')
+        return 0
+    try:
+        plugin = fast_mode_installer()
+        pid = gateway_pid or command('systemctl', 'show', '-p', 'MainPID', '--value', 'cliproxyapi')
+        action, message = plugin.full_install_action(pid)
+        print('Fast-mode plugin: ' + message + '.', flush=True)
+        if apply and action == 'install':
+            result = plugin.main([])
+            if result not in (None, 0):
+                raise RuntimeError('Plugin installer did not confirm live enforcement')
+        return 0
+    except Exception as error:
+        # YAML/config/subprocess exception text may contain secrets. The plugin
+        # emits its own safe build/backup diagnostics; never print raw exceptions.
+        if not apply:
+            print('Fast-mode plugin: state unavailable; rerun this read-only plan with sudo and check gateway config/status.')
+            return 0
+        detail = str(error) if 'plugin' in locals() and isinstance(
+            error, (plugin.SandboxError, plugin.RuntimeConfirmationError)) else type(error).__name__
+        print('The rest of the install is complete; the fast-mode plugin step failed (' + detail + '). '
+              'Check the build output and private plugin backup, ensure gcc and libc6-dev '
+              'are installed and HTTPS downloads are reachable, then rerun '
+              'sudo python3 scripts/install-operations.py --apply. '
+              'See docs/fast-mode-policy.md for gateway/reload recovery; '
+              '--skip-fast-mode-plugin leaves enforcement unchanged.', file=sys.stderr)
+        return FAST_MODE_FAILURE
 
 
 def preview_files():
@@ -430,6 +470,8 @@ def install_previews(apply=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--skip-fast-mode-plugin', action='store_true',
+                        help='Leave the fast-mode plugin unchanged during a full install')
     parser.add_argument('--site-config', type=Path, help='Site JSON to validate (and save as /etc/personal-codex-router/site.json on full apply)')
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument('--preview-only', action='store_true', help='Upgrade preview TLS only; preserve registrations, firewall and other services')
@@ -513,6 +555,7 @@ def main():
             print(f'Install {source.relative_to(ROOT)} -> {dest} ({mode:o})')
         for path in backup_paths(files):
             print(f'Back up if present: {path}')
+        fast_mode_step(skip=args.skip_fast_mode_plugin)
         return
     if os.geteuid() != 0:
         raise RuntimeError('Run with sudo')
@@ -648,11 +691,17 @@ def main():
         'codex_process_unchanged': True, 'at': time.time()}, indent=2))
     print(json.dumps({'deployed': True, 'pre_deploy_snapshot': saved, 'gateway_pid': before_gateway,
                       'codex_process_unchanged': True, 'preview_devices': [d['name'] for d in SITE_SETTINGS['devices']]}))
+    result = fast_mode_step(apply=True, skip=args.skip_fast_mode_plugin, gateway_pid=before_gateway)
+    # Keep the protected-process guarantee across the plugin's same-PID reload,
+    # including failed deployment/rollback attempts.
+    if before_gateway != command('systemctl', 'show', '-p', 'MainPID', '--value', 'cliproxyapi') or before_codex != version_fingerprint():
+        raise RuntimeError('A protected process changed during deployment; investigate')
+    return result
 
 
 if __name__ == '__main__':
     try:
-        main()
+        sys.exit(main())
     except Exception as error:
         # Do not dump subprocess stderr or configuration contents.
         print('Installation stopped: ' + (str(error) if isinstance(error, RuntimeError) else type(error).__name__))

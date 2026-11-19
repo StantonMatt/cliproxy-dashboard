@@ -28,6 +28,7 @@ PREPARE_PROVIDER_STATUS_USER = installer.prepare_provider_status_user
 
 class InstallOperationsTests(unittest.TestCase):
     def setUp(self):
+        self.plugin_step = self.enterContext(patch.object(installer, 'fast_mode_step', return_value=0))
         user = SimpleNamespace(pw_name='operator', pw_dir='/home/operator', pw_uid=1234, pw_gid=1235)
         self.site = {'desktop_user': 'operator', 'devices': [
             {'name': 'Laptop', 'tailscale_ip': '100.64.0.11'}],
@@ -399,6 +400,18 @@ class InstallOperationsTests(unittest.TestCase):
                       output.getvalue())
         self.assertIn('Restart personal-codex-router-claude-redeemer.service for operator', output.getvalue())
         self.assertNotIn('restart only dashboard', output.getvalue())
+        self.plugin_step.assert_called_once_with(skip=False)
+
+    def test_plugin_opt_out_and_scoped_plans(self):
+        with patch('sys.argv', ['install-operations.py', '--skip-fast-mode-plugin']), redirect_stdout(io.StringIO()):
+            installer.main()
+        self.plugin_step.assert_called_once_with(skip=True)
+        self.plugin_step.reset_mock()
+        for flag in ('--preview-only', '--claude-watch-only', '--account-access-only', '--t3-usage-only'):
+            with self.subTest(flag=flag), patch('sys.argv', ['install-operations.py', flag]), \
+                    patch.object(installer, 'install_previews'), redirect_stdout(io.StringIO()):
+                installer.main()
+                self.plugin_step.assert_not_called()
 
     def test_apply_restarts_services_after_replacing_scripts_even_when_already_running(self):
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
@@ -420,6 +433,7 @@ class InstallOperationsTests(unittest.TestCase):
             calls.attach_mock(user_command, 'user_command')
             install_file = Mock()
             calls.attach_mock(install_file, 'install_file')
+            calls.attach_mock(self.plugin_step, 'plugin')
             files = installer.install_files()
             patches = [patch('sys.argv', ['install-operations.py', '--apply']),
                        patch.object(installer, 'OPS', root), patch.object(installer, 'CONFIG', config),
@@ -439,7 +453,8 @@ class InstallOperationsTests(unittest.TestCase):
                        patch.object(installer, 'install_file', install_file), redirect_stdout(io.StringIO())]
             for context in patches:
                 stack.enter_context(context)
-            installer.main()
+            self.assertEqual(installer.main(), 0)
+            self.plugin_step.assert_called_once_with(apply=True, skip=False, gateway_pid='123')
             self.assertEqual(install_file.call_count, len(files))
             self.mock_provider_user.assert_called_once_with()
             self.assertTrue(any(call.args[:3] == ('systemctl', 'enable', '--now') and
@@ -467,6 +482,19 @@ class InstallOperationsTests(unittest.TestCase):
             ready = calls.mock_calls.index(unittest.mock.call.command(
                 'systemctl', 'show', '-p', 'ActiveState', '--value', 'personal-codex-router-move.path'))
             self.assertTrue(enable < ready and all(i < ready for i in restarts))
+            plugin_index = next(i for i, call in enumerate(calls.mock_calls) if call[0] == 'plugin')
+            self.assertGreater(plugin_index, ready)
+            self.assertEqual(calls.mock_calls[plugin_index + 1], unittest.mock.call.command(
+                'systemctl', 'show', '-p', 'MainPID', '--value', 'cliproxyapi'))
+            self.plugin_step.return_value = installer.FAST_MODE_FAILURE
+            self.assertEqual(installer.main(), installer.FAST_MODE_FAILURE)
+            # The final PID/fingerprint check remains active even after plugin failure.
+            def plugin_changed_pid(**kwargs):
+                command.side_effect = lambda *args, **kwargs: '999'
+                return installer.FAST_MODE_FAILURE
+            self.plugin_step.side_effect = plugin_changed_pid
+            with self.assertRaisesRegex(RuntimeError, 'protected process changed'):
+                installer.main()
 
     def test_move_readiness_requires_active_path_unit_and_request_directory(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -735,6 +763,75 @@ class InstallOperationsTests(unittest.TestCase):
             module.run = Mock(side_effect=lambda: module.sources())
             with patch.object(installer, 'backup_paths', return_value=[link]), self.assertRaises(RuntimeError):
                 installer.pre_apply_backup(module, [])
+
+
+class FastModeStepTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin = installer.fast_mode_installer()
+        self.load = self.enterContext(patch.object(installer, 'fast_mode_installer', return_value=self.plugin))
+        self.command = self.enterContext(patch.object(installer, 'command', return_value='123'))
+        self.action = self.enterContext(patch.object(self.plugin, 'full_install_action'))
+        self.deploy = self.enterContext(patch.object(self.plugin, 'main', return_value=0))
+        self.output, self.errors = io.StringIO(), io.StringIO()
+        self.enterContext(redirect_stdout(self.output))
+        self.enterContext(unittest.mock.patch('sys.stderr', self.errors))
+
+    def test_plan_reports_each_action_without_building_or_downloading(self):
+        for action, text in (('loaded', 'already loaded 0.2.0'),
+                             ('disabled', 'left off'), ('install', 'build, install and verify hot reload')):
+            with self.subTest(action=action):
+                self.action.return_value = action, text
+                self.assertEqual(installer.fast_mode_step(), 0)
+                self.assertIn(text, self.output.getvalue())
+                self.action.assert_called_with('123')
+                self.deploy.assert_not_called()
+        self.assertTrue(all(call.args == ('systemctl', 'show', '-p', 'MainPID', '--value', 'cliproxyapi')
+                            for call in self.command.call_args_list))
+
+    def test_apply_only_invokes_existing_installer_for_install_state(self):
+        for action in ('loaded', 'disabled', 'install'):
+            with self.subTest(action=action):
+                self.deploy.reset_mock()
+                self.action.return_value = action, action
+                self.assertEqual(installer.fast_mode_step(apply=True, gateway_pid='123'), 0)
+                if action == 'install':
+                    self.deploy.assert_called_once_with([])
+                else:
+                    self.deploy.assert_not_called()
+        self.command.assert_not_called()
+
+    def test_opt_out_does_not_even_read_state(self):
+        for apply in (False, True):
+            self.assertEqual(installer.fast_mode_step(apply=apply, skip=True), 0)
+        for call in (self.load, self.command, self.action, self.deploy):
+            call.assert_not_called()
+        self.assertIn('skipped', self.output.getvalue())
+
+    def test_failure_has_distinct_exit_code_and_recovery_message_without_secrets(self):
+        self.action.return_value = 'install', 'build plugin'
+        for error in (RuntimeError('TEST-SECRET'), ValueError('TEST-SECRET'), self.plugin.SandboxError('Unsupported gateway sandbox')):
+            with self.subTest(error=type(error).__name__):
+                self.deploy.side_effect = error
+                self.assertEqual(installer.fast_mode_step(apply=True), 4)
+        text = self.errors.getvalue()
+        for expected in ('rest of the install is complete', 'plugin step failed', 'gcc and libc6-dev',
+                         'sudo python3 scripts/install-operations.py --apply', 'Unsupported gateway sandbox'):
+            self.assertIn(expected, text)
+        self.assertNotIn('TEST-SECRET', text)
+
+    def test_unconfirmed_installer_result_is_a_failure(self):
+        self.action.return_value = 'install', 'install'
+        self.deploy.return_value = 3
+        self.assertEqual(installer.fast_mode_step(apply=True), installer.FAST_MODE_FAILURE)
+        self.assertIn('rest of the install is complete', self.errors.getvalue())
+
+    def test_unreadable_state_plan_is_read_only_but_apply_fails(self):
+        self.action.side_effect = PermissionError('TEST-SECRET')
+        self.assertEqual(installer.fast_mode_step(), 0)
+        self.assertIn('read-only plan with sudo', self.output.getvalue())
+        self.assertEqual(installer.fast_mode_step(apply=True), 4)
+        self.deploy.assert_not_called()
+        self.assertNotIn('TEST-SECRET', self.errors.getvalue() + self.output.getvalue())
 
 
 if __name__ == '__main__':

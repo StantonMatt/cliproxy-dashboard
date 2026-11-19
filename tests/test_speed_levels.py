@@ -48,11 +48,12 @@ class SpeedLevelTests(unittest.TestCase):
         self.manager = fast.FastModeManager(self.base / 'controls.json', self.base / 'policy.json',
                                             self.base / 'status.json')
         self.sol = {'known': True, 'status': 'ok', 'fetched_at': fast.stamp(self.now),
+                    'fast_models': [{'id': 'gpt-6.1-sol'}, {'id': 'gpt-6-astra'}],
                     'ultrafast_models': [{'id': 'gpt-6.1-sol', 'name': 'GPT-6.1-Sol'},
                                          {'id': 'gpt-6-astra', 'name': 'GPT-6-Astra'}]}
         self.accounts = [fast.fast_account('index1', 'one@example.test', 'codex-one.json', self.sol),
                          fast.fast_account('index2', 'two@example.test', 'codex-two.json',
-                                           {'known': True, 'status': 'ok', 'ultrafast_models': []})]
+                                           {'known': True, 'status': 'ok', 'fast_models': [{'id': 'gpt-6.1-terra'}], 'ultrafast_models': []})]
         self.db = self.base / 'usage.sqlite3'
         self.status(2)
 
@@ -309,12 +310,134 @@ class SpeedLevelTests(unittest.TestCase):
         result = self.at(20, 'ultrafast')
         self.assertEqual((result['level'], result['changed_at']), ('ultrafast', fast.stamp(self.now + 10)))
 
+    def test_normal_only_preserves_saved_choice_restores_policy_and_request_history(self):
+        for saved in ('fast', 'ultrafast'):
+            with self.subTest(saved=saved):
+                self.manager = fast.FastModeManager(self.base / (saved + '-controls.json'),
+                                                    self.base / (saved + '-policy.json'), self.base / 'status.json')
+                self.status(2)
+                self.at(0, saved)
+                setting = self.manager.setting('one@example.test')
+                restricted = [fast.fast_account('index1', 'one@example.test', 'codex-one.json',
+                              {'known': True, 'status': 'ok', 'fast_models': [], 'ultrafast_models': []})]
+                with patch.object(fast.time, 'time', return_value=self.now + 10), \
+                        patch.object(fast, 'enforcement', return_value='unavailable'):
+                    view = self.manager.views(restricted, self.db)['index1']
+                self.assertEqual(view['levels'], ['normal'])
+                self.assertFalse(view['fast_available'])
+                self.assertFalse(view['ultrafast_available'])
+                self.assertEqual(view['fast_unavailable_reason'], 'no_fast_models')
+                self.assertEqual(view['ultrafast_unavailable_reason'], 'no_fast_models')
+                self.assertEqual({k: view[k] for k in setting}, setting)
+                entry = json.loads(self.manager.policy_path.read_text())['accounts']['index1']
+                self.assertEqual(entry, {'level': 'normal', 'allow_fast': False,
+                                        'supports_ultrafast': False, 'ultrafast_models': []})
+                self.assertEqual(json.loads(self.manager.policy_path.read_text())['files']['codex-one.json'], entry)
+                change = self.manager.history('one@example.test')[-1]
+                self.assertEqual((change['level'], change['allow_fast'], change['reason']),
+                                 ('normal', False, 'catalog'))
+                self.assertEqual(change['changed_at'], fast.stamp(self.now + 10))
+                history = list(self.manager.history('one@example.test'))
+                rebuilt = fast.FastModeManager(self.manager.path, self.manager.policy_path, self.manager.status_path)
+                with patch.object(fast.time, 'time', return_value=self.now + 15):
+                    rebuilt.reconcile(restricted)
+                    rebuilt.reconcile(restricted)
+                self.assertEqual(rebuilt.history('one@example.test'), history)
+                self.assertEqual(rebuilt.setting('one@example.test'), setting)
+                with patch.object(fast.time, 'time', return_value=self.now + 20):
+                    self.manager.reconcile(self.accounts)
+                self.assertEqual(self.manager.setting('one@example.test'), setting)
+                self.assertEqual(json.loads(self.manager.policy_path.read_text())['accounts']['index1']['level'], saved)
+                self.assertEqual(self.manager.history('one@example.test')[-1]['reason'], 'catalog')
+                con = collector.connect(self.db)
+                try:
+                    con.execute('DELETE FROM usage')
+                    for offset in (5, 10, 15, 20, 25):
+                        con.execute(INSERT, (fast.stamp(self.now), fast.stamp(self.now + offset),
+                                           'index1', 'gpt-6.1-sol', 'priority', 'default'))
+                    con.commit()
+                finally:
+                    con.close()
+                rows = list(reversed(app.usage_summary('1970-01-01T00:00:00Z', self.db, self.manager)['recent']))
+                self.assertEqual([r['fast_mode_level'] for r in rows], [saved, 'normal', 'normal', saved, saved])
+                self.assertEqual([r['fast_mode_allowed'] for r in rows], [True, False, False, True, True])
+                forwarded = 'ultrafast' if saved == 'ultrafast' else 'priority'
+                self.assertEqual([r['forwarded_service_tier'] for r in rows],
+                                 [forwarded, 'normal', 'normal', forwarded, forwarded])
+
+    def test_normal_only_default_records_boundary_without_saving_normal(self):
+        restricted = [fast.fast_account('index1', 'one@example.test', 'codex-one.json',
+                      {'known': True, 'status': 'error', 'fast_models': [], 'ultrafast_models': []})]
+        with patch.object(fast.time, 'time', return_value=self.now):
+            self.manager.reconcile(restricted)
+        self.assertEqual(self.manager.setting('one@example.test'),
+                         {'level': 'fast', 'allowed': True, 'changed_at': None})
+        self.assertEqual(self.manager.level_at('index1', fast.stamp(self.now - 1))[0], 'fast')
+        self.assertEqual(self.manager.level_at('index1', fast.stamp(self.now))[0], 'normal')
+        with patch.object(fast.time, 'time', return_value=self.now + 10):
+            self.manager.reconcile(self.accounts)
+        self.assertEqual(self.manager.level_at('index1', fast.stamp(self.now + 10))[0], 'fast')
+        self.assertIsNone(self.manager.setting('one@example.test')['changed_at'])
+
+    def test_normal_only_history_write_failure_keeps_previous_policy_and_retries(self):
+        self.at(0, 'fast')
+        controls, policy = self.manager.path.read_text(), self.manager.policy_path.read_text()
+        restricted = [fast.fast_account('index1', 'one@example.test', 'codex-one.json',
+                      {'known': True, 'status': 'ok', 'fast_models': [], 'ultrafast_models': []})]
+        original_write = fast.write_json
+
+        def fail_controls(path, value, mode):
+            if path == self.manager.path:
+                raise OSError('fixture controls failure')
+            original_write(path, value, mode)
+
+        with patch.object(fast, 'write_json', side_effect=fail_controls), self.assertRaises(OSError):
+            self.manager.reconcile(restricted)
+        self.assertEqual(self.manager.path.read_text(), controls)
+        self.assertEqual(self.manager.policy_path.read_text(), policy)
+        with patch.object(fast.time, 'time', return_value=self.now + 10):
+            self.manager.reconcile(restricted)
+        self.assertEqual(self.manager.history('one@example.test')[-1]['level'], 'normal')
+        self.assertFalse(json.loads(self.manager.policy_path.read_text())['accounts']['index1']['allow_fast'])
+
+    def test_pending_or_errored_catalog_without_data_keeps_fast(self):
+        for catalog in (None, {'status': 'error', 'known': False, 'fast_models': [], 'ultrafast_models': []}):
+            with self.subTest(catalog=catalog):
+                accounts = [fast.fast_account('index1', 'one@example.test', 'codex-one.json', catalog)]
+                with patch.object(fast, 'enforcement', return_value='active'):
+                    view = self.manager.set_level('index1', 'fast', accounts)
+                self.assertEqual(view['levels'], ['normal', 'fast'])
+                self.assertTrue(view['fast_available'])
+                self.assertIsNone(view['fast_unavailable_reason'])
+                self.assertEqual(view['ultrafast_unavailable_reason'], 'catalog_pending')
+                self.assertEqual(json.loads(self.manager.policy_path.read_text())['accounts']['index1']['level'], 'fast')
+
+    def test_normal_only_post_refuses_fast_and_ultrafast_even_if_already_saved(self):
+        self.at(0, 'ultrafast')
+        catalog = catalog_module.CodexCatalog(self.base / 'catalog.json')
+        catalog.entries = {'one@example.test': {'models': [{'id': 'basic', 'service_tiers': []}]}}
+        gateway = app.GatewayState(Mock(), Mock(), self.manager, catalog=catalog)
+        self.addCleanup(gateway.signins.close)
+        files = [dict(auth_index='index1', type='codex', email='one@example.test', name='codex-one.json')]
+        with patch.object(app, 'api', return_value={'files': files}), \
+                patch.object(fast, 'enforcement', return_value='unavailable'):
+            for request in ({'level': 'fast'}, {'level': 'ultrafast'}, {'allowed': True}):
+                status, value = post(gateway, {'account_id': 'index1', **request})
+                self.assertEqual((status, value['code']), (409, 'no_fast_models'))
+                self.assertEqual(self.manager.setting('one@example.test')['level'], 'ultrafast')
+            status, value = post(gateway, {'account_id': 'index1', 'level': 'normal'})
+            self.assertEqual((status, value['level'], value['levels']), (200, 'normal', ['normal']))
+            # An explicit Normal remains selected when Fast returns.
+            self.manager.reconcile(self.accounts)
+            self.assertEqual(json.loads(self.manager.policy_path.read_text())['accounts']['index1']['level'], 'normal')
+
     def test_views_report_levels_models_plugin_and_catalog(self):
         with patch.object(fast, 'enforcement', return_value='active'):
             views = self.manager.views(self.accounts, self.db)
         self.assertEqual(views['index1'], {
             'allowed': True, 'level': 'fast', 'changed_at': None, 'enforcement': 'active',
-            'levels': ['normal', 'fast', 'ultrafast'], 'ultrafast_available': True,
+            'levels': ['normal', 'fast', 'ultrafast'], 'fast_available': True, 'fast_unavailable_reason': None,
+            'ultrafast_available': True,
             'ultrafast_unavailable_reason': None,
             'ultrafast_models': [{'id': 'gpt-6-astra', 'name': 'GPT-6-Astra'}, {'id': 'gpt-6.1-sol', 'name': 'GPT-6.1-Sol'}],
             'plugin_policy_schema': 2, 'plugin_supports_levels': True,
@@ -464,6 +587,24 @@ class SpeedLevelTests(unittest.TestCase):
 
 
 class CatalogTests(unittest.TestCase):
+    def test_fast_models_come_only_from_fast_capable_tiers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = catalog_module.CodexCatalog(Path(directory) / 'catalog.json')
+            for tiers, expected in (([], False), (['auto', 'default'], False), (['priority'], True),
+                                    (['fast'], True), (['ultrafast'], True)):
+                with self.subTest(tiers=tiers):
+                    catalog.entries = {'one@example.test': {'models': catalog_module.parse({'models': [
+                        {'slug': 'model', 'display_name': 'Model',
+                         'service_tiers': [{'id': t.upper()} for t in tiers]}]})}}
+                    view = catalog.view('one@example.test')
+                    self.assertEqual(view['fast_models'], [{'id': 'model', 'name': 'Model'}] if expected else [])
+                    account = fast.fast_account('index1', 'one@example.test', 'codex-one.json', view)
+                    manager = fast.FastModeManager(Path(directory) / 'controls.json', Path(directory) / 'policy.json')
+                    result = manager.views([account], None)['index1']
+                    self.assertEqual(result['levels'], ['normal', 'fast'] if expected else ['normal'])
+                    self.assertEqual(view['ultrafast_models'], [{'id': 'model', 'name': 'Model'}]
+                                     if 'ultrafast' in tiers else [])
+
     BODY = {'models': [
         {'slug': 'gpt-6.1-sol', 'display_name': 'GPT-6.1-Sol', 'base_instructions': 'long private text',
          'service_tiers': [{'id': 'priority', 'name': 'Fast'}, {'id': 'ultrafast', 'name': 'Ultrafast'}]},
@@ -516,6 +657,7 @@ class CatalogTests(unittest.TestCase):
         view = self.catalog.view('one@example.test')
         self.assertEqual(view['ultrafast_models'], [{'id': 'gpt-6-astra', 'name': 'gpt-6-astra'},
                                                     {'id': 'gpt-6.1-sol', 'name': 'GPT-6.1-Sol'}])
+        self.assertEqual([m['id'] for m in view['fast_models']], ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra'])
         self.assertEqual((view['status'], view['known'], view['fetched_at']), ('ok', True, fast.stamp(self.now)))
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o640)
         self.assertNotIn('long private text', self.path.read_text())
@@ -592,10 +734,11 @@ class CatalogTests(unittest.TestCase):
                 patch.object(fast.time, 'time', return_value=self.clock[0]):
             state.refresh_catalogs([self.file], {'index1': 'promax'}, self.call)
         policy = json.loads(manager.policy_path.read_text())['accounts']['index1']
+        self.assertEqual((policy['level'], policy['allow_fast']), ('normal', False))
         self.assertEqual(policy['ultrafast_models'], [])
         self.assertEqual(manager.history(self.file['email'])[-1]['ultrafast_models'], [])
         self.assertEqual(manager.request_view('index1', fast.stamp(self.clock[0] + 1),
-                                             'priority', 'gpt-6.1-sol')['forwarded_service_tier'], 'priority')
+                                             'priority', 'gpt-6.1-sol')['forwarded_service_tier'], 'normal')
         self.assertEqual(manager.request_view('index1', fast.stamp(self.now + 1),
                                              'priority', 'gpt-6.1-sol')['forwarded_service_tier'], 'ultrafast')
 

@@ -18,7 +18,7 @@ Only the human can:
 - Complete browser sign-ins for each subscription account.
 - Approve changes to how their existing tools sign in.
 
-Prerequisites: Kubuntu with systemd, Python 3.11+, and Node.js 22 or a newer supported LTS at `/usr/bin/node` (the optional preview unit uses that path). Kubuntu packages: `git curl ca-certificates tar python3 python3-yaml python3-bcrypt nodejs`; `openssh-client` for SSH access and `libglib2.0-bin` for desktop notices through `gdbus`. Install Codex CLI, Claude Code and T3 Code from their official distributions if those clients are wanted. Clone this repository and run the following commands from its root. Nightly tests also require the desktop user's `~/.local/bin/heavy` scheduler, which this repository does not supply. If it is unavailable, after step 4 run `systemctl --user disable --now personal-codex-router-nightly-tests.timer` until it is provisioned.
+Prerequisites: Kubuntu with systemd, Python 3.11+, and Node.js 22 or a newer supported LTS at `/usr/bin/node` (the optional preview unit uses that path). Kubuntu packages: `git curl ca-certificates tar python3 python3-yaml python3-bcrypt nodejs gcc libc6-dev`; `openssh-client` for SSH access and `libglib2.0-bin` for desktop notices through `gdbus`. Install Codex CLI, Claude Code and T3 Code from their official distributions if those clients are wanted. Clone this repository and run the following commands from its root. Nightly tests also require the desktop user's `~/.local/bin/heavy` scheduler, which this repository does not supply. If it is unavailable, after step 4 run `systemctl --user disable --now personal-codex-router-nightly-tests.timer` until it is provisioned.
 
 1. **Install the gateway.** Download the Linux archive matching `uname -m` from the [official 8.0.47 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.47). Verify its SHA-256 against the checksum asset on that release page before extracting. This is the example version; dashboard sign-in is validated on 8.0.30, 8.0.43 and 8.0.47, not arbitrary newer releases.
 
@@ -59,14 +59,14 @@ Prerequisites: Kubuntu with systemd, Python 3.11+, and Node.js 22 or a newer sup
 
    Check: `http://127.0.0.1:8317/management.html` loads; a management API call without its key returns 401 after hot reload. Verify an authenticated management read using the private key without printing it. If reload has not taken effect, diagnose the watched file before proceeding; see [hot reload](docs/standard-management-setup.md#maintenance-and-rollback).
 
-4. **Install the dashboard and operations.** From the intended desktop user's session, review the full plan, then apply:
+4. **Install the dashboard, operations and fast-mode plugin.** From the intended desktop user's session, review the full plan, then apply:
 
    ```sh
    python3 scripts/install-operations.py
    sudo python3 scripts/install-operations.py --apply
    ```
 
-   A full install means no scope flag. `--preview-only`, `--claude-watch-only`, `--account-access-only` and `--t3-usage-only` update selected components on an existing installation. The full installer adds services/timers, backups and desktop-user jobs; it does not install the gateway. User lingering is needed if user jobs must survive logout. The Tailscale host guard is optional and only needed for access from other devices: configuring devices requires signed-in, same-owner peers and the existing [private-preview guard layout](docs/private-previews.md); the installer does not create that firewall from scratch.
+   A full install means no scope flag. `--preview-only`, `--claude-watch-only`, `--account-access-only` and `--t3-usage-only` update selected components on an existing installation. The full installer adds services/timers, backups and desktop-user jobs, then builds and hot-loads the fast-mode plugin without restarting the gateway. Go is downloaded and verified as the checkout owner when needed; no Go installation is required. An already loaded current plugin is reused, and an explicit disable is preserved. Use `--skip-fast-mode-plugin` to leave it unchanged. The gateway itself must already be installed. User lingering is needed if user jobs must survive logout. The Tailscale host guard is optional and only needed for access from other devices: configuring devices requires signed-in, same-owner peers and the existing [private-preview guard layout](docs/private-previews.md); the installer does not create that firewall from scratch.
 
    Check: `personal-codex-router-dashboard.service` is active on `127.0.0.1:8320`; the dashboard reports the gateway online. Check the usage and preference timers with `systemctl list-timers 'personal-codex-router-*'`.
 
@@ -164,11 +164,13 @@ The upstream usage queue removes records when read. Records already collected pe
 | Operations | Backup, health, retention, release-check and desktop-user timers; [automation](docs/operations-automation.md) |
 | Optional private access | Preview proxy and SSH forwarding; [private previews](docs/private-previews.md) |
 
-Per-account fast mode requires the separate [plugin policy setup](docs/fast-mode-policy.md).
+Per-account fast mode uses the plugin included in the full install; see [policy and manual deployment](docs/fast-mode-policy.md).
 
 ## Development and validation
 
 The public copy, `cliproxy-dashboard`, is generated from the private repository, `cliproxy-dashboard-private`, by `.github/workflows/update-shareable-copy.yml` after every push to `main`. Do not edit the public copy directly: the next update overwrites it. The workflow is kept in the private repository and omitted from the public copy. Rehearse locally with `python3 scripts/export-public.py --out <empty dir>` followed by `python3 scripts/export-public.py --check <dir>`; export uses the committed tree and scrubs personal identifiers and Git history.
+
+To update an existing installation, run `git pull`, then `sudo python3 scripts/install-operations.py --apply` without a scope flag. If the final plugin step fails (exit 4), the rest remains installed; fix the reported build/reload issue and rerun the same command.
 
 Source files are in `dashboard/`; installed runtime copies live under `/opt/personal-codex-router`. Preview installer plans before applying scoped updates. Backend changes need a dashboard restart; static assets do not. Dashboard work should not restart the gateway. See [account access](docs/account-access.md) for scope and sign-in interruption limits.
 

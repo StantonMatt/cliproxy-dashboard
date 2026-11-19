@@ -9,7 +9,7 @@ import api_keys
 
 PLAN_LABELS = {'free': 'Free', 'pro': 'Pro 200', 'plus': 'Plus', 'team': 'Team',
                'business': 'Business', 'enterprise': 'Enterprise', 'edu': 'Edu', 'go': 'Go',
-               'prolite': 'Pro 100'}
+               'prolite': 'Pro 100', 'promax': 'Pro 500'}
 
 
 def plan_value(value):

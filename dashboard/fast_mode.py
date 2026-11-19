@@ -56,6 +56,7 @@ def write_json(path, value, mode):
 class LevelUnavailable(Exception):
     """A valid level that cannot be selected now; code and message are public."""
     MESSAGES = {
+        'no_fast_models': "No model on this account offers Fast.",
         'catalog_pending': "Ultrafast isn't available yet: this account's model list hasn't loaded.",
         'no_models': "Ultrafast isn't available: no model on this account's plan offers it.",
         'plugin_not_enforced': "Ultrafast isn't available: the gateway's speed plugin isn't loaded.",
@@ -158,7 +159,8 @@ def forwarded_at_level(requested, level, model=None, ultrafast_models=()):
 
 # Shown when the overview cannot match an account to its settings.
 UNKNOWN_VIEW = {'allowed': True, 'level': 'fast', 'changed_at': None, 'enforcement': 'unknown',
-                'levels': ['normal', 'fast'], 'ultrafast_available': False,
+                'levels': ['normal', 'fast'], 'fast_available': True, 'fast_unavailable_reason': None,
+                'ultrafast_available': False,
                 'ultrafast_unavailable_reason': 'catalog_pending', 'ultrafast_models': [],
                 'plugin_policy_schema': None, 'plugin_supports_levels': False,
                 'catalog': {'status': 'pending', 'fetched_at': None, 'attempted_at': None}}
@@ -168,10 +170,13 @@ def fast_account(account_id, email, name, catalog=None, supports_ultrafast=False
     """The account shape the manager reconciles; catalog is a CodexCatalog.view()."""
     catalog = catalog or {}
     names = [m for m in catalog.get('ultrafast_models') or [] if isinstance(m, dict) and isinstance(m.get('id'), str)]
+    fast_models = [m['id'] for m in catalog.get('fast_models') or []
+                   if isinstance(m, dict) and isinstance(m.get('id'), str)]
     return {'id': account_id, 'email': email, 'name': name,
             # Used only to interpret schema 1 request history, never to build policy.
             'supports_ultrafast': supports_ultrafast is True,
             'ultrafast_models': [m['id'] for m in names], 'ultrafast_names': names,
+            'fast_models': fast_models,
             'catalog_known': catalog.get('known') is True,
             'catalog': {k: catalog.get(k) for k in ('status', 'fetched_at', 'attempted_at')}}
 
@@ -255,10 +260,17 @@ class FastModeManager:
     def models(account):
         return sorted({normalize_model(m) for m in account.get('ultrafast_models') or [] if normalize_model(m)})
 
+    @staticmethod
+    def normal_only(account):
+        return account.get('catalog_known') is True and not account.get('fast_models')
+
+    def effective_level(self, account):
+        return 'normal' if self.normal_only(account) else self.setting(account['email'])['level']
+
     def policy(self):
         accounts, files = {}, {}
         for account in self.accounts:
-            level = self.setting(account['email'])['level']
+            level = self.effective_level(account)
             models = self.models(account)
             # The v1 fields mirror each level for a 0.1.x library after a rollback:
             # it removes tiers at normal and maps ultrafast to priority unless
@@ -282,18 +294,22 @@ class FastModeManager:
                     'forwarded_service_tier': forwarded}
 
     def record_catalog_changes(self):
-        """Log an allowlist change while ultrafast is selected, so past requests keep their tier."""
+        """Log effective level/ultrafast allowlist changes without changing the saved choice."""
         changed = False
         state = copy.deepcopy(self.state)
         for account in self.accounts:
             saved = state['accounts'].get(account['email'])
-            if not saved or level_of(saved) != 'ultrafast' or account.get('catalog_known') is not True:
-                continue
             history = list(self.history(account['email']))
+            level = self.effective_level(account)
             models = self.models(account)
-            if history and sorted(history[-1].get('ultrafast_models') or []) == models:
+            previous = level_of(history[-1]) if history else level_of(saved)
+            list_changed = (level == 'ultrafast' and account.get('catalog_known') is True
+                            and (not history or sorted(history[-1].get('ultrafast_models') or []) != models))
+            if previous == level and not list_changed:
                 continue
-            history.append({'changed_at': stamp(time.time()), 'level': 'ultrafast', 'allow_fast': True,
+            if saved is None:
+                saved = state['accounts'][account['email']] = {'level': 'fast', 'allow_fast': True, 'changed_at': None}
+            history.append({'changed_at': stamp(time.time()), 'level': level, 'allow_fast': level != 'normal',
                             'ultrafast_models': models, 'reason': 'catalog'})
             saved['history'] = history[-HISTORY_LIMIT:]
             changed = True
@@ -354,7 +370,9 @@ class FastModeManager:
     def capability(self, account, live, schema):
         """Which levels can be selected now, and why ultrafast cannot."""
         reason = None
-        if account.get('catalog_known') is not True:
+        if self.normal_only(account):
+            reason = 'no_fast_models'
+        elif account.get('catalog_known') is not True:
             reason = 'catalog_pending'
         elif not self.models(account):
             reason = 'no_models'
@@ -369,7 +387,9 @@ class FastModeManager:
         names = {m.get('id'): m.get('name') for m in account.get('ultrafast_names') or [] if isinstance(m, dict)}
         catalog = account.get('catalog') or {}
         return dict(setting, enforcement=live,
-                    levels=list(LEVELS) if reason is None else ['normal', 'fast'],
+                    levels=['normal'] if reason == 'no_fast_models' else list(LEVELS) if reason is None else ['normal', 'fast'],
+                    fast_available=reason != 'no_fast_models',
+                    fast_unavailable_reason='no_fast_models' if reason == 'no_fast_models' else None,
                     ultrafast_available=reason is None, ultrafast_unavailable_reason=reason,
                     ultrafast_models=[{'id': m, 'name': names.get(m) or m} for m in self.models(account)],
                     plugin_policy_schema=schema, plugin_supports_levels=schema is not None and schema >= LEVEL_SCHEMA,
@@ -413,6 +433,8 @@ class FastModeManager:
             self.reconcile(accounts)
             account = matches[0]
             saved = self.setting(account['email'])
+            if level != 'normal' and self.normal_only(account):
+                raise LevelUnavailable('no_fast_models')
             if level == 'ultrafast' and saved['level'] != 'ultrafast':
                 reason = self.capability(account, enforcement(self.status_path, self.policy_path),
                                          plugin_schema(self.status_path))

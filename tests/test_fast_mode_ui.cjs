@@ -119,7 +119,7 @@ assert.doesNotMatch(source,/fastRow|fastStatus|saveFastMode|data-fast-account|Al
 // Ultrafast has no status line of its own any more (the question says what it applies to).
 assert.doesNotMatch(source,/speedScope|on other models|Ultrafast on \$\{/);
 // The usage rates are one constant, with their source.
-assert.match(source,/\/\/ https:\/\/learn\.chatgpt\.com\/docs\/agent-configuration\/speed\nconst SPEED_USAGE_RATES=\{fast:2\.5,ultrafast:8\};/);
+assert.match(source,/\/\/ https:\/\/learn\.chatgpt\.com\/docs\/pricing\nconst SPEED_USAGE_RATES=\{fast:2\.5,ultrafast:8\};/);
 // The question's listeners: its buttons and keys, a press anywhere outside, a resize and a board change.
 assert.match(source,/\$\('speed-confirm'\)\.addEventListener\('click',speedAskClick\);\n\$\('speed-confirm'\)\.addEventListener\('keydown',speedAskKey\);/);
 assert.match(source,/document\.addEventListener\('pointerdown',speedAskOutside,true\);/);
@@ -180,6 +180,23 @@ const thumb = markup => ({value:markup.match(/ value="(\d)"/)[1],at:markup.match
   line:(markup.match(/<div class="fast-usage[^"]*"[^>]*>(.*)<\/div>$/)||[])[1]||null,tone:(markup.match(/<div class="(fast-usage[^"]*)"/)||[])[1]||null,
   busy:/aria-busy="true"/.test(markup),disabled:/ disabled/.test(markup),off:/class="ultra-off"/.test(markup),title:(markup.match(/ title="([^"]+)"><\/span>/)||[])[1]||null});
 
+// A known catalog without Fast shows only a muted Normal label, even with a saved higher level or failed enforcement.
+for(const level of ['normal','fast','ultrafast']) {
+  for(const enforcement of ['active','unavailable','unknown']) {
+    setAccount({...view(level),levels:['normal'],fast_available:false,fast_unavailable_reason:'no_fast_models',
+      ultrafast_available:false,ultrafast_unavailable_reason:'no_fast_models',ultrafast_models:[],enforcement});
+    context.fastErrors.set('one',{level:'fast'});
+    const markup=html();
+    assert.match(markup,/class="account-speed normal-only" title="No model on this account offers Fast"/);
+    assert.match(markup,/>Normal<span class="visually-hidden">\. No model on this account offers Fast/);
+    assert.match(markup,/<span class="visually-hidden">Speed: <\/span>/);
+    assert.doesNotMatch(markup,/<input|<label|fast-usage|data-speed-status|Not enforced|Couldn't save/);
+    assert.equal(context.speedState(context.current.gateway.accounts[0],context.current.gateway).stops,1);
+    context.fastErrors.clear();
+  }
+}
+assert.match(css,/\.account-speed\.normal-only\{font-size:11px;color:var\(--muted\)\}/);
+
 // Each level on a three-stop slider: the label is the value, in a slot that holds every name.
 for (const [level,at,name] of [['normal','0','Normal'],['fast','1','Fast'],['ultrafast','2','Ultrafast']]) {
   setAccount(view(level));const markup=html(),t=thumb(markup);
@@ -191,7 +208,7 @@ for (const [level,at,name] of [['normal','0','Normal'],['fast','1','Fast'],['ult
 }
 for (const models of [TWO,THREE]) {setAccount(view('ultrafast',{models}));assert.equal(thumb(html()).line,null);}
 // The question's text names the models that run Ultrafast, catalog names read as product names.
-const lead='Ultrafast uses your Codex allowance 8× faster than Normal — about 3× faster than Fast.';
+const lead='Ultrafast uses up to 8× the Codex allowance of Normal; Fast uses up to 2.5×.';
 const named=name=>`<span class="speed-model">${name}</span>`;
 assert.equal(context.speedAskBody(ONE),`${lead} Only ${named('GPT-6 Astra')} runs Ultrafast; other models stay on Fast.`);
 assert.equal(context.speedAskBody(TWO),`${lead} Only ${named('GPT-6 Astra')} and ${named('GPT-6.1 Sol')} run Ultrafast; other models stay on Fast.`);
@@ -301,7 +318,7 @@ async function checkAsk() {
   const opened=()=>{
     assert.equal(asking(),'one');assert.deepEqual([pop.open,pop.hidden],[true,false]);
     assert.equal(context.document.activeElement,confirmButton,'focus moves to Use Ultrafast');
-    assert.match(pop.innerHTML,/^<h2 id="speed-confirm-title">Use Ultrafast\?<\/h2><p id="speed-confirm-text">Ultrafast uses your Codex allowance 8× faster than Normal/);
+    assert.match(pop.innerHTML,/^<h2 id="speed-confirm-title">Use Ultrafast\?<\/h2><p id="speed-confirm-text">Ultrafast uses up to 8× the Codex allowance of Normal/);
     assert.match(pop.innerHTML,/<div class="speed-confirm-actions"><button type="button" class="reset-cancel" data-speed-cancel>Cancel<\/button><button type="button" class="reset-primary" data-speed-confirm>Use Ultrafast<\/button><\/div>$/);
     assert.doesNotMatch(pop.innerHTML,/class="(?:[^"]* )?confirm[ "]/,'boards.css owns .confirm');
   };

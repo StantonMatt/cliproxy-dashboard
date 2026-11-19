@@ -56,6 +56,46 @@ class ConfigTests(unittest.TestCase):
         self.enterContext(patch.object(urllib.request, 'build_opener', side_effect=AssertionError('no API access')))
         self.enterContext(patch.object(urllib.request, 'urlopen', side_effect=AssertionError('no API access')))
 
+    def test_full_install_action_preserves_disabled_and_reuses_only_live_current_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'config.yaml'
+            status = Path(directory) / 'status.json'
+            config.write_bytes(CONFIG)
+            with patch.object(installer, 'CONFIG', config), patch.object(installer, 'STATUS', status):
+                self.assertEqual(installer.full_install_action(123)[0], 'install')
+                for marker, action in (({'pid': 123, 'version': '0.2.0'}, 'loaded'),
+                                       ({'pid': 123, 'version': '0.1.2'}, 'install'),
+                                       ({'pid': 124, 'version': '0.2.0'}, 'install'),
+                                       ({'pid': 0, 'version': '0.2.0'}, 'install'),
+                                       ({'pid': 123, 'version': '0.2.0', 'disabled': True}, 'disabled'),
+                                       ({'pid': 124, 'version': '0.1.2', 'disabled': True}, 'disabled'),
+                                       ([], 'install')):
+                    with self.subTest(marker=marker):
+                        status.write_text(json.dumps(marker))
+                        self.assertEqual(installer.full_install_action(123)[0], action)
+                status.write_text('invalid JSON')
+                self.assertEqual(installer.full_install_action(123)[0], 'install')
+                status.write_text(json.dumps({'pid': 123, 'version': '0.2.0'}))
+                self.assertIn('already loaded 0.2.0', installer.full_install_action('123')[1])
+                for block in (b'plugins:\n  enabled: false\n',
+                              b'plugins:\n  enabled: true\n  configs:\n    fast-mode-policy:\n      enabled: false\n'):
+                    config.write_bytes(CONFIG + block)
+                    self.assertEqual(installer.full_install_action(123)[0], 'disabled')
+                self.assertEqual(config.read_bytes(), CONFIG + block)
+                self.assertEqual(json.loads(status.read_bytes()), {'pid': 123, 'version': '0.2.0'})
+
+    def test_full_install_action_uses_configured_status_path_and_rejects_ambiguous_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'config.yaml'
+            status = Path(directory) / 'custom-status.json'
+            config.write_bytes(CONFIG + ('plugins:\n  configs:\n    fast-mode-policy:\n      status_path: ' + str(status) + '\n').encode())
+            status.write_text('{"disabled": true}')
+            with patch.object(installer, 'CONFIG', config):
+                self.assertEqual(installer.full_install_action(123)[0], 'disabled')
+                config.write_bytes(CONFIG + b'plugins: []\n')
+                with self.assertRaises(ValueError):
+                    installer.full_install_action(123)
+
     def test_enable_preserves_every_other_setting_and_bytes(self):
         candidate = installer.configuration_candidate(CONFIG)
         self.assertTrue(candidate.startswith(CONFIG))
@@ -630,6 +670,29 @@ class SandboxPreflightTests(unittest.TestCase):
                 patch.object(installer, 'installer_access'):
             installer.preflight(config, 999)
 
+    def test_preflight_leaves_existing_policy_bytes_and_metadata_untouched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            policy = Path(directory) / 'policy.json'
+            contents = b'{"version":2,"accounts":{},"files":{},"updated_at":"2026-01-01T00:00:00Z"}\n'
+            policy.write_bytes(contents)
+            policy.chmod(0o640)
+            before = policy.stat()
+            config = yaml.safe_load(installer.configuration_candidate(CONFIG))
+            config['plugins']['configs']['fast-mode-policy']['policy_path'] = str(policy)
+            facts = {**self.gateway, 'PrivateTmp': 'no', 'ProtectSystem': 'no'}
+            identity = (os.getuid(), set(os.getgroups()) | {os.getgid()}, os.getgid())
+            access = installer.filesystem_access
+            with patch.object(installer, 'unit_sandbox', return_value=facts), \
+                    patch.object(installer, 'service_identity', return_value=identity), \
+                    patch.object(installer, 'installer_access'), \
+                    patch.object(installer, 'filesystem_access', side_effect=lambda path, *args, **kwargs:
+                        access(path, *args, **kwargs) if path == policy else None):
+                installer.preflight(config, 999)
+            self.assertEqual(policy.read_bytes(), contents)
+            after = policy.stat()
+            for field in ('st_ino', 'st_mtime_ns', 'st_mode', 'st_uid', 'st_gid'):
+                self.assertEqual(getattr(after, field), getattr(before, field))
+
     def test_modes_missing_state_and_links_are_checked_without_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -698,6 +761,8 @@ class CandidatePreflightTests(unittest.TestCase):
             facts['StateDirectory'] = 'cliproxyapi' if uid == 4242 else ''
             facts['ReadWritePaths'] = '' if uid == 4242 else '/var/lib/personal-codex-router'
             self.facts[unit] = facts
+        # Atomic dashboard publications must use a gateway-readable primary group.
+        self.facts['personal-codex-router-dashboard']['Group'] = '4242'
         self.add_file(installer.CONFIG)
         self.add_file(Path(installer.POLICY), uid=4243, gid=4242)
         self.add_file(installer.STATUS, uid=4242, gid=4242)
@@ -767,6 +832,46 @@ class CandidatePreflightTests(unittest.TestCase):
         installer.installer_preflight(cfg, old)
         installer.preflight(cfg, 999, old)
 
+    def test_account_free_install_leaves_policy_and_controls_absent(self):
+        path, _, install = self.main_fixture()
+        policy = Path(installer.POLICY)
+        controls = policy.with_name('fast-mode-controls.json')
+        self.files.pop(policy)
+        self.files.pop(controls)
+        before = self.files.copy()
+        path.write_bytes(CONFIG)
+        with contextlib.redirect_stdout(io.StringIO()):
+            installer.main(['--dry-run', '--config', str(path)])
+        self.assertEqual(self.files, before)
+        install.assert_not_called()
+        with patch.object(installer, 'verified_reload', return_value=0) as reload, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(installer.main(['--library', '/tmp/offline-input.so']), 0)
+        install.assert_called_once()
+        reload.assert_called_once()
+        self.assertEqual(self.files, before)
+        # Model the dashboard's first atomic publication with the checked mode
+        # and effective primary group; the gateway must then read that file.
+        self.add_file(policy, uid=4243, gid=4242)
+        self.run_preflights(self.enabled(), CONFIG)
+
+    def test_missing_policy_requires_writable_directory_and_future_reader_access(self):
+        policy = Path(installer.POLICY)
+        self.files.pop(policy)
+        parent_info = self.files[policy.parent]
+        self.facts['personal-codex-router-dashboard']['Group'] = '4243'
+        with patch.object(installer.os, 'getgrouplist', side_effect=lambda name, gid: [gid]):
+            with self.assertRaisesRegex(installer.SandboxError, 'cannot read future file'):
+                self.run_preflights(self.enabled(), CONFIG)
+        self.facts['personal-codex-router-dashboard']['Group'] = '4242'
+        for mode, uid, gid, error in ((0o750, 0, 4242, 'cannot create/rename'),
+                                      (0o700, 4243, 4243, 'cannot traverse')):
+            with self.subTest(mode=oct(mode)):
+                self.files[policy.parent] = self.info(stat.S_IFDIR | mode, uid, gid)
+                with self.assertRaisesRegex(installer.SandboxError, error):
+                    self.run_preflights(self.enabled(), CONFIG)
+        self.files[policy.parent] = parent_info
+
     def test_candidate_matrix_uses_only_required_paths(self):
         modes = ('enable', 'config-change', 'version-switch', 'disable',
                  'explicit-rollback-enabled', 'explicit-rollback-disabled',
@@ -805,11 +910,7 @@ class CandidatePreflightTests(unittest.TestCase):
                         else:
                             old, candidate = self.enabled(), self.disabled(plugins_present)
                         self.accessed.clear()
-                        if installer.status_settings(yaml.safe_load(candidate))[0] and not policy_present:
-                            with self.assertRaisesRegex(installer.SandboxError, 'required file is missing'):
-                                self.run_preflights(candidate, old)
-                        else:
-                            self.run_preflights(candidate, old)
+                        self.run_preflights(candidate, old)
                         self.assertTrue(all(path.is_absolute() for path in self.accessed))
                         if not installer.status_settings(yaml.safe_load(candidate))[0]:
                             self.assertNotIn(policy, self.accessed)
@@ -881,13 +982,8 @@ class CandidatePreflightTests(unittest.TestCase):
                         self.accessed.clear()
                         with patch.object(installer, 'verified_reload', return_value=0 if enabled else 3) as reload, \
                                 contextlib.redirect_stdout(io.StringIO()):
-                            if enabled and not policy_present:
-                                with self.assertRaisesRegex(installer.SandboxError, 'required file is missing'):
-                                    installer.main(args)
-                                reload.assert_not_called()
-                            else:
-                                self.assertEqual(installer.main(args), 0 if enabled else 3)
-                                self.assertEqual(reload.call_args.args[1:3], (original, candidate))
+                            self.assertEqual(installer.main(args), 0 if enabled else 3)
+                            self.assertEqual(reload.call_args.args[1:3], (original, candidate))
                         self.assertEqual(install.call_count, int(mode == 'enable'))
                         if not enabled:
                             self.assertNotIn(policy, self.accessed)
@@ -901,8 +997,8 @@ class CandidatePreflightTests(unittest.TestCase):
         for target in ('enabled', 'disabled', 'plugin-free'):
             for policy_present in (True, False):
                 with self.subTest(target=target, policy=policy_present):
-                    # Deployment needs its policy. Simulate deletion during the
-                    # failure so the rollback's own requirements are exercised.
+                    # Simulate deletion during failure; rollback must also
+                    # tolerate a policy the dashboard has not published yet.
                     self.files[policy] = policy_info
                     if target == 'enabled':
                         cfg = yaml.safe_load(self.enabled())
@@ -927,12 +1023,11 @@ class CandidatePreflightTests(unittest.TestCase):
                     with patch.object(installer, 'verified_reload', side_effect=reload) as reload_call, \
                             contextlib.redirect_stdout(io.StringIO()):
                         if target == 'enabled':
-                            message = ('original enabled config restored and verified' if policy_present
-                                       else 'rollback runtime confirmation failed')
-                            with self.assertRaisesRegex(installer.RuntimeConfirmationError, message):
+                            with self.assertRaisesRegex(installer.RuntimeConfirmationError,
+                                                        'original enabled config restored and verified'):
                                 installer.main(['--library', '/tmp/offline-input.so'])
-                            self.assertEqual(path.read_bytes(), original if policy_present else candidate)
-                            self.assertEqual(reload_call.call_count, 2 if policy_present else 1)
+                            self.assertEqual(path.read_bytes(), original)
+                            self.assertEqual(reload_call.call_count, 2)
                         else:
                             self.assertEqual(installer.main(['--library', '/tmp/offline-input.so']), 3)
                             self.assertEqual(path.read_bytes(), original)
@@ -982,7 +1077,6 @@ class CandidatePreflightTests(unittest.TestCase):
         library = installer.PLUGIN_DIR / 'linux/amd64' / f'fast-mode-policy-v{installer.VERSION}.so'
         controls = Path('/var/lib/personal-codex-router/fast-mode-controls.json')
         cases = (
-            ('missing-policy', lambda: self.files.pop(policy)),
             ('unreadable-policy', lambda: self.files.update({policy: self.info(stat.S_IFREG | 0o600, 4243, 4243)})),
             ('missing-library', lambda: self.files.pop(library)),
             ('unreadable-library', lambda: self.files.update({library: self.info(stat.S_IFREG | 0o600)})),

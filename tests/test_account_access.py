@@ -110,7 +110,7 @@ class AccountAccessTests(unittest.TestCase):
         self.assertFalse(any(method == 'PATCH' for _, _, method in self.calls))
 
     def test_plan_projection_preserves_new_nonempty_claims(self):
-        for plan, label in (('prolite', 'Pro 100'), ('pro', 'Pro 200'), ('future_super_plan', 'Future Super Plan'),
+        for plan, label in (('promax', 'Pro 500'), ('prolite', 'Pro 100'), ('pro', 'Pro 200'), ('future_super_plan', 'Future Super Plan'),
                             ('future-super-plan', 'Future Super Plan'), ('unknown', 'Unknown')):
             with self.subTest(plan=plan):
                 self.record['id_token']['plan_type'] = plan

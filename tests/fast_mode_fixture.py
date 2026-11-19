@@ -118,7 +118,7 @@ def build_state(directory):
                              'ultrafast_models': ['gpt-5.4']}]}
         catalog['accounts'][email] = {'fetched_at': fast.stamp(now - 600), 'attempted_at': fast.stamp(now - 600),
             'error': None, 'plan_type': 'pro', 'models': [{'id': 'gpt-5.4', 'name': 'GPT-5.4',
-            'service_tiers': ['priority', 'ultrafast'] if account_id == 'on-fast' else ['priority']}]}
+            'service_tiers': ['priority', 'ultrafast'] if account_id == 'on-fast' else [] if account_id == 'on-empty' else ['priority']}]}
         files.append(auth_file_row({'type': 'codex', 'email': email,
             'id_token': jwt(email=email, workspace='workspace-' + account_id)}, account_id + '.json', account_id))
         state.data['accounts'].append({'key': account_id + '.json', 'id': account_id, 'email': email, 'label': email,

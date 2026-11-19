@@ -2,7 +2,7 @@
 
 Every 60 seconds, the dashboard reads Codex entries from the gateway's
 management auth-file list. The explicit nested `id_token.plan_type` claim supplies
-the plan label: `prolite` displays **Pro 100** and `pro` displays **Pro 200**, and unfamiliar non-empty plan
+the plan label: `prolite` displays **Pro 100**, `pro` **Pro 200**, and `promax` **Pro 500**; unfamiliar non-empty plan
 values display a title-cased label (underscores and hyphens become spaces).
 Missing or malformed claims display **Unknown**. Labels do not determine plan
 validity: any non-empty string is accepted for sign-in, enable and refresh.
@@ -59,6 +59,15 @@ to enable the account. Routing reconciles after confirmed changes.
 CLIProxyAPI 8.0.30 has no conditional mutation API, so identity checks immediately
 before the status PATCH and identity-bound readback detect replacements but
 cannot eliminate a replacement between the final GET and PATCH.
+
+## Usage credits
+
+**Credits** comes from `credits.balance` in the same OpenAI usage reading as the
+allowance. These are OpenAI credits, not money. OpenAI draws on them automatically
+once the account's included allowance runs out. The dashboard does not change
+routing for credits: accounts reporting allowance are preferred; when none reports
+allowance, existing priorities are held, so requests reaching a spent account use
+its credits.
 
 ## Dashboard sign-in
 

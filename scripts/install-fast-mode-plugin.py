@@ -38,6 +38,34 @@ PUBLIC_KEYS = ('enabled', 'priority', 'policy_path', 'status_path',
                'map_unsupported_ultrafast', 'audit')
 
 
+def full_install_action(pid):
+    """Read-only decision; explicit disables take precedence over a live marker."""
+    config, _ = validated_config(CONFIG.read_bytes())
+    plugins = config.get('plugins', {})
+    if not isinstance(plugins, dict):
+        raise ValueError('plugins must be a mapping')
+    configs = plugins.get('configs', {})
+    if not isinstance(configs, dict):
+        raise ValueError('plugins.configs must be a mapping')
+    item = configs.get('fast-mode-policy', {})
+    if not isinstance(item, dict):
+        raise ValueError('fast-mode-policy must be a mapping')
+    if plugins.get('enabled') is False or item.get('enabled') is False:
+        return 'disabled', 'left off (explicitly disabled in gateway config)'
+    try:
+        status = json.loads(Path(item.get('status_path', str(STATUS))).read_bytes())
+    except (FileNotFoundError, ValueError):
+        status = {}
+    if not isinstance(status, dict):
+        status = {}
+    if status.get('disabled') is True:
+        return 'disabled', 'left off (explicitly disabled in plugin status)'
+    if (str(status.get('pid')) == str(pid) and str(pid) not in ('', '0') and
+            status.get('version') == VERSION):
+        return 'loaded', f'already loaded {VERSION}'
+    return 'install', f'build, install and verify hot reload of {VERSION} (no gateway restart)'
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -410,7 +438,8 @@ def preflight(config, pid, original=None):
         sandbox_access(writer_unit, writer_facts, path, write=True)
         sandbox_access(reader_unit, reader_facts, path)
         filesystem_access(path, writer, write=True, future=(writer, mode))
-        filesystem_access(path, reader, future=None if path == policy else (writer, mode))
+        # Policy and controls appear only after the dashboard sees Codex accounts.
+        filesystem_access(path, reader, future=(writer, mode))
     sandbox_access(gateway_unit, gateway, library)
     filesystem_access(library, gateway_id)
     for parent in (directory, directory / 'linux', directory / 'linux/amd64'):

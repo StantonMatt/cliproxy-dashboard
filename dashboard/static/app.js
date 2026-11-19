@@ -234,6 +234,14 @@ function renewalBlock(b, label, source) {
   const note=b.note && !/\.$/.test(b.note) ? b.note+'.' : b.note;
   return `<div class="reset-block billing-renewal${b.urgent ? ' renewal-soon' : ''}" title="${esc(`${b.badge}. ${note} ${source}`)}"><span>${esc(label)}</span><strong>${esc(b.date)}</strong></div>`;
 }
+function usageCreditsBlock(a) {
+  const c=a.usage_credits;
+  if(!c || !(c.unlimited || Number.isFinite(c.balance) && c.balance>0))return '';
+  const value=c.unlimited ? 'Unlimited' : c.balance.toLocaleString('en-US',{maximumFractionDigits:0});
+  const exact=c.unlimited ? 'Unlimited' : c.balance.toLocaleString('en-US',{maximumFractionDigits:2});
+  const title=c.limit_reached ? 'Spending limit reached' : `${exact}. Used after the allowance runs out`;
+  return `<div class="reset-block usage-credits${c.limit_reached ? ' renewal-soon' : ''}" title="${esc(title)}"><span>Credits</span><strong>${esc(value)}</strong></div>`;
+}
 // A check when ready, an alert when the account needs attention, a quiet minus when it is deliberately off.
 // The state stays on the facts line, its text truncating down to the icon on narrow cards; the full text and any
 // details (detail: what the text leaves out) open in the state popover (showStateTip). id keys the popover across re-renders.
@@ -1657,14 +1665,14 @@ accountEvents.addEventListener('pointerout',event=>{
 // most says what the slider can't (speedState). Ultrafast is a third stop while the account has ultrafast models, a
 // hollow one while the gateway can't apply it; with none (or the model list not read yet) the slider is a two-stop
 // switch, and a saved Ultrafast shows as Fast, which is what runs. The setting itself is kept. Choosing Ultrafast asks
-// first (speedAsk).
+// first (speedAsk). A known catalog without Fast renders only a Normal label.
 const SPEEDS=['normal','fast','ultrafast'], SPEED_NAMES={normal:'Normal',fast:'Fast',ultrafast:'Ultrafast'};
-// How fast each speed uses the subscription's included limits, against Normal (Standard), from OpenAI's Codex speed docs:
-// https://learn.chatgpt.com/docs/agent-configuration/speed
+// Maximum included-usage multipliers against Normal (Standard); rates vary by model:
+// https://learn.chatgpt.com/docs/pricing
 const SPEED_USAGE_RATES={fast:2.5,ultrafast:8};
 // Why Ultrafast can't be picked (ultrafast_unavailable_reason, or a refused save's code): the hollow stop's tooltip, and
 // the line a try shows for 6 s.
-const SPEED_BLOCKED={no_models:'No model offers Ultrafast right now',catalog_pending:'Ultrafast: model list not loaded yet',
+const SPEED_BLOCKED={no_fast_models:'No model on this account offers Fast',no_models:'No model offers Ultrafast right now',catalog_pending:'Ultrafast: model list not loaded yet',
   plugin_not_enforced:'Ultrafast needs the gateway plugin',plugin_outdated:'Ultrafast needs a gateway plugin update'};
 const speedTried=new Map();
 // A drag (speedPress), arrow keys waiting to save (speedKeys) or an open Ultrafast question (speedAsk) hold card renders,
@@ -1680,6 +1688,7 @@ const speedModels = view => (Array.isArray(view.ultrafast_models) ? view.ultrafa
 // Ultrafast it can't apply, or a try at a stop that can't be picked.
 function speedState(a, gateway) {
   const view=speedView(a), pending=fastPending.get(a.id), error=fastErrors.get(a.id), tried=speedTried.get(a.id);
+  if(view.levels?.length===1 && view.levels[0]==='normal')return {level:'normal',at:0,stops:1,status:null,title:SPEED_BLOCKED.no_fast_models};
   const models=speedModels(view);
   const open=view.ultrafast_available===true, reason=open ? null : view.ultrafast_unavailable_reason;
   const stops=open || models.length ? 3 : 2;
@@ -1698,6 +1707,7 @@ function speedState(a, gateway) {
 }
 function speedRow(a, gateway) {
   const s=speedState(a,gateway), id=esc(a.id);
+  if(s.stops===1)return `<span class="account-speed normal-only" title="${esc(s.title)}"><span class="visually-hidden">Speed: </span>Normal<span class="visually-hidden">. ${esc(s.title)}</span></span>`;
   return `<span class="account-speed${s.stops===2?' two':''}"><label class="speed-value" for="speed-${id}">${SPEEDS.slice(0,s.stops).map(level=>`<span${level===s.level?' class="on"':''}>${SPEED_NAMES[level]}</span>`).join('')}</label><input id="speed-${id}" data-speed-account="${id}" type="range" min="0" max="${s.stops-1}" step="1" value="${s.at}" data-at="${s.at}" aria-label="Speed" aria-valuetext="${SPEED_NAMES[s.level]}"${s.status?` aria-describedby="speed-${id}-status"`:''}${s.ultraOff?' class="ultra-off"':''}${s.busy?' aria-busy="true"':''}${s.disabled?' disabled':''}${s.title?` title="${esc(s.title)}"`:''}></span>`;
 }
 function speedStatus(a, gateway) {
@@ -1803,7 +1813,7 @@ const speedModelName = m => typeof m.name==='string' && m.name.trim() ? m.name.t
 function speedAskBody(models) {
   const names=models.map(m=>`<span class="speed-model">${esc(speedModelName(m))}</span>`);
   const list=names.length>1 ? names.slice(0,-1).join(', ')+' and '+names.at(-1) : names[0], {fast,ultrafast}=SPEED_USAGE_RATES;
-  return `Ultrafast uses your Codex allowance ${ultrafast}× faster than Normal — about ${Math.round(ultrafast/fast)}× faster than Fast.`+
+  return `Ultrafast uses up to ${ultrafast}× the Codex allowance of Normal; Fast uses up to ${fast}×.`+
     (names.length ? ` Only ${list} ${names.length===1 ? 'runs' : 'run'} Ultrafast; other models stay on Fast.` : '');
 }
 const speedInput = id => document.querySelector(`[data-speed-account="${CSS.escape(id)}"]`);
@@ -1990,7 +2000,7 @@ function renderAccountsContent(gateway) {
       ${!session?signinStrip(a,gateway,outcome):''}
       ${a.access_error?`<div class="quota-warning" role="alert">${esc(a.access_error)}</div>`:''}
       ${cooldownRecoveryHtml(a)}<div class="account-resets"><button type="button" class="resets-button" data-reset-open="${esc(a.id)}" aria-haspopup="dialog">Resets <span>${r.available==null?'—':esc(r.available)}</span></button><span>${r.automatic?'Auto-use before expiry':''}</span></div>
-      <div class="account-bottom"><div class="account-dates"><div class="reset-block allowance-reset"><span>Allowance resets</span><strong class="countdown" data-reset="${w?.resets_at || ''}" title="${w?.resets_at?esc(dateTime(w.resets_at*1000)):''}">${countdown(w?.resets_at)}</strong></div>${renewalBlock(billing,billing.ended?billing.label:a.billing?.confirmed?'Renews':billing.label,verified)}</div>${!strip&&!session?statePill(shownState,shownState.startsWith('Stale') ? 'warn' : tone,[state,stale ? '' : quotaAge].filter(Boolean).join(' · '),usageRefreshButton('codex',a,accountName(a),`data-access-focus="${esc(a.id+':usage')}"`),'codex-'+a.id,`data-access-focus="${esc(a.id+':state')}"`):''}</div>
+      <div class="account-bottom"><div class="account-dates"><div class="reset-block allowance-reset"><span>Allowance resets</span><strong class="countdown" data-reset="${w?.resets_at || ''}" title="${w?.resets_at?esc(dateTime(w.resets_at*1000)):''}">${countdown(w?.resets_at)}</strong></div>${renewalBlock(billing,billing.ended?billing.label:a.billing?.confirmed?'Renews':billing.label,verified)}${usageCreditsBlock(a)}</div>${!strip&&!session?statePill(shownState,shownState.startsWith('Stale') ? 'warn' : tone,[state,stale ? '' : quotaAge].filter(Boolean).join(' · '),usageRefreshButton('codex',a,accountName(a),`data-access-focus="${esc(a.id+':usage')}"`),'codex-'+a.id,`data-access-focus="${esc(a.id+':state')}"`):''}</div>
       ${!strip&&!session?usageRefreshNote('codex',a):''}
       ${routingRow(a,gateway,speedRow(a,gateway),speedStatus(a,gateway))}</div></div>
     </article>`;

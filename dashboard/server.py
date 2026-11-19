@@ -732,6 +732,32 @@ def claude_routing_projection(files, checked_at):
             for f in files if f.get('type') == 'claude' and not api_keys.is_api_key_row(f)]
 
 
+def usage_credits(payload):
+    """Keep only the purchasable usage balance, separate from reset credits."""
+    if not isinstance(payload, dict):
+        return None
+    credits = payload.get('credits')
+    if not isinstance(credits, dict):
+        return None
+    unlimited = credits.get('unlimited') is True
+    if credits.get('has_credits') is not True and not unlimited:
+        return None
+    raw = credits.get('balance')
+    balance = None
+    if type(raw) in (str, int, float):
+        try:
+            value = float(raw)
+            # A trillion credits is a defensive ceiling, not a provider limit.
+            if math.isfinite(value) and 0 <= value <= 1e12:
+                balance = value
+        except (ValueError, OverflowError):
+            pass
+    spend = payload.get('spend_control')
+    return dict(balance=balance, unlimited=unlimited,
+                limit_reached=credits.get('overage_limit_reached') is True
+                or isinstance(spend, dict) and spend.get('reached') is True)
+
+
 def quota_windows(payload):
     result = []
     limits = payload.get('rate_limit') or {}
@@ -809,7 +835,7 @@ def fetch_account(file, resets=None, call=None, cache=None, manual=False, force=
         headers = subscriptions.codex_headers(account_id)
         def normalize(raw):
             body = account_access.json_object(raw)
-            normalized = dict(windows=quota_windows(body), auth_state='authenticated',
+            normalized = dict(windows=quota_windows(body), usage_credits=usage_credits(body), auth_state='authenticated',
                         _t3_usage=t3_usage.codex_projection(body, account_access.identity(file), account_id),
                         _usage_plan=account_access.plan_value(body.get('plan_type')))
             if isinstance(body.get('additional_rate_limits'), list):
@@ -823,7 +849,7 @@ def fetch_account(file, resets=None, call=None, cache=None, manual=False, force=
             request_body={'auth_index': file['auth_index'], 'method': 'GET',
                           'url': 'https://chatgpt.com/backend-api/wham/usage', 'header': headers},
             normalize=normalize)
-        public.update({k: view[k] for k in ('windows', '_t3_usage', '_usage_plan') if k in view})
+        public.update({k: view[k] for k in ('windows', 'usage_credits', '_t3_usage', '_usage_plan') if k in view})
         public['quota_attempted_at'] = view.get('attempted_at')
         public['quota_checked_at'] = view.get('checked_at')
         public['fresh_until'] = view.get('fresh_until')

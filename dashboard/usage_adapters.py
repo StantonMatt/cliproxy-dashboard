@@ -417,7 +417,7 @@ class UsageCache:
         measured = max(w['measured_at'] for w in windows)
         # Primary traffic cannot refresh spend/reset observations, or a model window it did not report.
         windows += models
-        safe = {k: v for k, v in normalized.items() if k not in ('windows', 'extra_usage', 'recovery_windows')}
+        safe = {k: v for k, v in normalized.items() if k not in ('windows', 'extra_usage', 'usage_credits', 'recovery_windows')}
         return dict(view, **safe, windows=windows, status='ok', error=None,
                     checked_at=measured, usage_checked_at=measured,
                     usage_source='headers', fresh_until=stamp(min(
@@ -768,7 +768,7 @@ class UsageCache:
                     row.update(measured_at=checked, usage_source='gateway')
             view.update(normalized, status='ok', error=None, checked_at=checked, usage_checked_at=checked,
                         fresh_until=None, usage_source='gateway')
-            for field in ('extra_usage', 'resets', 'recovery_windows'):
+            for field in ('extra_usage', 'usage_credits', 'resets', 'recovery_windows'):
                 if field in normalized:
                     view[field + '_checked_at'] = checked
             success = True
@@ -810,7 +810,7 @@ class UsageCache:
                             models[name] = copy.deepcopy(row)
                     latest['windows'] = [w for w in latest.get('windows', [])
                                          if w.get('kind') != 'weekly_model'] + list(models.values())
-                    for field in ('extra_usage', 'resets', 'recovery_windows'):
+                    for field in ('extra_usage', 'usage_credits', 'resets', 'recovery_windows'):
                         measured_field = field + '_checked_at'
                         if (epoch(view.get(measured_field)) or 0) > (epoch(latest.get(measured_field)) or 0):
                             latest[field] = copy.deepcopy(view[field])

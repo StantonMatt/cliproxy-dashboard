@@ -31,9 +31,10 @@ class FastModeTests(unittest.TestCase):
         self.manager = fast.FastModeManager(self.base / 'controls.json', self.base / 'policy.json',
                                             self.base / 'status.json')
         self.accounts = [fast.fast_account('index1', 'one@example.test', 'codex-one.json',
-                                           {'known': True, 'status': 'ok', 'ultrafast_models': []}),
+                                           {'known': True, 'status': 'ok', 'fast_models': [{'id': 'gpt-6.1-terra'}], 'ultrafast_models': []}),
                          fast.fast_account('index2', 'two@example.test', 'codex-two.json',
                                            {'known': True, 'status': 'ok', 'fetched_at': fast.stamp(self.now),
+                                            'fast_models': [{'id': 'gpt-6.1-sol'}],
                                             'ultrafast_models': [{'id': 'gpt-6.1-sol', 'name': 'GPT-6.1-Sol'}]})]
         self.db = self.base / 'usage.sqlite3'
         self.now = 1790985600
