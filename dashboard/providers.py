@@ -170,7 +170,9 @@ def groups(gateway, watched, usage=None, billing=None):
                 public.setdefault('usage_source', 'gateway')
             if 'windows' in public:
                 public['windows'] = [dict(w, used_pct=w.get('used_pct', w.get('used'))) for w in public['windows']]
-            disabled = bool(file.get('disabled')) or file.get('status') == 'disabled'
+            # Codex enrichment can include a verified pause/resume newer than inventory.
+            disabled = public.get('disabled') if provider == 'codex' and type(public.get('disabled')) is bool else (
+                bool(file.get('disabled')) or file.get('status') == 'disabled')
             public.update(key=file['name'], provider=provider,
                           label=email or file.get('label') or file['name'],
                           confirm_text=confirmation_text(file),

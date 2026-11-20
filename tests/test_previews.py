@@ -66,7 +66,7 @@ class PreviewTests(unittest.TestCase):
                 assert.equal(timeout({url:url+'?query=1'}, {dashboard:true}), 65000);
                 assert.equal(timeout({url}, {dashboard:false}), 30000);
             }
-            for (const url of ['/api/accounts/signin/start', '/api/accounts/signin/cancel', '/api/accounts/routing', '/api/routing', '/api/claude-routing', '/api/routing-link', '/api/routing-all', '/api/claude/accounts/routing']) {
+            for (const url of ['/api/accounts/signin/start', '/api/accounts/signin/cancel', '/api/accounts/routing','/api/accounts/credit-spending', '/api/routing', '/api/claude-routing', '/api/routing-link', '/api/routing-all', '/api/claude/accounts/routing']) {
                 assert.equal(timeout({url}, {dashboard:true}), 50000);
                 assert.equal(timeout({url:url+'?query=1'}, {dashboard:true}), 50000);
                 assert.equal(timeout({url}, {dashboard:false}), 30000);
@@ -289,7 +289,7 @@ class PreviewTests(unittest.TestCase):
                     self.assertIsNone(json.loads(body)['read_only'])
                     self.assertEqual(json.loads(body)['transport'],'tailscale')
                     self.assertEqual(json.loads(body)['host'],'127.0.0.1:8320')
-                for endpoint in ('/api/claude-warnings/dismiss','/api/refresh','/api/routing','/api/claude-routing','/api/routing-link','/api/routing-all','/api/claude/accounts/routing','/api/resets/policy','/api/resets/consume','/api/claude/resets/policy','/api/claude/resets/consume','/api/fast-mode','/api/accounts/signin/start','/api/accounts/signin/cancel','/api/accounts/routing'):
+                for endpoint in ('/api/claude-warnings/dismiss','/api/refresh','/api/routing','/api/claude-routing','/api/routing-link','/api/routing-all','/api/claude/accounts/routing','/api/resets/policy','/api/resets/consume','/api/claude/resets/policy','/api/claude/resets/consume','/api/fast-mode','/api/accounts/signin/start','/api/accounts/signin/cancel','/api/accounts/routing','/api/accounts/credit-spending'):
                     self.assertEqual(request(base+9,'POST',path=endpoint)[0],200)
                     self.assertEqual(request(base+9,'POST',{'Origin':'https://evil.test'},path=endpoint)[0],403)
                     self.assertEqual(request(base+9,'POST',{'Sec-Fetch-Site':'cross-site'},path=endpoint)[0],403)

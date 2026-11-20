@@ -1147,3 +1147,35 @@ footer .health-item i{width:6px;height:6px}
   .stack-table .num-full{display:none}
   .stack-table .num-short{display:inline}
 }
+
+/* NEW for the credits setting (append to style.css). Everything else in the prototype is the existing style.css.
+   About 20 rules. */
+
+/* The Credits fact opens the credits popover on Codex cards (not for read-only viewers, where it stays a plain fact).
+   It keeps the fact's look: same label and value, plus a small chevron; hover and open take the menu button's background. */
+.credits-button{display:block;margin:-3px -6px;padding:3px 6px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;line-height:inherit;text-align:left;cursor:pointer}
+.credits-button:hover,.credits-button[aria-expanded=true]{background:var(--raised)}
+.credits-button:focus-visible{outline:2px solid var(--blue);outline-offset:0}
+.credits-button>svg{width:11px;height:11px;margin-left:3px;vertical-align:-1px;flex-shrink:0;align-self:center;color:var(--muted);stroke-width:2}
+.credits-button[aria-busy=true]{animation:breathe 1.6s infinite;cursor:progress}
+@media(prefers-reduced-motion:reduce){.credits-button[aria-busy=true]{opacity:.6}}
+/* Phones and compact board cards set the facts inline (label, value, chevron); the flex gap already spaces the chevron. */
+@media(max-width:490px){.credits-button>svg{margin-left:-2px}}
+.w-accounts[data-density=compact] .credits-button>svg{margin-left:-1px}
+@media(pointer:coarse){.credits-button{padding:8px 6px;margin:-8px -6px}}
+
+/* The popover: the speed confirmation's shell (.menu-pop.speed-confirm) holding the Resets dialog's setting row
+   (.reset-auto-setting), without that row's divider. Its "Try again" keeps the speed line's link look. */
+.credits-pop{padding:14px}
+.credits-pop .reset-auto-setting{padding:0;border:0}
+.credits-pop .reset-auto-setting label{align-items:flex-start;font-weight:600;font-size:13px}
+.credits-pop .reset-auto-setting small{font-weight:400;line-height:1.55}
+.credits-pop .reset-auto-setting small.warn{color:var(--amber)}
+.credits-pop .reset-auto-setting input{margin:1px 0 0}
+.credits-pop .reset-auto-setting input:disabled{opacity:.45;cursor:not-allowed}
+.credits-pop .reset-auto-setting input[aria-busy=true]{animation:breathe 1.6s infinite;cursor:progress}
+.credits-pop .fast-usage{margin:10px 0 0;font-size:11px}
+.menu-pop.credits-pop .speed-retry{display:inline;width:auto;min-height:0;padding:0;border-radius:2px;background:none;color:inherit;font:inherit;font-weight:inherit}
+.menu-pop.credits-pop .speed-retry:hover{background:none}
+[data-theme=light] .credits-pop .reset-auto-setting small.warn{color:#8a6100}
+@media(max-width:760px){.credits-pop .reset-auto-setting label{font-size:14px}.credits-pop .reset-auto-setting small,.credits-pop .fast-usage{font-size:12px}}

@@ -77,6 +77,17 @@ class HubTests(unittest.TestCase):
         self.cache = fixture()
         self.state = SimpleNamespace(t3_usage_cache=Mock(side_effect=lambda _: copy.deepcopy(self.cache)))
 
+    def test_guard_paused_keeps_existing_disabled_hub_shape(self):
+        self.cache['accounts'][0].update(disabled=True, credit_spending={
+            'enabled': False, 'paused': {'windows': ['weekly'], 'resets_at': NOW + 2000}})
+        code, value = self.request()
+        self.assertEqual(code, 200)
+        row = next(r for r in value['files'] if r['provider'] == 'codex')
+        self.assertTrue(row['disabled'])
+        self.assertNotIn('credit_spending', row)
+        code, _ = self.request('POST', '/v0/management/api-call', polling(row))
+        self.assertEqual(code, 403)
+
     def request(self, method='GET', path='/v0/management/auth-files', value=None, raw=None, headers=None):
         handler = object.__new__(app.Handler)
         handler.path = path

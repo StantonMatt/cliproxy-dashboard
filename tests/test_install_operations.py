@@ -544,6 +544,16 @@ class InstallOperationsTests(unittest.TestCase):
         for path in (installer.ROUTING, installer.OPS, installer.WATCH, installer.CONFIG.parent, installer.GUARD):
             self.assertIn(path, paths)
 
+    def test_full_install_backup_keeps_credit_spending_controls(self):
+        controls = Path('/var/lib/personal-codex-router/credit-spending-controls.json')
+        with patch.object(Path, 'exists', return_value=True), \
+                patch.object(Path, 'is_symlink', return_value=False), \
+                patch.object(Path, 'glob', return_value=[]):
+            original = backup.sources
+            with patch.object(backup, 'run', side_effect=lambda: self.assertIn(controls, backup.sources())):
+                installer.pre_apply_backup(backup, installer.install_files())
+            self.assertIs(backup.sources, original)
+
     def test_claude_redeemer_installed_and_private_state_backed_up_without_socket(self):
         files = installer.install_files()
         self.assertIn((ROOT / 'scripts/claude-redeemer.py', installer.DEST / 'claude-redeemer.py', 0o755), files)

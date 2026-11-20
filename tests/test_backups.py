@@ -69,6 +69,24 @@ class BackupTests(unittest.TestCase):
                 patch.object(Path, 'glob', return_value=[]):
             self.assertNotIn(backup.USAGE_SPOOL, backup.sources())
 
+    def test_credit_spending_controls_are_optional_private_backup_source(self):
+        controls = Path('/var/lib/personal-codex-router/credit-spending-controls.json')
+        for present, symlinked in ((True, False), (False, False), (True, True)):
+            with self.subTest(present=present, symlinked=symlinked), \
+                    patch.object(Path, 'exists', autospec=True,
+                                 side_effect=lambda path: present if path == controls else True), \
+                    patch.object(Path, 'is_symlink', autospec=True,
+                                 side_effect=lambda path: symlinked if path == controls else False), \
+                    patch.object(Path, 'glob', return_value=[]):
+                self.assertEqual(controls in backup.sources(), present and not symlinked)
+        source = self.root / controls.name
+        source.write_text('{"accounts":{}}')
+        dest = self.root / 'credit-backup'
+        backup.snapshot([source], dest)
+        restored = dest / 'files' / source.relative_to('/')
+        self.assertEqual(restored.read_bytes(), source.read_bytes())
+        self.assertEqual(restored.stat().st_mode & 0o777, 0o600)
+
     def test_fast_mode_controls_are_optional_and_derived_files_are_skipped(self):
         controls = Path('/var/lib/personal-codex-router/fast-mode-controls.json')
         policy = controls.with_name('fast-mode-policy.json')

@@ -348,13 +348,16 @@ class ForecastOverviewTests(unittest.TestCase):
                     patch.object(server, 'AllowanceForecastStore', return_value=store), \
                     patch.object(server, 'GatewayState', return_value=state) as gateway_state, \
                     patch.object(server.subscriptions, 'CodexBilling') as billing, \
+                    patch.object(server.account_access, 'CreditSpending') as credits, \
                     patch.object(server.threading, 'Thread') as thread, \
                     patch.object(server, 'ThreadingHTTPServer'), \
                     patch.object(server, 'watch_accounts', return_value=watched), \
                     patch.object(operations.time, 'time', return_value=NOW):
                 server.main()
                 billing.assert_called_once_with(server.BILLING.with_name('codex-billing.json'))
-                gateway_state.assert_called_once_with(forecasts=store, codex_billing=billing.return_value)
+                credits.assert_called_once_with(server.account_access.CREDIT_SPENDING_STATE)
+                gateway_state.assert_called_once_with(forecasts=store, codex_billing=billing.return_value,
+                                                      credit_spending=credits.return_value)
                 self.assertEqual(thread.call_count, 2)  # Reuses existing pollers.
                 observer = thread.call_args_list[1].kwargs['target']
                 with patch.object(server.time, 'sleep', side_effect=StopIteration):

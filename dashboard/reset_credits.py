@@ -43,6 +43,7 @@ class ResetManager:
     def __init__(self, api, metadata, path=STATE, after_reset=None):
         self.api, self.metadata, self.path = api, metadata, Path(path)
         self.after_reset = after_reset
+        self.is_paused = lambda record: False
         self.lock = threading.RLock()
         self.operation = threading.Lock()
         self.cache = {}
@@ -147,7 +148,7 @@ class ResetManager:
     def account(self, account_id):
         matches = [f for f in self.api('/auth-files').get('files', [])
                    if f.get('type') == 'codex' and f.get('auth_index') == account_id]
-        if len(matches) != 1 or not matches[0].get('email') or matches[0].get('disabled'):
+        if len(matches) != 1 or not matches[0].get('email') or (matches[0].get('disabled') and not self.is_paused(matches[0])):
             raise ValueError('Connected account unavailable')
         message = str(matches[0].get('status_message') or '').lower()
         if any(code in message for code in ('refresh_token_reused', 'refresh_token_expired',

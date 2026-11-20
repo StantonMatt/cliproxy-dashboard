@@ -14,7 +14,10 @@ Ultrafast upgrades are allowlist-only (`ultrafast_models`) and limited to the
 See [the policy and deployment guide](../../docs/fast-mode-policy.md) for the
 contract, defaults, status lifecycle and websocket limitation.
 
-The full operations installer builds and hot-loads this plugin automatically.
+The [full operations installer](../../README.md#update-an-existing-installation)
+builds and hot-loads this plugin automatically, including before Codex sign-in.
+It reuses the current loaded version and preserves explicit disables; scoped
+installs and `--skip-fast-mode-plugin` leave it unchanged.
 For a direct build, use Linux amd64 with a C compiler
 (`sudo apt install gcc libc6-dev`):
 

@@ -9,14 +9,13 @@ validity: any non-empty string is accepted for sign-in, enable and refresh.
 Usage responses supply quota bars and plan-disagreement refresh observations;
 they never replace the displayed claim or its renewal estimate. Free and paid
 accounts use the same routing eligibility, quota exhaustion and failover rules. The plan claim never changes the saved
-**Use for routing** preference. Polling never enables or disables accounts;
-accounts already off stay off until the user enables routing or completes sign-in.
+**Use for routing** preference. Polling can automatically pause and resume accounts when **Spend credits** is off. Accounts manually turned off stay off until the user enables routing or completes sign-in.
 
 A fresh Free claim produces the Linux desktop notification **ChatGPT reports
 a Free plan**, regardless of the disabled flag. Legacy dismissal flags
 remain valid for the same identity and continuous Free episode; a new identity or
 a later Free episode gets a new notice. Sign-in notices remain independent.
-The dashboard no longer shows notice tiles. Free cards retain their plan badge and have the same controls as paid cards.
+The dashboard no longer shows notice tiles. Free cards retain their plan badge and the same routing and sign-in controls as paid cards. Speed controls follow [each account's model catalog](fast-mode-policy.md#model-catalog), independently of its plan label.
 A passed renewal date on a Free plan reads **Plan ended** in the neutral colour.
 Without cached allowance, disabled cards show **Not available while disabled**.
 
@@ -44,10 +43,11 @@ or failed worker launch clears refresh/session activity so later polls and sign-
 attempts can retry. In-memory session locks never wrap gateway transport calls.
 Completion callbacks run after the import releases it.
 
-There is no new durable state file; sign-in outcomes are written only as journal
+**Spend credits** adds the durable `credit-spending-controls.json` file described
+in **Usage credits** below; backups include it. Sign-in outcomes are written only as journal
 lines (see **Journal** below). Refresh
 throttles live in memory; existing notification storage retains desktop notification episodes and legacy dismissal flags.
-No backup source changes are needed. Gateway status PATCHes are verified against
+Gateway status PATCHes are verified against
 runtime state; sign-in also verifies persistence of its final disabled flag.
 
 The **Use for routing** switch on each Codex card
@@ -64,10 +64,46 @@ cannot eliminate a replacement between the final GET and PATCH.
 
 **Credits** comes from `credits.balance` in the same OpenAI usage reading as the
 allowance. These are OpenAI credits, not money. OpenAI draws on them automatically
-once the account's included allowance runs out. The dashboard does not change
-routing for credits: accounts reporting allowance are preferred; when none reports
-allowance, existing priorities are held, so requests reaching a spent account use
-its credits.
+once the account's included allowance runs out.
+
+Open **Credits** to change **Spend credits** (on by default). When off, a fresh
+reading showing any allowance window used up, with a future reset, pauses an
+account whose **Use for routing** choice is on. Weekly and 5-hour limits both
+count, even with a zero credit balance. The routing switch stays on; the account
+is excluded from routing until a fresh reading includes every window recorded in
+the pause marker with remaining allowance above zero, and no present window is
+used up. A missing window is no evidence of renewed allowance.
+A passed reset alone does not resume it: **Paused · reset due · checking** waits
+for that reading. Stale or missing readings change neither pause nor routing.
+
+Turning spending on ends a pause immediately. An exhausted allowance still
+reports **Out · back in …**, as before; credits do not change availability or
+allowance-based selection. Redeeming a **Reset** can end a pause after the
+existing full allowance refresh confirms all paused windows have allowance; manual resets and **Auto-use before expiry**
+remain available while paused. Turning **Use for routing** off while paused drops
+the automatic pause and leaves the account disabled until you turn routing on.
+Turning routing on re-evaluates the cached reading before returning, so a fresh
+spent allowance pauses it again immediately when spending is off.
+External re-enables are re-evaluated on the next cycle. With only one account,
+Codex requests fail while it is paused, until allowance returns or spending is
+turned on. The off setting always keeps the Credits fact visible, showing `0`
+when no balance is reported. Read-only viewers see the fact without its control.
+
+Response headers update allowance on the 60-second dashboard poll. The pause
+normally follows exhaustion within about a minute while requests flow; a few
+requests can still spend credits first. Full usage reads otherwise run about a
+day apart, with an exhausted window rechecked just after its latest reset
+(about one to two minutes including the poll). Provider retry limits still apply.
+
+The private `/var/lib/personal-codex-router/credit-spending-controls.json` file
+(mode `0600`, atomic writes) stores each email's `spend_credits` choice and any
+`paused: {since, windows, resets_at, access_identity}` recovery marker. A marker
+belongs to that credential identity; replacement discards the marker without
+changing gateway status, while keeping the email-keyed spending choice. Refreshing tokens or signing
+in again keeps the choice. Missing or unreadable controls default to spending on.
+`POST /api/accounts/credit-spending` accepts exactly `{account_id, identity,
+spend}` with a boolean `spend`, and returns `{enabled, paused}`. It uses the same
+identity, same-origin, read-only and request-deadline checks as the routing API.
 
 ## Dashboard sign-in
 
@@ -382,8 +418,10 @@ cancel also invalidates older starts still awaiting their initial lookup, so a
 stale join cannot recreate the canceled session. A later new sign-in start is a
 new intent; explicit routing on remains an independently verified change and
 does not re-arm an older suppressed sign-in.
-The Tailscale proxy permits exactly `/api/accounts/signin/start`,
-`/api/accounts/signin/cancel` and `/api/accounts/routing` for POST. Status is folded
+The Tailscale proxy permits selected dashboard POST routes, including
+`/api/accounts/signin/start`, `/api/accounts/signin/cancel`, `/api/accounts/routing`
+and `/api/accounts/credit-spending`; `dashboardRequestAllowed` in
+`scripts/router-preview.mjs` defines the complete allowlist. Status is folded
 into the overview; raw management endpoints are never forwarded.
 
 ## Model errors and failover

@@ -809,7 +809,7 @@ def codex_account_order(account):
     return account.get('key') or account.get('name') or account.get('id') or ''
 
 
-def fetch_account(file, resets=None, call=None, cache=None, manual=False, force=False):
+def fetch_account(file, resets=None, call=None, cache=None, manual=False, force=False, credit_spending=None):
     email = str(file.get('email', 'Connected account'))[:160]
     public = {'key': file.get('name'), 'provider': 'codex', 'status': file.get('status'), 'id': str(file.get('auth_index', ''))[:80], 'label': email,
               'email': email, 'active': not file.get('disabled') and not file.get('unavailable'),
@@ -869,12 +869,14 @@ def fetch_account(file, resets=None, call=None, cache=None, manual=False, force=
             resets.fetch(file)
         except Exception:
             pass  # Balance and quota polling succeed independently.
+    if credit_spending is not None:
+        public['credit_spending'] = credit_spending.view(file)
     public['availability'] = classify(file, public)
     return public
 
 
 class GatewayState:
-    def __init__(self, resets=None, notices=None, fast_modes=None, forecasts=None, catalog=None, codex_billing=None):
+    def __init__(self, resets=None, notices=None, fast_modes=None, forecasts=None, catalog=None, codex_billing=None, credit_spending=None):
         self.resets = resets if resets is not None else ResetManager(api, account_metadata)
         self.notices = notices if notices is not None else NoticeStore()
         self.fast_modes = fast_modes if fast_modes is not None else FastModeManager()
@@ -887,6 +889,7 @@ class GatewayState:
         self.lock = threading.Lock()
         self.lifecycle_lock = threading.RLock()
         self.access = account_access.AccountAccess()
+        self.credit_spending = credit_spending if credit_spending is not None else account_access.CreditSpending()
         self.usage_cache = usage_adapters.UsageCache()
         self.profiles = subscriptions.Profiles()
         # main() supplies the durable store; tests/embedded callers default to memory only.
@@ -898,13 +901,15 @@ class GatewayState:
         self.api_keys = api_keys.APIKeyManager(self.lifecycle_lock, self.accounts_changed)
         self.account_mutations = account_mutations.AccountMutations(
             lambda *a, **kw: api(*a, **kw), self.lifecycle_lock, self.accounts_changed,
-            lambda rows, provider, key, call: self.other_ready_accounts(rows, provider, key, call, self.usage_cache))
+            lambda rows, provider, key, call: self.other_ready_accounts(
+                rows, provider, key, call, self.usage_cache, self.credit_spending))
         self.running = False
         self.last_attempt = 0
         self.account_updates = {}
         self.data = {'online': None, 'checked_at': None, 'accounts': [], 'routing': {}, 'error': None,
                      'move_available': False}
         self.resets.after_reset = self.after_reset
+        self.resets.is_paused = self.credit_spending.marked
 
     def accounts_changed(self, signed_in=None):
         if signed_in:
@@ -935,8 +940,9 @@ class GatewayState:
             profile_updated = profile.get('status') == 'ok' and profile.get('checked_at') != previous
         if provider == 'codex':
             account = fetch_account(file, call=call, cache=self.usage_cache,
-                                    manual=not after_reset, force=after_reset)
+                                    manual=not after_reset, force=after_reset, credit_spending=self.credit_spending)
             self.access.project(file, account)
+            self.apply_credit_spending(file, account, deadline)
             billing_plan = account.pop('_usage_plan', None) or account.get('plan_type')
             account['priority_checked_at'] = utcnow()
         else:
@@ -1006,10 +1012,16 @@ class GatewayState:
             self.usage_cache.due_now(matched[0])
 
     @staticmethod
-    def other_ready_accounts(rows, provider, removed_key, call, cache=None):
+    def other_ready_accounts(rows, provider, removed_key, call, cache=None, credit_spending=None):
         others = [r for r in rows if r.get('type') == provider and r.get('name') != removed_key]
         if provider == 'codex':
-            return any(fetch_account(r, call=call, cache=cache).get('availability', {}).get('state') == 'ready' for r in others)
+            for record in others:
+                account = fetch_account(record, call=call, cache=cache, credit_spending=credit_spending)
+                if credit_spending is not None:
+                    credit_spending.project(record, account)
+                if account.get('availability', {}).get('state') == 'ready':
+                    return True
+            return False
         if provider == 'claude':
             observed = {'gateway': {'online': True, 'checked_at': utcnow(),
                                    'claude_accounts': claude_routing_projection(others, utcnow())},
@@ -1027,8 +1039,9 @@ class GatewayState:
             return self._after_reset(account_id)
 
     def fetch_access_account(self, file):
-        account = fetch_account(file, self.resets, cache=self.usage_cache)
+        account = fetch_account(file, self.resets, cache=self.usage_cache, credit_spending=self.credit_spending)
         self.access.project(file, account)
+        self.apply_credit_spending(file, account)
         self.access.maybe_refresh(file, account.pop('_usage_plan', None), api)
         return account
 
@@ -1074,6 +1087,50 @@ class GatewayState:
                            and a.get('auth_state') == 'sign_in_required' for a in self.data['accounts'])
         return self.signins.start(account_id, identity, observed_required=required, deadline=deadline)
 
+    def apply_credit_spending(self, record, account, deadline=None):
+        deadline = deadline or RequestDeadline(18)
+        try:
+            with deadline.lock(self.lifecycle_lock):
+                current = self.credit_spending.reconcile(record, account, deadline.wrap(api), deadline)
+                record.update(current)
+                return current
+        except Exception:
+            self.credit_spending.warn()
+            self.credit_spending.project(record, account)
+            return record
+
+    def set_credit_spending(self, account_id, identity, spend, deadline=None):
+        if type(spend) is not bool:
+            raise ValueError('Spend must be true or false')
+        deadline = deadline or RequestDeadline()
+        call = deadline.wrap(api)
+        with deadline.lock(self.lifecycle_lock):
+            record = self.signins.resolve(account_id, identity, call)
+            # A settings change uses cached/header observations, never an extra usage request.
+            with deadline.lock(self.lock):
+                matches = [copy.deepcopy(a) for a in self.data['accounts']
+                           if a['id'] == account_id and a.get('access_identity') == identity]
+            account = matches[0] if len(matches) == 1 else {}
+            previous = self.credit_spending.view(record)['enabled']
+            self.credit_spending.update(record['email'], spend_credits=spend)
+            try:
+                record = self.credit_spending.reconcile(record, account, call, deadline)
+            except Exception:
+                # An unconfirmed effect fails the save too. Keep any crash marker,
+                # and retry its recovery under the previous setting next cycle.
+                try:
+                    self.credit_spending.update(record['email'], spend_credits=previous)
+                except Exception:
+                    self.credit_spending.warn()
+                raise
+            if account.get('id'):
+                self.access.project(record, account)
+                self.credit_spending.project(record, account)
+                with deadline.lock(self.lock):
+                    self.account_updates[account_id] = self.account_updates.get(account_id, 0) + 1
+                    self.data['accounts'] = [account if a['id'] == account_id else a for a in self.data['accounts']]
+            return account.get('credit_spending', self.credit_spending.view(record))
+
     def set_routing_enabled(self, account_id, identity, enabled, confirmed=False, deadline=None):
         deadline = deadline or RequestDeadline()
         call = deadline.wrap(api)
@@ -1081,7 +1138,9 @@ class GatewayState:
             record = self.signins.resolve(account_id, identity, call)
             if not enabled and record.get('disabled') is not True and not confirmed:
                 files = [f for f in call('/auth-files').get('files', []) if f.get('type') == 'codex']
-                accounts = [fetch_account(f, call=call, cache=self.usage_cache) for f in files]
+                accounts = [fetch_account(f, call=call, cache=self.usage_cache, credit_spending=self.credit_spending) for f in files]
+                for file, account in zip(files, accounts):
+                    self.credit_spending.project(file, account)
                 deadline.timeout(LOCK_WAIT_SECONDS)
                 ready = {a['id'] for a in accounts if a.get('active') and a.get('availability', {}).get('state') == 'ready'}
                 if not ready - {account_id}:
@@ -1091,8 +1150,25 @@ class GatewayState:
                 record = self.signins.resolve(account_id, identity, call)
                 if not enabled:
                     self.signins.suppress_enable(account_id)
-                account_access.set_disabled_verified(record, not enabled, call)
+                was_paused = self.credit_spending.marked(record)
+                if not enabled and was_paused:
+                    # Persist manual OFF before PATCH so crash recovery cannot resume it.
+                    self.credit_spending.update(record['email'], paused=None)
+                if enabled or record.get('disabled') is not True or not was_paused:
+                    record = account_access.set_disabled_verified(record, not enabled, call)
                 self.signins.routing_set(account_id)
+            if enabled and (not self.credit_spending.view(record)['enabled'] or self.credit_spending.marked(record)):
+                # Reconcile after releasing controller_flock; it acquires that lock
+                # itself, under this same lifecycle lock and request deadline.
+                with deadline.lock(self.lock):
+                    matches = [copy.deepcopy(a) for a in self.data['accounts']
+                               if a['id'] == account_id and a.get('access_identity') == identity]
+                account = matches[0] if len(matches) == 1 else {}
+                self.apply_credit_spending(record, account, deadline)
+                if account.get('id'):
+                    with deadline.lock(self.lock):
+                        self.account_updates[account_id] = self.account_updates.get(account_id, 0) + 1
+                        self.data['accounts'] = [account if a['id'] == account_id else a for a in self.data['accounts']]
         threading.Thread(target=self.signin_changed, args=(account_id,), daemon=True).start()
         return {'enabled': enabled}
 
@@ -1234,6 +1310,7 @@ class GatewayState:
             all_files = routing_policy.inventory_snapshot(api)
             claude_accounts = claude_routing_projection(all_files, priority_checked_at)
             files = [f for f in all_files if f.get('type') == 'codex']
+            self.credit_spending.prune(files)
             self.signins.prune(files)
             files = self.access.reconcile(files, api)
             watched = watch_accounts() if claude_accounts else []
@@ -1242,7 +1319,7 @@ class GatewayState:
                 # Profile owns a separate endpoint budget and is read even if usage cools down.
                 list(pool.map(lambda f: self.profiles.fetch(f, api, self.usage_cache),
                               [f for f in all_files if f.get('type') == 'claude']))
-                accounts = list(pool.map(lambda f: fetch_account(f, self.resets, cache=self.usage_cache), files))
+                accounts = list(pool.map(lambda f: fetch_account(f, self.resets, cache=self.usage_cache, credit_spending=self.credit_spending), files))
                 # Share the gateway poll's workers; refresh/browser requests obey the same budget.
                 usage_accounts = list(pool.map(lambda f: self.usage_cache.fetch(
                                                    f, api, runtime_rows=claude_accounts, watched=watched),
@@ -1259,6 +1336,7 @@ class GatewayState:
             plans = {}
             for file, account in zip(files, accounts):
                 self.access.project(file, account)
+                self.apply_credit_spending(file, account)
                 usage_plan = account.pop('_usage_plan', None)
                 plans[file.get('auth_index')] = account_access.plan_value(usage_plan) or account.get('plan_type')
                 self.access.maybe_refresh(file, usage_plan, api)
@@ -2296,7 +2374,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, b'{"error":"Invalid account request"}')
             except Exception:
                 return self.send(503, b'{"error":"Account change could not be confirmed. Try again."}')
-        if self.path in ('/api/accounts/signin/start', '/api/accounts/signin/cancel', '/api/accounts/routing'):
+        if self.path in ('/api/accounts/signin/start', '/api/accounts/signin/cancel', '/api/accounts/routing', '/api/accounts/credit-spending'):
             generic_routing = False
             try:
                 deadline = RequestDeadline()
@@ -2314,7 +2392,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.state.account_mutations.apply(data['key'], data['auth_index'], data['enabled'], deadline=deadline)
                     return self.send(200, json.dumps(result).encode())
                 extra = ({'handle'} if self.path.endswith('/cancel') else
-                         {'enabled', 'confirmed'} if self.path.endswith('/routing') else set())
+                         {'enabled', 'confirmed'} if self.path.endswith('/routing') else
+                         {'spend'} if self.path.endswith('/credit-spending') else set())
                 if (not isinstance(data, dict) or set(data) != {'account_id', 'identity'} | extra
                         or not isinstance(data['account_id'], str) or not 1 <= len(data['account_id']) <= 80
                         or not isinstance(data['identity'], str) or not re.fullmatch(r'[a-f0-9]{64}', data['identity'])):
@@ -2325,6 +2404,11 @@ class Handler(BaseHTTPRequestHandler):
                     if not isinstance(data['handle'], str) or not 20 <= len(data['handle']) <= 100:
                         raise ValueError()
                     result = self.server.state.signins.cancel(data['account_id'], data['identity'], data['handle'], deadline=deadline)
+                elif self.path.endswith('/credit-spending'):
+                    if type(data['spend']) is not bool:
+                        raise ValueError()
+                    result = self.server.state.set_credit_spending(data['account_id'], data['identity'],
+                                                                   data['spend'], deadline=deadline)
                 else:
                     if type(data['enabled']) is not bool or type(data['confirmed']) is not bool:
                         raise ValueError()
@@ -2489,6 +2573,7 @@ def main():
     parser.add_argument('--port', type=int, default=8320)
     args = parser.parse_args()
     state = GatewayState(forecasts=AllowanceForecastStore(),
+                         credit_spending=account_access.CreditSpending(account_access.CREDIT_SPENDING_STATE),
                          codex_billing=subscriptions.CodexBilling(BILLING.with_name('codex-billing.json')))
     def poll():
         while True:

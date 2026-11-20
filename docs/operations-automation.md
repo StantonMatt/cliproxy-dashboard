@@ -1,7 +1,9 @@
 # Usage retention, release notices and nightly tests
 
 These jobs are included in the full `scripts/install-operations.py` manifest.
-Its default invocation only previews changes. Scoped dashboard/watch installers
+Its default invocation only previews changes. For installation and updates,
+including the final fast-mode plugin step, follow the
+[README procedure](../README.md#update-an-existing-installation). Scoped dashboard/watch installers
 do not install or enable these jobs. Nothing automatically upgrades the gateway.
 
 ## Raw usage retention

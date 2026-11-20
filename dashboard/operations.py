@@ -293,6 +293,9 @@ def account_health(account, gateway, now):
         return 'stale'
     if account.get('access_state') == 'disable_unconfirmed':
         return 'disable_unconfirmed'
+    if (account.get('credit_spending') or {}).get('paused'):
+        return ('sign_in_required' if account.get('auth_state') == 'sign_in_required'
+                and not signin_superseded(account) else 'paused')
     if account.get('disabled'):
         outcome = (account.get('signin') or {}).get('last_outcome') or {}
         # A confirmed sign-in whose automatic enable failed was not turned off on purpose.
@@ -329,7 +332,7 @@ def weekly_allowance(account, gateway, now):
 
 def can_resume(account):
     """Quota resets cannot enable credentials or repair revoked authentication."""
-    return bool(account and not account.get('disabled')
+    return bool(account and (not account.get('disabled') or (account.get('credit_spending') or {}).get('paused'))
                 and account.get('access_state') != 'disable_unconfirmed'
                 and account.get('auth_state') != 'sign_in_required'
                 and (account.get('availability') or {}).get('state') not in
@@ -391,7 +394,7 @@ def exhaustion_candidates(accounts, gateway, now):
         details.append({'account_id': account.get('id'), 'label': account['email'],
                         'weekly_resets_at': windows[account['email']].get('resets_at'),
                         'reset_credits_available': resets.get('available')})
-        if (not account.get('disabled') and (account.get('availability') or {}).get('state') != 'disabled'
+        if (can_resume(account)
                 and account.get('auth_state') == 'authenticated'
                 and account.get('id') and resets.get('eligible') is True
                 and type(resets.get('available')) is int and resets['available'] > 0

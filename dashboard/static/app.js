@@ -234,13 +234,116 @@ function renewalBlock(b, label, source) {
   const note=b.note && !/\.$/.test(b.note) ? b.note+'.' : b.note;
   return `<div class="reset-block billing-renewal${b.urgent ? ' renewal-soon' : ''}" title="${esc(`${b.badge}. ${note} ${source}`)}"><span>${esc(label)}</span><strong>${esc(b.date)}</strong></div>`;
 }
+const creditsPending=new Map(), creditsErrors=new Map();
+let creditsOpen=null;
+function creditsEnabled(a) { return creditsPending.get(a.id)?.spend ?? a.credit_spending?.enabled ?? true; }
 function usageCreditsBlock(a) {
-  const c=a.usage_credits;
-  if(!c || !(c.unlimited || Number.isFinite(c.balance) && c.balance>0))return '';
-  const value=c.unlimited ? 'Unlimited' : c.balance.toLocaleString('en-US',{maximumFractionDigits:0});
-  const exact=c.unlimited ? 'Unlimited' : c.balance.toLocaleString('en-US',{maximumFractionDigits:2});
-  const title=c.limit_reached ? 'Spending limit reached' : `${exact}. Used after the allowance runs out`;
-  return `<div class="reset-block usage-credits${c.limit_reached ? ' renewal-soon' : ''}" title="${esc(title)}"><span>Credits</span><strong>${esc(value)}</strong></div>`;
+  const c=a.usage_credits || {}, off=!creditsEnabled(a);
+  if(!off && !(c.unlimited || Number.isFinite(c.balance) && c.balance>0))return '';
+  const balance=Number.isFinite(c.balance) && c.balance>0 ? c.balance : 0;
+  const value=c.unlimited ? 'Unlimited' : balance.toLocaleString('en-US',{maximumFractionDigits:0});
+  const exact=c.unlimited ? 'Unlimited' : balance.toLocaleString('en-US',{maximumFractionDigits:2});
+  const title=c.limit_reached ? 'Spending limit reached' : `${exact}. ${off ? 'Not spent: this account pauses when its allowance runs out' : 'Used after the allowance runs out'}`;
+  const body=`<span>${off?'Credits · spending off':'Credits'}</span><strong>${esc(value)}</strong>`;
+  const tone=c.limit_reached ? ' renewal-soon' : '';
+  if(current?.read_only)return `<div class="reset-block usage-credits${tone}" title="${esc(title)}">${body}</div>`;
+  return `<button type="button" class="reset-block usage-credits credits-button${tone}" id="credits-${esc(a.id)}" data-credits-open="${esc(a.id)}" data-access-focus="${esc(a.id+':credits')}" aria-haspopup="dialog" aria-expanded="${creditsOpen===a.id}" aria-controls="credits-pop" aria-label="Credits ${esc(value)} · spending ${off?'off':'on'}" title="${esc(title)}"${creditsPending.get(a.id)?.saving?' aria-busy="true"':''}>${body}${icon('chevron')}</button>`;
+}
+function creditsError(id) {
+  const error=creditsErrors.get(id);
+  return error ? `Couldn't turn spending ${error.spend?'on':'off'} · <button type="button" class="speed-retry" data-credits-retry="${esc(id)}" data-access-focus="${esc(id+':credits-retry')}">Try again</button>` : '';
+}
+function creditsStatus(a) {
+  return creditsErrors.has(a.id) && creditsOpen!==a.id ? `<div class="fast-usage error credits-status" role="status">${creditsError(a.id)}</div>` : '';
+}
+function creditsOtherReady(id) {
+  return current?.gateway.accounts.some(a=>a.id!==id && !a.disabled && a.availability?.state==='ready');
+}
+function creditsClose(focus=false) {
+  const id=creditsOpen;if(id===null)return;
+  creditsOpen=null;
+  const pop=$('credits-pop');try {pop.hidePopover?.();} catch (_) {}pop.hidden=true;
+  $('credits-'+id)?.setAttribute('aria-expanded','false');
+  const a=accountFor(id),bottom=$('credits-'+id)?.closest('.account-card')?.querySelector('.account-bottom');
+  if(a && creditsErrors.has(id) && bottom && !bottom.parentElement.querySelector('.credits-status'))bottom.insertAdjacentHTML('afterend',creditsStatus(a));
+  if(focus)$('credits-'+id)?.focus();
+}
+function creditsPlace() {
+  const pop=$('credits-pop'), button=creditsOpen!==null && $('credits-'+creditsOpen);
+  if(!button || !button.offsetParent){creditsClose();return;}
+  const r=button.getBoundingClientRect();pop.style.left=pop.style.top='0px';
+  const w=pop.offsetWidth,h=pop.offsetHeight,below=r.bottom+8+h<=innerHeight-8;
+  pop.style.left=Math.max(8,Math.min(innerWidth-w-8,r.right-w))+scrollX+'px';
+  pop.style.top=(below ? r.bottom+8 : Math.max(8,r.top-h-8))+scrollY+'px';
+}
+function syncCredits() {
+  if(creditsOpen===null)return;
+  const a=accountFor(creditsOpen),pop=$('credits-pop');
+  if(!a || !$('credits-'+creditsOpen) || current?.read_only){creditsClose();return;}
+  pop.setAttribute('aria-label','Credits · '+a.email);
+  const input=$('credits-switch'),note=$('credits-pop-note'),only=!creditsOtherReady(a.id);
+  input.checked=creditsEnabled(a);input.disabled=failed || current.gateway.online!==true;
+  input.title=input.disabled?'Gateway unreachable':'';
+  if(creditsPending.get(a.id)?.saving)input.setAttribute('aria-busy','true');else input.removeAttribute('aria-busy');
+  note.textContent='When off, this account pauses once its allowance runs out, until it resets.'+(only?' No other Codex account is ready, so Codex requests fail until then.':'');
+  note.classList.toggle('warn',only);
+  const error=pop.querySelector('.credits-pop-error'),html=creditsError(a.id);
+  if(error.innerHTML!==html)error.innerHTML=html;
+  error.hidden=!html;creditsPlace();
+}
+function creditsShow(id) {
+  if(creditsOpen===id){creditsClose();return;}
+  if(creditsOpen!==null)creditsClose();
+  const a=accountFor(id);if(!a || current?.read_only)return;
+  creditsOpen=id;
+  const pop=$('credits-pop');
+  pop.innerHTML='<div class="reset-auto-setting"><label><span>Spend credits<small id="credits-pop-note"></small></span><input id="credits-switch" type="checkbox" role="switch" aria-label="Spend credits" aria-describedby="credits-pop-note"></label></div><p class="fast-usage error credits-pop-error" role="status" hidden></p>';
+  pop.hidden=false;try {pop.showPopover?.();} catch (_) {}
+  $('credits-'+id)?.setAttribute('aria-expanded','true');syncCredits();($('credits-switch').disabled?pop:$('credits-switch')).focus();
+  $('credits-'+id)?.closest('.account-card')?.querySelector('.credits-status')?.remove();
+}
+async function saveCredits(id,spend) {
+  const a=accountFor(id);
+  if(!a || current?.read_only || failed || current.gateway.online!==true)return;
+  if(creditsPending.get(id)?.saving){syncCredits();return;}
+  const entry={spend,saving:true};
+  creditsErrors.delete(id);creditsPending.set(id,entry);renderAccounts(current.gateway);syncCredits();
+  try {
+    const result=await accountRequest('/api/accounts/credit-spending',{account_id:id,identity:a.access_identity,spend});
+    if(result.enabled!==spend || !('paused' in result))throw new Error();
+    // Keep this confirmed choice over older overviews until a post-save read arrives.
+    entry.result=result;entry.after=fastLoadEpoch;
+    for(const account of [a,accountFor(id)])if(account)account.credit_spending=result;
+  } catch (_) {creditsErrors.set(id,{spend});creditsPending.delete(id);}
+  finally {
+    entry.saving=false;renderAccounts(current.gateway);syncCredits();
+    await load(true); // If busy, wait for that older read and then request another.
+  }
+}
+function creditsKey(event) {
+  if(creditsOpen===null)return;
+  if(event.key==='Escape'){event.preventDefault();event.stopPropagation();creditsClose(true);}
+  if(event.key==='Tab') {
+    const controls=[...$('credits-pop').querySelectorAll('input,button')].filter(el=>!el.disabled),at=controls.indexOf(document.activeElement);
+    if(event.shiftKey && (at===0 || document.activeElement===$('credits-pop'))){event.preventDefault();creditsClose(true);}
+    else if(!event.shiftKey && at===controls.length-1){
+      event.preventDefault();const id=creditsOpen;creditsClose();$('state-codex-'+id)?.focus();
+    }
+  }
+}
+function creditsSpentText(windows) {
+  return windows.includes('weekly') && windows.includes('five_hour') ? '5-hour limit and weekly allowance used up'
+    : windows.includes('five_hour') ? '5-hour limit used up' : 'Weekly allowance used up';
+}
+function creditsPausedState(a,gateway) {
+  const p=a.credit_spending?.paused;if(!p)return null;
+  const checked=Date.parse(gateway.checked_at),now=Date.now()/1000;
+  if(failed || gateway.online!==true || !Number.isFinite(checked) || Date.now()-checked>180000)return {text:'Status stale',tone:'warn',detail:relative(a.quota_checked_at)};
+  const due=now>=p.resets_at,only=!creditsOtherReady(a.id);
+  const spent=creditsSpentText(p.windows);
+  return {text:due ? 'Paused · reset due · checking' : `Paused · back in ${allowanceCountdown(p.resets_at)} · ${allowanceClock(p.resets_at)}`,
+    tone:due ? only || now-p.resets_at>300?'warn':'' : only?'warn':'',
+    detail:['Credit spending is off',due?'Stays paused until a fresh reading shows allowance':spent,!due&&only?'No other Codex account is ready':'',relative(a.quota_checked_at)].filter(Boolean).join(' · ')};
 }
 // A check when ready, an alert when the account needs attention, a quiet minus when it is deliberately off.
 // The state stays on the facts line, its text truncating down to the icon on narrow cards; the full text and any
@@ -479,12 +582,12 @@ function windowPace(w, remaining) {
 // reading), five-hour and weekly windows show the pace bar as the hero does, and every window its forecast. A per-model
 // weekly reading older than 15 minutes reads "last known" unless its own window is current and the server deferred the
 // next read (fresh_until). muted: the account is out, so a sub-limit it can't use yet recedes and shows no forecast.
-function limitRow(label, w, claude=false, paced=false, freshUntil=null, muted=false) {
+function limitRow(label, w, claude=false, paced=false, freshUntil=null, muted=false, paused=false) {
   const left = w ? w.remaining ?? (w.used == null ? null : Math.max(0, 100 - w.used)) : null;
   const measured=w?.measured_at, now=Date.now();
   const lastKnown=w?.kind==='weekly_model' && now-Date.parse(measured)>900000 &&
     !(quotaWindowFresh(w,measured,now) && deferredFresh({fresh_until:freshUntil},Date.parse(measured),now));
-  const p=paced && !lastKnown && !muted ? windowPace(w,left) : null, f=forecast(w,left,paced && !lastKnown && !muted);
+  const p=paced && !lastKnown && !muted && !paused ? windowPace(w,left) : null, f=forecast(w,left,paced && !lastKnown && !muted);
   const title=[w?.resets_at?'Resets '+dateTime(w.resets_at*1000):'',measured?'As of '+dateTime(measured):'',f?.title,p?.title].filter(Boolean).join(' · ');
   return `<div class="limit-row${muted ? ' muted' : ''}"${title ? ` title="${esc(title)}"` : ''}><div class="secondary-quota"><span>${esc(label)}${lastKnown?' · last known':''}</span>${forecastHtml(f)}<span${claude && left!=null && left<10 && !muted?' class="low"':''}>${left == null ? '—' : esc(percent(left)) + ' remaining'}</span></div><div class="limit-track${left == null ? ' empty' : ''}${p ? ' has-pace' : ''}" aria-hidden="true"><span style="width:${Math.min(100, left ?? 0)}%"></span>${paceBar(p)}</div></div>`;
 }
@@ -914,7 +1017,7 @@ function renderWatchContent(data) {
     </article>`;
   }).join('');
   if (focused) $(focused)?.focus();
-  reserveCardRows();syncStateTip();
+  reserveCardRows();syncStateTip();syncCredits();
 }
 function availabilityLabel(account, gateway) {
   const checked = Date.parse(gateway.checked_at);
@@ -1527,10 +1630,10 @@ function signinStrip(a, gateway, outcome) {
 }
 function routingRow(a, gateway, lead='', note='') {
   const pending=routePending.has(a.id), required=signinNeeded(a);
-  const enabled=!required && !a.disabled;
+  const enabled=!required && (a.routing_enabled ?? !a.disabled);
   const disabled=required || accessBlocked(gateway) || pending;
   const title=required?'Sign in to use for routing':current?.read_only?'Change routing from your computer dashboard':failed||gateway.online!==true?'Gateway unreachable':'';
-  return `<div class="account-route">${lead}<span class="route-toggle"><label for="route-${esc(a.id)}"><span class="route-use">Use for </span>routing</label><input id="route-${esc(a.id)}" data-route-account="${esc(a.id)}" data-access-focus="${esc(a.id+':route')}" type="checkbox" role="switch" aria-label="Use for routing" ${enabled?'checked':''} ${disabled?'disabled':''} ${pending?'aria-busy="true"':''} ${title?`title="${title}"`:''}></span></div>
+  return `<div class="account-route">${lead}<span class="route-toggle"><label for="route-${esc(a.id)}"><span class="route-use">Use for </span>routing</label><input id="route-${esc(a.id)}" data-route-account="${esc(a.id)}" data-access-focus="${esc(a.id+':route')}" type="checkbox" role="switch" aria-label="Use for routing" ${a.credit_spending?.paused?`aria-describedby="state-codex-${esc(a.id)}" `:''}${enabled?'checked':''} ${disabled?'disabled':''} ${pending?'aria-busy="true"':''} ${title?`title="${title}"`:''}></span></div>
     ${note}${routeConfirm.has(a.id)?`<div class="route-confirm" role="alert"><span>No other Codex account is ready.</span><div><button type="button" class="reset-primary confirm" data-route-off="${esc(a.id)}" data-access-focus="${esc(a.id+':off')}">Turn off</button><button type="button" class="reset-cancel" data-route-keep="${esc(a.id)}" data-access-focus="${esc(a.id+':keep')}">Keep on</button></div></div>`:''}
     ${routeErrors.has(a.id)?`<div class="fast-usage error" role="status">${esc(routeErrors.get(a.id).message)}</div>`:''}`;
 }
@@ -1584,7 +1687,7 @@ async function copySignin(id) {
 async function saveAccountRouting(id, enabled, confirmed=false) {
   const a=accountFor(id);if(!a || accessBlocked(current.gateway) || signinNeeded(a) || routePending.has(id))return;
   const others=current.gateway.accounts.some(b=>b.id!==id&&!b.disabled&&b.availability?.state==='ready');
-  if(!enabled&&!confirmed&&!a.disabled&&!others) {confirmRouting(a);accessNextFocus=id+':keep';renderAccounts(current.gateway);return;}
+  if(!enabled&&!confirmed&&!a.disabled&&!a.credit_spending?.paused&&!others) {confirmRouting(a);accessNextFocus=id+':keep';renderAccounts(current.gateway);return;}
   routeConfirm.delete(id);routeErrors.delete(id);accessFocus=id+':route';
   routePending.add(id);renderAccounts(current.gateway);
   try {
@@ -1920,7 +2023,7 @@ function renderAccounts(gateway) {
   speedDeferred=false;
   const focus=splitCardFocus();
   renderAccountsContent(gateway);
-  distributeCards();restoreSplitFocus(focus);
+  distributeCards();restoreSplitFocus(focus);syncCredits();
 }
 function renderAccountsContent(gateway) {
   reconcileAccess(gateway);
@@ -1961,19 +2064,22 @@ function renderAccountsContent(gateway) {
   }
   const cards = layoutSort('codex',[...accounts,...keys]).map(a => {
     if(isKeyAccount(a))return genericCard(group,a,gateway);
-    const windows=a.windows.map(w=>codexForecast(a,Number.isFinite(w.resets_at) && w.resets_at<=Date.now()/1000 ? {...w,used:null,remaining:null} : w));
+    const windows=a.windows.map(w=>{
+      const view=codexForecast(a,!a.credit_spending?.paused && Number.isFinite(w.resets_at) && w.resets_at<=Date.now()/1000 ? {...w,used:null,remaining:null} : w);
+      return a.credit_spending?.paused && view.remaining===0 ? {...view,forecast:{state:'out'}} : view;
+    });
     const w = windows.find(w=>w.seconds===604800) || windows[0];
     const view=signinView(a), session=view.session, outcome=view.last_outcome;
-    const off=a.disabled || a.auth_state==='sign_in_required' && !signinSuperseded(a);
+    const off=a.disabled && !a.credit_spending?.paused || a.auth_state==='sign_in_required' && !signinSuperseded(a);
     const strip=!session && (signinNeeded(a) || outcome?.kind!=='saved_unconfirmed' && (outcomeText[outcome?.kind] || outcome?.kind==='wrong_account'));
     const stale = !!a.quota_error || gateway.online === false || !primaryUsageFresh(a,a.quota_checked_at);
     const other = windows.filter(x=>x!==w);
     const remaining = w?.remaining;
     // As on Claude cards (L2): while a 5-hour or weekly limit is used up, the other limits recede.
     const left = x => x?.remaining ?? (x?.used == null ? null : 100 - x.used);
-    const codexOut = [w,...other].some(x=>[18000,604800].includes(x?.seconds) && left(x)===0);
+    const codexOut = !!a.credit_spending?.paused || [w,...other].some(x=>[18000,604800].includes(x?.seconds) && left(x)===0);
     const heroQuiet = off || stale || (codexOut && left(w) !== 0);
-    const p = !heroQuiet && [18000,604800].includes(w?.seconds) ? pace(w, remaining) : null, f = forecast(w, remaining, !heroQuiet);
+    const p = !heroQuiet && !a.credit_spending?.paused && [18000,604800].includes(w?.seconds) ? pace(w, remaining) : null, f = forecast(w, remaining, !heroQuiet);
     const preferred = preference?.status === 'active' && preference.preferred_email === a.email;
     const billing = BillingDates.describe(a.billing,new Date(),a.plan_type);
     const r = a.resets || {}, credits = r.credits || [];
@@ -1981,11 +2087,13 @@ function renderAccountsContent(gateway) {
     const label = a.disabled?'Disabled':availabilityLabel(a,gateway), state = label + (until ? ` · until ${dateTime(a.availability.retry_at*1000)}` : '');
     // Ready with last-known quota numbers gets no check. The status reads as on every card: "Ready", "Out · back in …",
     // "Stale · updated …"; the gateway's own wording stays in the popover.
-    const tone = label==='Ready to route' && stale ? '' : availabilityTone(a,label);
+    let tone = label==='Ready to route' && stale ? '' : availabilityTone(a,label);
     const outUntil = until && a.availability.state==='quota_exhausted' && a.availability.scope!=='model';
     const quotaAge = relative(a.quota_checked_at);
-    const shownState = outUntil ? `Out · back in ${allowanceCountdown(a.availability.retry_at)} · ${allowanceClock(a.availability.retry_at)}`
+    let shownState = outUntil ? `Out · back in ${allowanceCountdown(a.availability.retry_at)} · ${allowanceClock(a.availability.retry_at)}`
       : label==='Ready to route' ? stale && a.quota_checked_at && !a.quota_error && gateway.online!==false ? 'Stale · '+quotaAge.charAt(0).toLowerCase()+quotaAge.slice(1) : 'Ready' : state;
+    const pausedState=creditsPausedState(a,gateway);
+    if(pausedState){shownState=pausedState.text;tone=pausedState.tone;}
     const verified = a.billing?.verified_at ? `Checked ${dateTime(a.billing.verified_at)} against ${a.billing.source==='user_confirmed'?'your confirmation':'ChatGPT billing'}. Recheck billing if you cancel or change plans.` : 'The account reports access through this date; the next charge has not been confirmed.';
     return `<article data-provider="codex" data-account-key="${esc(a.key || a.id)}" class="account-card codex-card${off?' is-off':''}${codexOut?' is-out':''}" data-cardid="${esc(a.id)}" data-access-focus="${esc(a.id+':card')}" tabindex="-1">
       <div class="account-top"><div class="account-identity"><div class="account-name"><span title="${esc(accountName(a))}">${esc(shortName(accountName(a)))}</span></div></div>${planBadge(a.plan,{href:'https://chatgpt.com/#settings/Billing',label:`${a.plan} · Billing`,title:`Open ChatGPT billing · ${billingCheck}`,attrs:`data-access-focus="${esc(a.id+':plan')}"`})}${cardMenuButton('codex',a,accountName(a),`data-access-focus="${esc(a.id+':menu')}"`)}</div>
@@ -1993,15 +2101,15 @@ function renderAccountsContent(gateway) {
       <div class="quota-value">${remaining == null ? '—' : esc(number(remaining))}${remaining==null?'':'<span class="percent">%</span>'}<span class="remaining-word">remaining</span></div>
       <div class="quota-track${p ? ' has-pace' : ''}" role="progressbar" aria-label="Codex · ${esc(accountName(a))} ${esc(w?.label || '')} allowance remaining" aria-valuemin="0" aria-valuemax="100" ${remaining==null?'':`aria-valuenow="${remaining}"`}${paceValueText(p, remaining, f)}${heroTitle(f,p)}><span style="width:${remaining ?? 0}%"></span>${paceBar(p)}</div>
       <div class="quota-used"${heroTitle(f,p)}>${forecastHtml(f)}<span class="used-figure">${w?.used == null ? a.disabled?'Not available while disabled':'Waiting for quota data' : esc(percent(w.used))+' used'}</span>${footReset(w)}</div></div>`}
-      <div class="account-side">${session?'':`${other.length?`<div class="limit-rows">${other.map(o=>limitRow(o.label==='5-hour'?'5-hour limit':o.label,o,false,!off && !stale,a.fresh_until,codexOut && left(o)!==0)).join('')}</div>`:''}
+      <div class="account-side">${session?'':`${other.length?`<div class="limit-rows">${other.map(o=>limitRow(o.label==='5-hour'?'5-hour limit':o.label,o,false,!off && !stale,a.fresh_until,codexOut && left(o)!==0,!!a.credit_spending?.paused)).join('')}</div>`:''}
       ${a.quota_error&&!strip?`<div class="quota-warning">${esc(a.quota_error)}</div>`:''}`}
       ${!session&&outcome?.kind==='signed_in'?`<div class="access-result" role="status">${icon('check')}Signed in just now</div>`:''}
       ${!session&&outcome?.kind==='signed_in'&&outcome.enable_failed===true&&a.disabled===true?`<div class="quota-warning" role="status">Couldn't turn on routing</div>`:''}
       ${!session?signinStrip(a,gateway,outcome):''}
       ${a.access_error?`<div class="quota-warning" role="alert">${esc(a.access_error)}</div>`:''}
       ${cooldownRecoveryHtml(a)}<div class="account-resets"><button type="button" class="resets-button" data-reset-open="${esc(a.id)}" aria-haspopup="dialog">Resets <span>${r.available==null?'—':esc(r.available)}</span></button><span>${r.automatic?'Auto-use before expiry':''}</span></div>
-      <div class="account-bottom"><div class="account-dates"><div class="reset-block allowance-reset"><span>Allowance resets</span><strong class="countdown" data-reset="${w?.resets_at || ''}" title="${w?.resets_at?esc(dateTime(w.resets_at*1000)):''}">${countdown(w?.resets_at)}</strong></div>${renewalBlock(billing,billing.ended?billing.label:a.billing?.confirmed?'Renews':billing.label,verified)}${usageCreditsBlock(a)}</div>${!strip&&!session?statePill(shownState,shownState.startsWith('Stale') ? 'warn' : tone,[state,stale ? '' : quotaAge].filter(Boolean).join(' · '),usageRefreshButton('codex',a,accountName(a),`data-access-focus="${esc(a.id+':usage')}"`),'codex-'+a.id,`data-access-focus="${esc(a.id+':state')}"`):''}</div>
-      ${!strip&&!session?usageRefreshNote('codex',a):''}
+      <div class="account-bottom"><div class="account-dates"><div class="reset-block allowance-reset"><span>Allowance resets</span><strong class="countdown" data-reset="${w?.resets_at || ''}" title="${w?.resets_at?esc(dateTime(w.resets_at*1000)):''}">${countdown(w?.resets_at)}</strong></div>${renewalBlock(billing,billing.ended?billing.label:a.billing?.confirmed?'Renews':billing.label,verified)}${usageCreditsBlock(a)}</div>${!strip&&!session?statePill(shownState,shownState.startsWith('Stale') ? 'warn' : tone,pausedState?.detail || [state,stale ? '' : quotaAge].filter(Boolean).join(' · '),usageRefreshButton('codex',a,accountName(a),`data-access-focus="${esc(a.id+':usage')}"`),'codex-'+a.id,`data-access-focus="${esc(a.id+':state')}"`):''}</div>
+      ${creditsStatus(a)}${!strip&&!session?usageRefreshNote('codex',a):''}
       ${routingRow(a,gateway,speedRow(a,gateway),speedStatus(a,gateway))}</div></div>
     </article>`;
   });
@@ -2333,7 +2441,7 @@ function renderProvidersContent(data) {
     markSortable();
     document.querySelector(`#gateways>.gateway[data-provider="${CSS.escape(reorderFocus)}"] .provider-icon[tabindex]`)?.focus({preventScroll:true});
   }
-  syncStateTip();
+  syncStateTip();syncCredits();
   const online=data.gateway.online, adding=!data.read_only && Array.isArray(data.add_providers);
   $('inventory-empty').hidden=!!list.length;$('inventory-empty-icons').hidden=online!==true;
   $('inventory-empty-text').textContent=online===true ? adding ? 'Add your first account' : 'No accounts connected yet' : online===null ? 'Connecting to your gateway…' : 'Gateway inventory is unavailable';
@@ -2403,7 +2511,7 @@ function levelHeads() {
     const heights=line.map(h=>h.getBoundingClientRect().height), tallest=Math.max(0,...heights);
     line.forEach((h,i)=>{if(heights[i]<tallest)h.style.minHeight=tallest+'px';});
   }
-  levelSplitCards();reserveCardRows();syncStateTip();
+  levelSplitCards();reserveCardRows();syncStateTip();syncCredits();
 }
 // Reordering. A provider moves by its name block and a card, within its provider, by its top row: a mouse drags after a
 // few pixels, touch and pen after a still long-press, so clicks and scrolling work as before. The item lifts and
@@ -3234,6 +3342,14 @@ $('card-menu').addEventListener('click',event=>{
   } else if(item.dataset.menuMove)moveCard(provider,key,authIndex,Number(item.dataset.menuMove));
   else if(item.hasAttribute('data-menu-signin'))openAdd(provider,key,opener);else openDisconnect(provider,key,opener,authIndex);
 });
+$('credits-pop').addEventListener('change',event=>{if(event.target.id==='credits-switch' && creditsOpen!==null)saveCredits(creditsOpen,event.target.checked);});
+$('credits-pop').addEventListener('keydown',creditsKey);
+$('credits-pop').addEventListener('click',event=>{const retry=event.target.closest?.('[data-credits-retry]');if(retry){event.stopPropagation();const id=retry.dataset.creditsRetry;saveCredits(id,creditsErrors.get(id)?.spend);$('credits-switch')?.focus();}});
+accountEvents.addEventListener('click',event=>{
+  const button=event.target.closest?.('[data-credits-open]'),retry=event.target.closest?.('[data-credits-retry]');
+  if(button)creditsShow(button.dataset.creditsOpen);
+  if(retry){const id=retry.dataset.creditsRetry;saveCredits(id,creditsErrors.get(id)?.spend);$('credits-'+id)?.focus();}
+});
 $('speed-confirm').addEventListener('click',speedAskClick);
 $('speed-confirm').addEventListener('keydown',speedAskKey);
 $('card-menu').addEventListener('keydown',event=>{
@@ -3361,7 +3477,7 @@ function resetBlockedReason(a) {
   if(!a)return 'Account unavailable.';
   const state=a.availability?.state;
   if(state==='auth_required' || a.auth_state==='sign_in_required')return 'Sign in again to use resets.';
-  if(a.disabled || state==='disabled')return 'This account is disabled.';
+  if((a.disabled || state==='disabled') && !a.credit_spending?.paused)return 'This account is disabled.';
   return '';
 }
 function resetCredits(a) {
@@ -3582,6 +3698,9 @@ async function load(fresh=false, supersede=false) {
     for(const a of current.gateway.accounts || []) {
       const pending=fastPending.get(a.id);
       if(pending && !pending.saving && generation>pending.after)fastPending.delete(a.id);
+      const credits=creditsPending.get(a.id);
+      if(credits && !credits.saving && generation>credits.after)creditsPending.delete(a.id);
+      else if(credits?.result)a.credit_spending=credits.result;
     }
     failed=false;render();
   } catch (_) {
@@ -3614,6 +3733,11 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
 window.addEventListener('resize',levelHeads);document.fonts?.ready.then(levelHeads);document.fonts?.addEventListener?.('loadingdone',levelHeads);
 document.addEventListener('pointerdown',event=>{if(stateTip && !event.target.closest?.('[data-state-tip],#state-tip'))hideStateTip();},true);
 document.addEventListener('pointerdown',routingMenuOutside,true);
+document.addEventListener('keydown',event=>{if(event.key==='Escape')creditsKey(event);});
+document.addEventListener('pointerdown',event=>{if(creditsOpen!==null && !event.target.closest?.('#credits-pop,[data-credits-open]'))creditsClose();},true);
+window.addEventListener('resize',()=>{if(creditsOpen!==null)creditsPlace();});
+window.addEventListener('scroll',()=>{if(creditsOpen!==null)creditsPlace();},true);
+window.addEventListener('hashchange',()=>creditsClose());
 document.addEventListener('pointerdown',speedAskOutside,true);
 // The Ultrafast question follows its slider when the window changes size, and a board change cancels it.
 window.addEventListener('resize',()=>{if(speedAsk)speedAskPlace();});

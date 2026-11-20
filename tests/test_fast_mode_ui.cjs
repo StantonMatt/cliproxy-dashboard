@@ -151,7 +151,7 @@ const makeDocument=()=>({activeElement:null,querySelectorAll:()=>[],createElemen
 const grid={addEventListener(type,fn){(listeners[type] ||= []).push(fn);}};
 const fire=(type,target,extra={})=>{for(const fn of [...(listeners[type]||[]),...(docListeners[type]||[])])fn({type,target,...extra});};
 const context = vm.createContext({Date:FakeDate,console,JSON,Map,Set,Error,Number,Object,Array,String,Promise,
-  fastPending:new Map(),fastErrors:new Map(),fastFocus:null,fastLoadEpoch:0,renders,
+  creditsPending:new Map(),fastPending:new Map(),fastErrors:new Map(),fastFocus:null,fastLoadEpoch:0,renders,
   reconcileAccess(){},reconcileClaude(){},routingEpoch:0,loadDone:Promise.resolve(),layoutSaved:null,
   current:null,failed:false,busy:false,today:null,
   esc:s=>String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),

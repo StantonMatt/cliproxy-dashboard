@@ -18,7 +18,7 @@ Only the human can:
 - Complete browser sign-ins for each subscription account.
 - Approve changes to how their existing tools sign in.
 
-Prerequisites: Kubuntu with systemd, Python 3.11+, and Node.js 22 or a newer supported LTS at `/usr/bin/node` (the optional preview unit uses that path). Kubuntu packages: `git curl ca-certificates tar python3 python3-yaml python3-bcrypt nodejs gcc libc6-dev`; `openssh-client` for SSH access and `libglib2.0-bin` for desktop notices through `gdbus`. Install Codex CLI, Claude Code and T3 Code from their official distributions if those clients are wanted. Clone this repository and run the following commands from its root. Nightly tests also require the desktop user's `~/.local/bin/heavy` scheduler, which this repository does not supply. If it is unavailable, after step 4 run `systemctl --user disable --now personal-codex-router-nightly-tests.timer` until it is provisioned.
+Prerequisites: Kubuntu on x86_64 (Linux amd64) with systemd, Python 3.11+, and Node.js 22 or a newer supported LTS at `/usr/bin/node` (the optional preview unit uses that path). Kubuntu packages: `git curl ca-certificates tar python3 python3-yaml python3-bcrypt nodejs gcc libc6-dev`; `openssh-client` for SSH access and `libglib2.0-bin` for desktop notices through `gdbus`. Install Codex CLI, Claude Code and T3 Code from their official distributions if those clients are wanted. Clone this repository and run the following commands from its root. Nightly tests also require the desktop user's `~/.local/bin/heavy` scheduler, which this repository does not supply. If it is unavailable, after step 4 run `systemctl --user disable --now personal-codex-router-nightly-tests.timer` until it is provisioned.
 
 1. **Install the gateway.** Download the Linux archive matching `uname -m` from the [official 8.0.47 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.47). Verify its SHA-256 against the checksum asset on that release page before extracting. This is the example version; dashboard sign-in is validated on 8.0.30, 8.0.43 and 8.0.47, not arbitrary newer releases.
 
@@ -62,11 +62,11 @@ Prerequisites: Kubuntu with systemd, Python 3.11+, and Node.js 22 or a newer sup
 4. **Install the dashboard, operations and fast-mode plugin.** From the intended desktop user's session, review the full plan, then apply:
 
    ```sh
-   python3 scripts/install-operations.py
+   sudo python3 scripts/install-operations.py
    sudo python3 scripts/install-operations.py --apply
    ```
 
-   A full install means no scope flag. `--preview-only`, `--claude-watch-only`, `--account-access-only` and `--t3-usage-only` update selected components on an existing installation. The full installer adds services/timers, backups and desktop-user jobs, then builds and hot-loads the fast-mode plugin without restarting the gateway. Go is downloaded and verified as the checkout owner when needed; no Go installation is required. An already loaded current plugin is reused, and an explicit disable is preserved. Use `--skip-fast-mode-plugin` to leave it unchanged. The gateway itself must already be installed. User lingering is needed if user jobs must survive logout. The Tailscale host guard is optional and only needed for access from other devices: configuring devices requires signed-in, same-owner peers and the existing [private-preview guard layout](docs/private-previews.md); the installer does not create that firewall from scratch.
+   A full install means no scope flag. `--preview-only`, `--claude-watch-only`, `--account-access-only` and `--t3-usage-only` update selected components on an existing installation. The full installer adds services/timers, backups and desktop-user jobs, then builds and hot-loads the fast-mode plugin without restarting the gateway. If a sufficient Go is unavailable, the build downloads pinned Go 1.26.10 as the checkout owner and verifies its SHA-256; no Go installation is required. An already loaded current plugin is reused, and an explicit disable is preserved. Use `--skip-fast-mode-plugin` to leave it unchanged; scoped installs never touch it. Plugin installation works before Codex sign-in. A final plugin failure exits 4 with the rest installed; fix the reported issue and rerun the full command. The gateway itself must already be installed. User lingering is needed if user jobs must survive logout. The Tailscale host guard is optional and only needed for access from other devices: configuring devices requires signed-in, same-owner peers and the existing [private-preview guard layout](docs/private-previews.md); the installer does not create that firewall from scratch.
 
    Check: `personal-codex-router-dashboard.service` is active on `127.0.0.1:8320`; the dashboard reports the gateway online. Check the usage and preference timers with `systemctl list-timers 'personal-codex-router-*'`.
 
@@ -130,9 +130,15 @@ Installation files and private state:
 
 What has been tested: this setup runs daily on the original Kubuntu machine. The example was checked with CLIProxyAPI 8.0.47 as an unprivileged scratch process: loopback-only listener, authenticated model listing, unauthenticated inference refusal and inaccessible management with an empty secret; startup left the config unchanged. In-place management activation and client-key replacement hot-reloaded under the same PID. The example unit passed `systemd-analyze verify`. The minimal Codex provider snippet above produced a real reply through the running gateway from a throwaway Codex home. A clean-machine installation has not been run end to end. The installer requires Linux with systemd; Windows and macOS hosts are not supported by it.
 
+## Update an existing installation
+
+From the checkout root, run `git pull`, review the plan from `sudo python3 scripts/install-operations.py`, then run `sudo python3 scripts/install-operations.py --apply` without a scope flag. Ensure the C compiler packages `gcc libc6-dev` are installed; Go is provisioned as in setup step 4. Preserve local dashboard edits before updating: checkout edits can conflict with the pull, and the install replaces dashboard files under `/opt/personal-codex-router` with checkout copies.
+
+The final `Fast-mode plugin:` step reports a build/install/hot-reload verification, `already loaded` at the current version, or `left off` for an explicit disable. `--skip-fast-mode-plugin` reports `skipped`. Exit 4 means only that final step failed; the rest stays installed. Check the build output and private plugin backup, fix compiler/download/reload errors, then rerun the full command; see [plugin recovery](docs/fast-mode-policy.md).
+
 ## Pages
 
-- **Overview:** accounts grouped by provider, remaining allowance, reset windows, routing controls, health, today's recorded tokens and recent requests. Unconfirmed billing dates are labelled; see [billing renewals](docs/billing-renewals.md).
+- **Overview:** accounts grouped by provider, remaining allowance, reset windows, OpenAI usage **Credits** with a per-account **Spend credits** switch, speed controls from each account's model list, routing controls, health, today's recorded tokens and recent requests. Unconfirmed billing dates are labelled; see [billing renewals](docs/billing-renewals.md).
 - **Usage:** today, the last seven days or all recorded history, with account/model totals and a request chart. All-history charts show up to the latest 30 days.
 - **System:** gateway status, routing and affinity settings, recording status and advanced management.
 - The theme button switches between dark and light and remembers the browser's preference.
@@ -149,6 +155,8 @@ Advanced management is the separate pinned Management Center at `http://127.0.0.
 
 The provider reports each account’s current allowance and reset window independently. These are not added into a single interchangeable quota. Window lengths can differ by plan; the dashboard shows the windows reported for each account.
 
+Codex **Credits** (`usage_credits`) displays a positive or unlimited OpenAI usage balance from the same allowance reading, retained when refresh fails. It adds no provider request or routing change. It is separate from **Resets**, the reset credits managed by `dashboard/reset_credits.py`; see [usage credits](docs/account-access.md#usage-credits).
+
 Token history begins when your collector starts recording. Cached input can form much of a request's token total. These are operational records, not a dollar bill or a calculation of subscription allowance.
 
 The upstream usage queue removes records when read. Records already collected persist in SQLite, but a crash during dequeue/commit or expired uncollected records can leave gaps. Treat this as best-effort operational history. Run only one queue consumer.
@@ -160,17 +168,18 @@ The upstream usage queue removes records when read. Records already collected pe
 | Separate model gateway | `cliproxyapi.service`, example CLIProxyAPI 8.0.47, loopback 8317 |
 | Dashboard backend and static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, loopback 8320 |
 | Usage collector | `personal-codex-router-usage.timer`, every 15 seconds; SQLite at `/var/lib/personal-codex-router/usage.sqlite3` |
+| Codex speed policy | Native `fast-mode-policy` plugin, included in the full install; [policy and deployment](docs/fast-mode-policy.md) |
 | Routing controller | `personal-codex-router-preference.timer`, every minute; [routing contracts](docs/claude-routing.md) |
 | Operations | Backup, health, retention, release-check and desktop-user timers; [automation](docs/operations-automation.md) |
 | Optional private access | Preview proxy and SSH forwarding; [private previews](docs/private-previews.md) |
 
-Per-account fast mode uses the plugin included in the full install; see [policy and manual deployment](docs/fast-mode-policy.md).
+Per-account Fast and Ultrafast follow each account's model catalog, independently of its plan label; the plugin enforces the resulting policy. See [speed availability](docs/fast-mode-policy.md#model-catalog).
 
 ## Development and validation
 
 The public copy, `cliproxy-dashboard`, is generated from the private repository, `cliproxy-dashboard-private`, by `.github/workflows/update-shareable-copy.yml` after every push to `main`. Do not edit the public copy directly: the next update overwrites it. The workflow is kept in the private repository and omitted from the public copy. Rehearse locally with `python3 scripts/export-public.py --out <empty dir>` followed by `python3 scripts/export-public.py --check <dir>`; export uses the committed tree and scrubs personal identifiers and Git history.
 
-To update an existing installation, run `git pull`, then `sudo python3 scripts/install-operations.py --apply` without a scope flag. If the final plugin step fails (exit 4), the rest remains installed; fix the reported build/reload issue and rerun the same command.
+Use [Update an existing installation](#update-an-existing-installation) for full updates; scoped updates leave the plugin unchanged.
 
 Source files are in `dashboard/`; installed runtime copies live under `/opt/personal-codex-router`. Preview installer plans before applying scoped updates. Backend changes need a dashboard restart; static assets do not. Dashboard work should not restart the gateway. See [account access](docs/account-access.md) for scope and sign-in interruption limits.
 

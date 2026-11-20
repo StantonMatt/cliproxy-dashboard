@@ -162,7 +162,8 @@ I/O for provider status.
 
 ## Deployment
 
-A full `scripts/install-operations.py --apply` installs the collector, shared
+The [full installation procedure](../README.md#update-an-existing-installation),
+including the final fast-mode plugin step, installs the collector, shared
 backend reader, service and timer, reloads systemd, and **automatically enables
 and starts the new timer**. The existing installer also restarts the dashboard
 and configured preview service. Its restricted deployment modes ship the

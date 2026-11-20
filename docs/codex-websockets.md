@@ -45,8 +45,8 @@ the tested duplex create-follow-up and native-warmup policy bypass. The initial
 old expectation failed and prompted the source reassessment recorded in the
 [8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md). Keep steering explicitly
 false for this rollout: full-duplex/error interactions and the 8.0.30 rollback
-still need that safeguard. The installed v0.1.2 plugin warning is unconditional
-and remains stale on 8.0.47.
+still need that safeguard. The plugin warning is unconditional
+and does not establish a bypass on 8.0.47.
 
 Later payload rules can restore `service_tier` after the plugin removes it.
 Check `requests.payload` and historical `payload`, including `default`,
@@ -382,7 +382,7 @@ commands were prepared and checked offline; they were not applied to production.
 
 ## Regression evidence
 
-Run from this checkout with the installed plugin; each integration command goes
+Run from this checkout with the plugin from the [full install](../README.md#update-an-existing-installation); each integration command goes
 through `heavy`. The mock accepts only the textual CONNECT target
 `chatgpt.com:443`, terminates TLS locally and never resolves/dials an upstream.
 Other background catalog/update CONNECT attempts are rejected and counted. All
@@ -394,7 +394,7 @@ python3 -B tests/codex_websockets_isolated.py --check-only
 ~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api
 ~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.30/cli-proxy-api
 # Existing broader plugin suite, parameterized for either steering mode:
-~/.local/bin/heavy python3 -B tests/fast_mode_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api --library /opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.1.2.so --response-steering false
+~/.local/bin/heavy python3 -B tests/fast_mode_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api --library /opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.2.0.so --response-steering false
 # Repeat with --response-steering true and with the 8.0.30 binary.
 ```
 

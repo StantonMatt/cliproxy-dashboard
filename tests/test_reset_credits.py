@@ -53,6 +53,19 @@ class ResetsTest(unittest.TestCase):
         self.manager.tick()
         self.assertEqual([p['credit_id'] for p in self.posts], ['credit-one'])
 
+    def test_guard_paused_manual_and_expiry_redemption_still_work(self):
+        self.f['disabled'] = True
+        self.manager.is_paused = lambda record: True
+        self.assertEqual(self.manager.consume('a', 'credit-one')['outcome'], 'reset')
+        self.manager.state['attempts'].clear()
+        self.manager.policy('a', True)
+        self.manager.fetch(self.f)
+        self.manager.tick()
+        self.assertEqual(len(self.posts), 2)
+        self.manager.is_paused = lambda record: False
+        with self.assertRaises(ValueError):
+            self.manager.consume('a', 'credit-one')
+
     def test_account_validation(self):
         with self.assertRaises(ValueError): self.manager.consume('wrong-account','credit-one')
         self.assertEqual(self.posts, [])

@@ -111,6 +111,7 @@ def sources():
     required = [Path('/etc/cliproxyapi'), Path('/opt/personal-codex-router')]
     desktop_sources = [PROJECT, Path('/var/lib/cliproxyapi/auth'),
                        Path('/var/lib/personal-codex-router/reset-controls.json'),
+                       Path('/var/lib/personal-codex-router/credit-spending-controls.json'),
                        Path('/var/lib/personal-codex-router/usage.sqlite3'),
                        HOME / '.codex/config.toml', HOME / '.codex/auth.json',
                        HOME / '.codex/app-server-daemon/settings.json',
