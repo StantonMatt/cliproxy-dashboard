@@ -1,6 +1,6 @@
 # Automatic task title generation: catalogue repair
 
-**Current status (2026-10-29):** CLIProxyAPI 8.0.30 is live with catalogue updates enabled; 8.0.47 is installed and staged, with cutover pending ([runbook](gateway-upgrade-8.0.47-2026-10-29.md)). Account prefixes were removed on October 16; see [current model routes and plans](standard-management-setup.md#model-routes). The repair procedure and acceptance results below record September 27.
+**Current status (2026-11-20):** CLIProxyAPI 8.0.79 is live with catalogue updates enabled (no `-local-model`; [upgrade record](gateway-upgrade-8.0.79-2026-11-19.md)). Account prefixes were removed on October 16; see [current model routes and plans](standard-management-setup.md#model-routes). The repair procedure and acceptance results below record September 27.
 
 Before the September 27 repair, the Mac desktop app logs showed `ThreadMetadataGenerationService` failing because the gateway rejected `gpt-6-luna` as an unknown model. The then-installed CLIProxyAPI 7.3.11 service started with `-local-model`, preventing startup and periodic catalogue refresh. Its embedded catalogue predated GPT-6 Luna. The later [8.0.7 upgrade](gateway-upgrade-8.0.7-2026-10-01.md) and [8.0.30 activation](gateway-upgrade-8.0.30-2026-10-15.md) retained catalogue updates.
 

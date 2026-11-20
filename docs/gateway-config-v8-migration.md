@@ -1,17 +1,16 @@
 # Migrating config to v8
 
 The live `/etc/cliproxyapi/config.yaml` uses the nested `config-version: 8`
-layout following the migration on 2026-10-01. Verified 2026-11-19: the gateway
-runs CLIProxyAPI 8.0.47 through
-`/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.47.conf`.
+layout following the migration on 2026-10-01. Since 2026-11-20 the gateway
+runs CLIProxyAPI 8.0.79 through
+`/etc/systemd/system/cliproxyapi.service.d/zz-gateway-8.0.79.conf`.
 
-8.0.79 is installed with an ignored staged drop-in. The backup prerequisite is
-resolved by setting `server.kv-store.disabled: true`, keeping session/date-pin/replay
-state in memory as on 8.0.47. No schema migration is needed; remove only this
-future key before rollback because 8.0.47 strict PATCH rejects it. The
-[November 19 preparation](gateway-upgrade-8.0.79-2026-11-19.md) records the KV
-choice that must be resolved separately. 8.0.7 and the migration rollback below
-are historical.
+The 8.0.79 cutover added one key, `server.kv-store.disabled: true`, which keeps
+session/date-pin/replay state in memory as on 8.0.47 so backups need no bbolt
+support. No schema migration was needed. Rolling back to 8.0.47 removes only this
+key first, because 8.0.47 strict PATCH rejects it; see the
+[8.0.79 upgrade record](gateway-upgrade-8.0.79-2026-11-19.md). 8.0.7 and the
+migration rollback below are historical.
 
 Current retry policy is `request-retry: 5`, `max-retry-interval: 45` seconds and
 `max-retry-credentials: 2` under `routing.retry`. The `0` in the October 1

@@ -347,9 +347,9 @@ Start also checks that the dashboard can write the auth dir, failing with
 Legacy 8.0.7 is excluded on purpose: it has no Codex file lock, and
 the harness showed an in-flight refresh overwriting the new tokens (12 of 12
 in-flight races). After any gateway upgrade, re-run the harness against the new
-binary and extend the allowlist only if it passes. The [8.0.79 preparation](gateway-upgrade-8.0.79-2026-11-19.md) passed this gate and the separate move gate; 8.0.47 remains live, and these dashboard changes have not been deployed. Account-add also marks 8.0.79 tested after the source/API and synthetic compatibility assessment; real provider sign-in remains unverified.
+binary and extend the allowlist only if it passes. The [8.0.79 upgrade](gateway-upgrade-8.0.79-2026-11-19.md) passed this gate and the separate move gate; 8.0.79 has been live since 2026-11-20 with the extended allowlists deployed. Account-add also marks 8.0.79 tested after the source/API and synthetic compatibility assessment; real provider sign-in remains unverified.
 
-8.0.47 is the rollback target for staged 8.0.79; the backup prerequisite is resolved by disabling local KV, keeping session/date-pin/replay state in memory as on 8.0.47. 8.0.7 is historical.
+8.0.47 is the rollback target; local KV is disabled on 8.0.79, keeping session/date-pin/replay state in memory as on 8.0.47. 8.0.7 is historical.
 
 **Journal.** Each outcome writes one `codex_signin` JSON line to stdout (the
 journal): kind, account email, elapsed seconds and `checks`. Every `signed_in`

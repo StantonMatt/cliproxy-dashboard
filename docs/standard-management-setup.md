@@ -24,8 +24,7 @@ On the Mac, open Settings → Connections, find the connected `user-desktop` SSH
 
 ## What is installed
 
-- Gateway: stock CLIProxyAPI 8.0.47 is live at `/opt/cliproxyapi/8.0.47`, selected by `zz-gateway-8.0.47.conf`, with nested-v8 configuration. See the [config migration](gateway-config-v8-migration.md).
-- 8.0.79 has been live since November 20 from `/opt/cliproxyapi/8.0.79` (`zz-gateway-8.0.79.conf`), with local KV disabled so session/date-pin/replay state stays in memory as on 8.0.47. The 8.0.47 drop-in is parked as `zz-gateway-8.0.47.conf.rollback-8.0.79`; rolling back removes the KV key first. See the [preparation, checks and rollback](gateway-upgrade-8.0.79-2026-11-19.md).
+- Gateway: stock CLIProxyAPI 8.0.79 with nested-v8 configuration ([config migration](gateway-config-v8-migration.md)). It has been live since November 20 from `/opt/cliproxyapi/8.0.79` (`zz-gateway-8.0.79.conf`), with local KV disabled so session/date-pin/replay state stays in memory as on 8.0.47. The 8.0.47 drop-in is parked as `zz-gateway-8.0.47.conf.rollback-8.0.79`; rolling back removes the KV key first. See the [preparation, checks and rollback](gateway-upgrade-8.0.79-2026-11-19.md).
 - Official Management Center: pinned v1.24.2 at `/etc/cliproxyapi/static/management.html`, SHA-256 checked against the upstream release asset. Automatic panel updates are disabled so changes can be validated deliberately.
 - Management: enabled with a separate bcrypt-hashed key and `allow-remote: false`.
 - Network: empty `server.host` gives a `*:8317` listener. The nftables `tailscale_host_guard` admits loopback and the Mac over Tailscale only; management still rejects remote requests. Mac inference connects directly to `http://100.64.0.10:8317`; management and the computer-only dashboard use SSH forwards.

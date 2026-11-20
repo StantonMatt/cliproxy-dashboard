@@ -1,10 +1,11 @@
 # Codex WebSockets
 
-The [8.0.79 preparation](gateway-upgrade-8.0.79-2026-11-19.md) passed the
-installed v0.2.0 plugin and WebSocket gates on candidate 8.0.79 and rollback
-8.0.47. 8.0.47 remains live. Keep response steering explicitly false; candidate
-payload rules still run after account policy. The backup prerequisite is resolved by disabling local KV; session/date-pin/replay
-state stays in memory and is lost on restart as on 8.0.47.
+CLIProxyAPI 8.0.79 has been live since 2026-11-20; its
+[upgrade](gateway-upgrade-8.0.79-2026-11-19.md) passed the installed v0.2.0 plugin
+and WebSocket gates on 8.0.79 and on the 8.0.47 rollback. Keep response steering
+explicitly false; gateway payload rules still run after account policy. Local KV
+is disabled, so session/date-pin/replay state stays in memory and is lost on
+restart as on 8.0.47.
 
 Codex can keep a Responses WebSocket open through the gateway instead of making
 an HTTP streaming request for each turn. Both ends must opt in: the selected
@@ -397,11 +398,11 @@ their own disposable gateway usage queues.
 
 ```sh
 python3 -B tests/codex_websockets_isolated.py --check-only
+~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.79/cli-proxy-api
 ~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api
-~/.local/bin/heavy python3 -B tests/codex_websockets_isolated.py --binary /opt/cliproxyapi/8.0.30/cli-proxy-api
 # Existing broader plugin suite, parameterized for either steering mode:
-~/.local/bin/heavy python3 -B tests/fast_mode_isolated.py --binary /opt/cliproxyapi/8.0.47/cli-proxy-api --library /opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.2.0.so --response-steering false
-# Repeat with --response-steering true and with the 8.0.30 binary.
+~/.local/bin/heavy python3 -B tests/fast_mode_isolated.py --binary /opt/cliproxyapi/8.0.79/cli-proxy-api --library /opt/personal-codex-router/plugins/linux/amd64/fast-mode-policy-v0.2.0.so --response-steering false
+# Repeat with --response-steering true and with the 8.0.47 rollback binary.
 ```
 
 On 2026-10-27, 8.0.30 and 8.0.43 each passed **39 new integration assertions, 24 completed

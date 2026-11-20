@@ -190,7 +190,7 @@ upstream:
   account: Claude no longer sends 5-hour headers, and 8.0.47's Fable-only check
   in `helps/claude_ratelimit.go` requires an explicit 5-hour utilization, so the
   refusal was read as a shared-window rejection. Upstream relaxed that check
-  after 8.0.47 (present in 8.0.69). When the all-model weekly allowance is
+  after 8.0.47 (present in 8.0.69, so in the live 8.0.79). When the all-model weekly allowance is
   really exhausted, each model is now cooled on its own first refusal, which
   costs one failed attempt per model before failover.
 - **404 rule**: a Claude `not_found_error` moves on to the other account without

@@ -46,10 +46,10 @@ Tests (use the selected or cached Go binary for `go test`):
 (cd plugins/fast-mode-policy && go test -v .)
 python3 -m unittest discover -s tests -p test_install_fast_mode_plugin.py -v
 heavy python3 tests/fast_mode_isolated.py --library /tmp/fast-mode-build/fast-mode-policy-v0.2.0.so \
-  --binary /opt/cliproxyapi/8.0.47/cli-proxy-api --response-steering false
+  --binary /opt/cliproxyapi/8.0.79/cli-proxy-api --response-steering false
 ```
 
-The isolated test requires `--binary` (for example the installed 8.0.47 executable)
+The isolated test requires `--binary` (for example the installed 8.0.79 executable)
 and covers the schema 2 levels for Responses, Chat Completions and Claude clients.
 It needs Python PyYAML, websockets >= 15 and openssl. It creates private temporary
 state and dummy accounts under `/tmp`, captures only mock traffic, and uses

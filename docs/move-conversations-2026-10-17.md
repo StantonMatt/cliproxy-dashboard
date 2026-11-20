@@ -356,10 +356,10 @@ layout no longer shifts. It offers the same choices and sends the same requests.
 ## Gateway upgrades
 
 Moves are disabled on any gateway version not in `MOVE_TESTED_GATEWAYS`
-(`dashboard/server.py`), 8.0.30, 8.0.43 and 8.0.47 in this checkout, because on another build the
+(`dashboard/server.py`), 8.0.30, 8.0.43, 8.0.47 and 8.0.79 in this checkout, because on another build the
 TTL readback could report `moved` even if the gateway didn’t release its pins.
-Legacy 8.0.7 is unverified for moves and would disable them. The staged 8.0.47
-upgrade retains 8.0.30 as its rollback target. The
+Legacy 8.0.7 is unverified for moves and would disable them. 8.0.79 is live, with
+8.0.47 as its rollback target. The
 list is separate from sign-in’s `TESTED_GATEWAYS` in `dashboard/signin.py`:
 sign-in’s check verifies credential persistence and never touches affinity, so
 adding a version there must not enable moves.
