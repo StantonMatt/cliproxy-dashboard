@@ -119,7 +119,7 @@ if __name__=='__main__':
     parser.add_argument('--binary', type=pathlib.Path, required=True)
     parser.add_argument('--model', default=MODEL, help='Model available in the selected binary catalog')
     parser.add_argument('--response-steering', choices=('true', 'false'), default='true',
-                        help='true retains the expected duplex policy failure; false enforces every turn')
+                        help='true exercises version-pinned duplex policy; false exercises serial enforcement')
     parser.add_argument('--scratch', type=pathlib.Path,
                         default=pathlib.Path('~/.cache/agent-scratch/personal-codex-router').expanduser())
     args=parser.parse_args()
@@ -229,7 +229,7 @@ if __name__=='__main__':
         with HTTP.open(urllib.request.Request(f'http://127.0.0.1:{port}/v0/management/config',
                 headers={'Authorization':'Bearer spike-management-dummy'}),timeout=5) as response:
             version=response.headers['X-CPA-VERSION']
-        assert version in ('8.0.30','8.0.43','8.0.47'), 'Reassess duplex policy expectations for this version'
+        assert version in ('8.0.30','8.0.43','8.0.47','8.0.79'), 'Reassess duplex policy expectations for this version'
         summary['gateway_version']=version
         # Enabling through config hot reload, same PID, from initially disabled plugin host.
         # Keep the gateway's startup bcrypt normalization rather than rewriting its secret.

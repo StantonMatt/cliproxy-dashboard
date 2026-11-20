@@ -122,6 +122,78 @@ def validated_edit(original, updates, allow_add=()):
     return text.encode()
 
 
+def disable_local_kv(original):
+    """Set nested-v8 KV disabled, retaining other keys and comments verbatim."""
+    text = original.decode()
+    expected = yaml.safe_load(text)
+    if layout(expected) != 'v8':
+        raise ValueError('Local KV edit requires nested-v8 configuration')
+    tree = yaml.compose(text)
+    server = _mapping_child(tree, 'server')
+    if not isinstance(server, yaml.MappingNode) or server.flow_style or not server.value:
+        raise ValueError('Expected a nonempty server block mapping')
+    kv = _mapping_child(server, 'kv-store')
+    if kv is None:
+        first = server.value[0][0].start_mark
+        start = stop = first.index - first.column
+        replacement = ' ' * first.column + 'kv-store: {disabled: true}\n'
+        expected['server']['kv-store'] = {'disabled': True}
+    else:
+        disabled = _mapping_child(kv, 'disabled')
+        if disabled is None:
+            if kv.flow_style or not kv.value:
+                raise ValueError('Expected a nonempty kv-store block mapping')
+            first = kv.value[0][0].start_mark
+            start = stop = first.index - first.column
+            replacement = ' ' * first.column + 'disabled: true\n'
+        else:
+            if not isinstance(disabled, yaml.ScalarNode) or disabled.style in ('|', '>'):
+                raise ValueError('Expected a scalar kv-store.disabled')
+            start, stop = disabled.start_mark.index, disabled.end_mark.index
+            replacement = ' true' if start == stop else 'true'
+        expected['server']['kv-store']['disabled'] = True
+    candidate = (text[:start] + replacement + text[stop:]).encode()
+    try:
+        actual = yaml.safe_load(candidate)
+    except yaml.YAMLError:
+        raise ValueError('Unexpected configuration change') from None
+    if actual != expected:
+        raise ValueError('Unexpected configuration change')
+    return candidate
+
+
+def remove_local_kv(original):
+    """Remove only the cutover's KV safeguard before rolling back to 8.0.47."""
+    text = original.decode()
+    expected = yaml.safe_load(text)
+    if layout(expected) != 'v8':
+        raise ValueError('Local KV edit requires nested-v8 configuration')
+    tree = yaml.compose(text)
+    server = _mapping_child(tree, 'server')
+    kv = _mapping_child(server, 'kv-store')
+    if kv is None:
+        return original
+    if server.flow_style or expected['server']['kv-store'] != {'disabled': True}:
+        raise ValueError('Unexpected KV settings; inspect privately before rollback')
+    disabled = _mapping_child(kv, 'disabled')
+    key = next(key for key, value in server.value if key.value == 'kv-store')
+    # Remove only the field lines, retaining intervening/full-line comments.
+    lines = text.splitlines(keepends=True)
+    rows = {key.start_mark.line, disabled.start_mark.line}
+    if (kv.flow_style and kv.end_mark.line != key.start_mark.line) or (
+            disabled.end_mark.line != disabled.start_mark.line):
+        raise ValueError('Unexpected multiline KV settings')
+    candidate = ''.join(line for index, line in enumerate(lines) if index not in rows).encode()
+    del expected['server']['kv-store']
+    try:
+        actual = yaml.safe_load(candidate)
+    except yaml.YAMLError:
+        raise ValueError('Unexpected configuration change') from None
+    if actual != expected:
+        raise ValueError('Unexpected configuration change')
+    return candidate
+
+
 def write_same_inode(path, candidate, original):
     """Keep the gateway's watched inode and refuse a changed preparation input."""
     with path.open('r+b') as stream:

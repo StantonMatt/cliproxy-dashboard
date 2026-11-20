@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 
 from request_deadline import RequestDeadline
 
-TESTED_GATEWAYS = frozenset({'8.0.47'})
+TESTED_GATEWAYS = frozenset({'8.0.47', '8.0.79'})
 # Exact origins from CLIProxyAPI v8.0.47 internal/auth provider implementations.
 FLOWS = {
     'claude': ('browser', 'claude.ai', 54545, '/callback'),

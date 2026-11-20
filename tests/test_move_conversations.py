@@ -459,7 +459,7 @@ class MoveProtocolTests(MoveFixture):
                 self.assertEqual(list(self.request_dir.iterdir()), [])
 
     def test_untested_gateway_is_unavailable_and_writes_nothing(self):
-        for version in ('8.0.7', None, '8.0.30-dirty', '8.0.43-dirty', '8.0.47-dirty', ''):
+        for version in ('8.0.7', None, '8.0.30-dirty', '8.0.43-dirty', '8.0.47-dirty', '8.0.79-dirty', ''):
             with self.subTest(version=version):
                 self.gateway_version = version
                 self.assertEqual(self.move(), {'outcome': 'not_moved', 'code': 'unavailable'})
@@ -469,7 +469,7 @@ class MoveProtocolTests(MoveFixture):
         self.assertEqual((self.seen_requests, list(self.request_dir.iterdir())), ([], []))
         self.assertEqual(self.gateway_ttl, '1h')
         # Moves have their own list: sign-in's, verified without touching affinity, never enables or disables them.
-        self.assertEqual(dashboard.MOVE_TESTED_GATEWAYS, ('8.0.30', '8.0.43', '8.0.47'))
+        self.assertEqual(dashboard.MOVE_TESTED_GATEWAYS, ('8.0.30', '8.0.43', '8.0.47', '8.0.79'))
         self.gateway_version = '9.9.9'
         with patch.object(dashboard.signin, 'TESTED_GATEWAYS', ('9.9.9',)):
             self.assertEqual(self.move()['code'], 'unavailable')
@@ -481,7 +481,7 @@ class MoveProtocolTests(MoveFixture):
         self.assertEqual(self.move()['outcome'], 'moved')
 
     def test_each_validated_build_can_move(self):
-        for version in ('8.0.30', '8.0.43', '8.0.47'):
+        for version in ('8.0.30', '8.0.43', '8.0.47', '8.0.79'):
             with self.subTest(version=version):
                 self.gateway_version = version
                 self.assertEqual(self.move()['outcome'], 'moved')

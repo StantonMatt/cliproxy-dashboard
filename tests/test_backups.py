@@ -22,6 +22,48 @@ class BackupTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
 
+    def test_non_sqlite_database_fails_with_actionable_error_before_sqlite_backup(self):
+        for name, data in (('kv.db', b'\x00' * 16 + b'\xed\xda\x0c\xed' + b'\x00' * 4096),
+                           ('other.sqlite', b'not SQLite'), ('empty.sqlite3', b'')):
+            with self.subTest(name=name):
+                source = self.root / name
+                source.write_bytes(data)
+                destination = self.root / (name + '-backup')
+                with patch.object(backup, 'sqlite_copy') as sqlite_copy:
+                    with self.assertRaises(ValueError) as error:
+                        backup.snapshot([source], destination)
+                self.assertIn(str(source), str(error.exception))
+                self.assertIn('server.kv-store.disabled: true', str(error.exception))
+                self.assertIn('gateway-upgrade-8.0.79-2026-11-19.md', str(error.exception))
+                sqlite_copy.assert_not_called()
+                self.assertFalse((destination / 'manifest.json').exists())
+
+    def test_recursive_auth_snapshot_includes_private_codex_refresh_receipts(self):
+        auth = self.root / 'auth'
+        receipts = auth / '.codex-refresh' / 'synthetic-account'
+        receipts.mkdir(parents=True, mode=0o700)
+        auth.chmod(0o700)
+        receipts.parent.chmod(0o700)
+        files = [auth / 'codex.json', receipts / 'claim.json', receipts / 'receipt.json']
+        for source in files:
+            source.write_text('{"synthetic": true}')
+            source.chmod(0o600)
+        destination = self.root / 'snapshot'
+        # Match run()'s private umask, including intermediate receipt directories.
+        previous_umask = os.umask(0o077)
+        try:
+            manifest = backup.snapshot([auth], destination)
+        finally:
+            os.umask(previous_umask)
+        self.assertEqual({row['path'] for row in manifest['entries']},
+                         {str(p.relative_to('/')) for p in files})
+        for source in files:
+            target = destination / 'files' / source.relative_to('/')
+            self.assertEqual(target.read_bytes(), source.read_bytes())
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), stat.S_IMODE(source.stat().st_mode))
+            self.assertEqual(stat.S_IMODE(target.parent.stat().st_mode), 0o700)
+        self.assertEqual(len(backup.verify(destination)['entries']), 3)
+
     def test_online_database_snapshot_includes_wal_but_not_uncommitted_transaction(self):
         source = self.root / 'live.sqlite3'
         con = sqlite3.connect(source)

@@ -244,6 +244,7 @@ class AddAccountsTests(unittest.TestCase):
     def test_gateway_version_policy_table_and_fresh_start_gate(self):
         for version, supported, tested in (
                 ('8.0.46', False, False), ('8.0.47', True, True),
+                ('8.0.79', True, True), ('8.0.79-dev', False, False),
                 ('8.0.52', True, False), ('8.1.0', True, False),
                 ('9.0.0', False, False), ('dev', False, False),
                 ('v8.0.47', False, False), ('8.0.47-dev', False, False),

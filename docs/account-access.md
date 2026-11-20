@@ -337,7 +337,7 @@ failed still gets the **Needs a new sign-in** desktop notification when a check 
 sign-in reports that it needs one. Once approval enters `finishing`, cancel returns a fixed
 `already_finishing` conflict; pending sessions remain cancellable.
 
-**Version gate.** `signin.TESTED_GATEWAYS` (`8.0.30`, `8.0.43` and `8.0.47` in this checkout) lists the
+**Version gate.** `signin.TESTED_GATEWAYS` (`8.0.30`, `8.0.43`, `8.0.47` and `8.0.79` in this checkout) lists the
 builds validated with `tests/gateway_replace_integration.py`. The version comes
 from the `X-CPA-VERSION` header on the start preflight's `GET /config`. An
 untested build fails closed at start, before the user approves anything, and
@@ -347,9 +347,9 @@ Start also checks that the dashboard can write the auth dir, failing with
 Legacy 8.0.7 is excluded on purpose: it has no Codex file lock, and
 the harness showed an in-flight refresh overwriting the new tokens (12 of 12
 in-flight races). After any gateway upgrade, re-run the harness against the new
-binary and extend the allowlist only if it passes. The [8.0.47 preparation](gateway-upgrade-8.0.47-2026-10-29.md) passed this gate; 8.0.30 remains live, and the updated dashboard has not been deployed by that preparation.
+binary and extend the allowlist only if it passes. The [8.0.79 preparation](gateway-upgrade-8.0.79-2026-11-19.md) passed this gate and the separate move gate; 8.0.47 remains live, and these dashboard changes have not been deployed. Account-add also marks 8.0.79 tested after the source/API and synthetic compatibility assessment; real provider sign-in remains unverified.
 
-8.0.30 is the rollback target for the staged 8.0.47 cutover; 8.0.7 is historical.
+8.0.47 is the rollback target for staged 8.0.79; the backup prerequisite is resolved by disabling local KV, keeping session/date-pin/replay state in memory as on 8.0.47. 8.0.7 is historical.
 
 **Journal.** Each outcome writes one `codex_signin` JSON line to stdout (the
 journal): kind, account email, elapsed seconds and `checks`. Every `signed_in`

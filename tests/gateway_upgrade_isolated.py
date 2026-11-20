@@ -172,6 +172,7 @@ class Lab:
                 (auth / (name + '.json')).chmod(0o600)
         cfg = yaml.safe_load((ROOT / 'tests/fixtures/config-v8-nested.yaml').read_text())
         cfg['server']['port'] = self.port
+        cfg['server']['kv-store'] = {'disabled': True}
         cfg['management']['secret-key'] = MANAGEMENT_KEY
         cfg['access']['api-keys'] = [CLIENT_KEY]
         cfg['oauth']['auth-dir'] = str(auth)
@@ -233,8 +234,34 @@ class Lab:
     def run(self):
         cfg = self.management('/config')
         self.check('nested retry policy consumed', cfg['request-retry'] == 5 and cfg['max-retry-interval'] == 45)
+        if self.version == '8.0.47':
+            # Startup tolerates the future key, but strict persistence rejects it.
+            for provider in ('codex', 'claude'):
+                self.call(provider)
+            try:
+                self.request('/v8/management/config', yaml.safe_load(self.config.read_text()), MANAGEMENT_KEY, 'PATCH')
+            except urllib.error.HTTPError as error:
+                detail = error.read().decode()
+                self.check('rollback strict PATCH rejects future KV key',
+                           error.code == 400, response=detail)
+            else:
+                self.check('rollback strict PATCH rejects future KV key', False)
+            logs = (self.root / 'gateway.log').read_text()
+            self.check('rollback migration warns about future KV key',
+                       'unrecognized configuration section "server.kv-store"' in logs)
+            original = self.config.read_bytes()
+            inode = self.config.stat().st_ino
+            gateway_config.write_same_inode(self.config, gateway_config.remove_local_kv(original), original)
+            self.check('rollback KV key removed in place', self.config.stat().st_ino == inode
+                       and 'kv-store' not in yaml.safe_load(self.config.read_text())['server'])
+            self.evidence['rollback_kv'] = {'startup_with_key': True, 'inference_with_key': True,
+                'strict_patch_accepts_key': False, 'migration_warning': True, 'removed_same_inode': True}
         self.request('/v8/management/config', yaml.safe_load(self.config.read_text()), MANAGEMENT_KEY, 'PATCH')
         self.check('nested fixture passes strict v8 config validation', True)
+        if self.version != '8.0.47':
+            self.check('local KV explicitly disabled in persisted nested config',
+                       yaml.safe_load(self.config.read_text())['server']['kv-store']['disabled'] is True)
+        self.check_no_kv()
         models = {m['id'] for m in self.request('/v1/models')['data']}
         self.check('plain model routes advertised', set(CODEX_MODELS + CLAUDE_MODELS) <= models,
                    missing=sorted(set(CODEX_MODELS + CLAUDE_MODELS) - models))
@@ -297,15 +324,36 @@ class Lab:
                 self.check(path + ' rejects unauthenticated access', False)
         if tuple(map(int, self.version.split('.'))) >= (8, 0, 43):
             self.claude_wire()
+        if self.version == '8.0.79':
+            self.request_error_rules()
         self.collect()
         logs = (self.root / 'gateway.log').read_text().lower()
-        self.check('no unknown or removed config warnings',
-                   not any(term in logs for term in ('unknown field', 'unknown key', 'deprecated', 'removed key')))
+        if self.version == '8.0.47':
+            logs = '\n'.join(line for line in logs.splitlines()
+                             if 'unrecognized configuration section \"server.kv-store\"' not in line)
+        self.check('no unexpected unknown or removed config warnings',
+                   not any(term in logs for term in ('unknown field', 'unknown key', 'deprecated',
+                                                     'removed key', 'unrecognized configuration')))
         self.evidence['refused_external_hosts'] = sorted(set(self.mock.refused))
+        self.check_no_kv()
+
+    def check_no_kv(self):
+        files = [p for p in (self.root / 'auth').rglob('*') if p.is_file()]
+        self.check('disabled local KV creates no database files',
+                   not any(p.suffix in ('.db', '.bbolt', '.bolt') for p in files))
+        # bbolt has little-endian magic 0xED0CDAED at offset 16 in page zero.
+        self.check('disabled local KV creates no bbolt files regardless of extension',
+                   not any(p.read_bytes()[16:20] == b'\xed\xda\x0c\xed' for p in files))
 
     def claude_wire(self):
-        ua = 'claude-cli/2.1.304 (external, sdk-ts, agent-sdk/0.3.276)'
-        system = [{'type': 'text', 'text': 'x-anthropic-billing-header: cc_version=2.1.304.179; cc_entrypoint=sdk-ts;'},
+        # v8.0.63 advances the native fingerprint baseline (b4e7dbd2).
+        # Keep the rollback fixture pinned and verify the candidate's current
+        # native profile, plus its deliberate normalization of the older caller.
+        candidate = self.version == '8.0.79'
+        version = '2.1.321' if candidate else '2.1.304'
+        runtime = 'v26.12.1' if candidate else 'v26.3.0'
+        ua = f'claude-cli/{version} (external, sdk-ts, agent-sdk/0.3.276)'
+        system = [{'type': 'text', 'text': f'x-anthropic-billing-header: cc_version={version}.179; cc_entrypoint=sdk-ts;'},
                   {'type': 'text', 'text': "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK."},
                   {'type': 'text', 'text': 'isolated-sdk-system-marker'}]
         messages = [{'role': 'user', 'content': 'synthetic'},
@@ -319,7 +367,7 @@ class Lab:
                                          'device_id': 'c' * 64, 'session_id': '33333333-4444-4555-8666-777777777777'})},
                             'tools': [{'name': 'Bash', 'description': 'synthetic', 'input_schema': {'type': 'object'}}]},
                             extra_headers={'User-Agent': ua, 'X-App': 'cli', 'Anthropic-Beta': 'claude-code-20250219',
-                                           'X-Stainless-Package-Version': '0.128.0', 'X-Stainless-Runtime-Version': 'v26.3.0',
+                                           'X-Stainless-Package-Version': '0.128.0', 'X-Stainless-Runtime-Version': runtime,
                                            'X-Stainless-Os': 'MacOS', 'X-Stainless-Arch': 'arm64'})
         body = attempts[-1]['body']
         self.evidence['claude_wire'] = {'thinking': body.get('thinking'),
@@ -331,6 +379,50 @@ class Lab:
         self.check('sdk-ts native request preserves caller profile and system',
                    attempts[-1]['user_agent'] == ua
                    and any(b.get('text') == 'isolated-sdk-system-marker' for b in body.get('system', [])))
+        if candidate:
+            legacy = self.call('claude', extra={'system': system}, extra_headers={
+                'User-Agent': 'claude-cli/2.1.304 (external, sdk-ts, agent-sdk/0.3.276)',
+                'X-App': 'cli', 'Anthropic-Beta': 'claude-code-20250219',
+                'X-Stainless-Package-Version': '0.128.0', 'X-Stainless-Runtime-Version': 'v26.3.0'})
+            self.check('legacy SDK caller normalizes to candidate fingerprint baseline',
+                       legacy[-1]['user_agent'] == 'claude-cli/2.1.321 (external, cli)')
+
+    def request_error_rules(self):
+        # Request-scoped classification and usage propagation changed in 8.0.58
+        # and 8.0.64. Exercise the deployed rule *shapes* with synthetic text.
+        cfg = yaml.safe_load(self.config.read_text())
+        cfg['routing']['cooldown']['transient-error-cooldown-seconds'] = 15
+        cfg.setdefault('upstream', {}).setdefault('claude', {})['model-level-cooling'] = True
+        cfg['oauth']['request-scoped-errors'] = {'claude': [
+            {'status': 404, 'match': ['synthetic isolated failure'], 'action': 'continue'},
+            {'status': 503, 'match': ['synthetic isolated failure'], 'action': 'stop'}]}
+        self.request('/v8/management/config', cfg, MANAGEMENT_KEY, 'PATCH')
+        wait_for(lambda: self.management('/config').get('transient-error-cooldown-seconds') == 15)
+        self.check('15 second transient cooldown consumed with retry policy preserved',
+                   self.management('/config')['request-retry'] == 5
+                   and self.management('/config')['max-retry-interval'] == 45)
+        for status in (404, 503):
+            session = str(uuid.uuid4())
+            account = self.call('claude', session)[0]['account']
+            self.mock.failures[account] = status
+            offset = len(self.mock.records)
+            try:
+                if status == 404:
+                    attempts = self.call('claude', session)
+                    self.check('Claude matching 404 continue reaches peer in same request',
+                               len(attempts) == 2 and attempts[0]['status'] == 404
+                               and attempts[1]['account'] != account and attempts[1]['status'] == 200)
+                else:
+                    try:
+                        self.call('claude', session)
+                    except urllib.error.HTTPError as error:
+                        self.check('Claude matching overload stop returns original status', error.code == 503)
+                    else:
+                        self.check('Claude matching overload stop returns original status', False)
+                    self.check('Claude matching overload stop does not rotate or replay',
+                               len(self.mock.records) - offset == 1)
+            finally:
+                self.mock.failures.clear()
 
     def collect(self):
         spec = importlib.util.spec_from_file_location('isolated_collector', ROOT / 'scripts/collect-usage.py')

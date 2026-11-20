@@ -1,8 +1,10 @@
-# CLIProxyAPI 8.0.47; replace the example client key before connecting clients.
+# CLIProxyAPI 8.0.79; replace the example client key before connecting clients.
 config-version: 8
 server:
   host: 127.0.0.1
   port: 8317
+  # Keep session/date-pin/replay state in memory and avoid a bbolt backup requirement.
+  kv-store: {disabled: true}
 management:
   allow-remote: false
   # enable-dashboard.py requires an empty secret on first activation.

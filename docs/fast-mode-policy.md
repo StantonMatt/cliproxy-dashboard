@@ -1,5 +1,11 @@
 # Fast-mode policy
 
+The [8.0.79 preparation](gateway-upgrade-8.0.79-2026-11-19.md) passed the
+installed v0.2.0 plugin and WebSocket gates on candidate 8.0.79 and rollback
+8.0.47. 8.0.47 remains live. Keep response steering explicitly false; candidate
+payload rules still run after account policy. The backup prerequisite is resolved by disabling local KV; session/date-pin/replay
+state stays in memory and is lost on restart as on 8.0.47.
+
 `fast-mode-policy` 0.2.0 runs inside CLIProxyAPI 8.0.47 using its native C/JSON
 plugin ABI. Each Codex account has a speed level: **normal**, **fast** or
 **ultrafast**. Wire values are `priority` for Fast and `ultrafast` for Ultrafast;

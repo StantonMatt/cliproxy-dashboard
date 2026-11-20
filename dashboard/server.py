@@ -60,7 +60,7 @@ DB = Path('/var/lib/personal-codex-router/usage.sqlite3')
 PREFERENCE = Path('/var/lib/personal-codex-router-routing/status.json')
 # Builds where a TTL change was verified to replace the selector and release every pin; separate from
 # sign-in's TESTED_GATEWAYS, whose check never touches affinity. See docs/move-conversations-2026-10-17.md.
-MOVE_TESTED_GATEWAYS = ('8.0.30', '8.0.43', '8.0.47')
+MOVE_TESTED_GATEWAYS = ('8.0.30', '8.0.43', '8.0.47', '8.0.79')
 MOVE_REQUEST_DIR = Path('/run/personal-codex-router-move-request')
 MOVE_RESULT = Path('/run/personal-codex-router-move/result.json')
 MOVE_HELPER = Path('/opt/personal-codex-router/move-conversations.py')

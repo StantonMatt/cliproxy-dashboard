@@ -1,5 +1,11 @@
 # Codex WebSockets
 
+The [8.0.79 preparation](gateway-upgrade-8.0.79-2026-11-19.md) passed the
+installed v0.2.0 plugin and WebSocket gates on candidate 8.0.79 and rollback
+8.0.47. 8.0.47 remains live. Keep response steering explicitly false; candidate
+payload rules still run after account policy. The backup prerequisite is resolved by disabling local KV; session/date-pin/replay
+state stays in memory and is lost on restart as on 8.0.47.
+
 Codex can keep a Responses WebSocket open through the gateway instead of making
 an HTTP streaming request for each turn. Both ends must opt in: the selected
 client provider needs `supports_websockets = true`, and each file-backed gateway

@@ -339,7 +339,7 @@ class Experiment:
         req = urllib.request.Request(f'http://127.0.0.1:{self.port}/v0/management' + path, data=json.dumps(body).encode() if body is not None else None, method='PATCH' if body is not None else 'GET', headers={'Authorization': 'Bearer synthetic-management', 'Content-Type': 'application/json'})
         with HTTP.open(req, timeout=5) as response:
             self.version = response.headers['X-CPA-VERSION']
-            assert self.version in ('8.0.30', '8.0.43', '8.0.47'), 'Reassess duplex policy expectations for this version'
+            assert self.version in ('8.0.30', '8.0.43', '8.0.47', '8.0.79'), 'Reassess duplex policy expectations for this version'
             self.result['gateway_version'] = self.version
             return json.load(response)
 
@@ -413,7 +413,7 @@ class Experiment:
         self.reload()
         observed = self.pair()
         # 0fe38224 adds ordinary interceptor hooks to subsequent duplex frames.
-        fixed = self.version == '8.0.47'
+        fixed = self.version in ('8.0.47', '8.0.79')
         label = 'duplex_denied_followup_enforced' if fixed else 'EXPECTED_FAILURE_duplex_denied_followup_bypasses_policy'
         self.check(label, [r['tier'] for r in observed] == ['<absent>', '<absent>' if fixed else 'priority'])
         self.cfg['upstream']['codex']['response-steering'] = False

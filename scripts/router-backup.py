@@ -200,6 +200,14 @@ def snapshot(paths, destination):
         relative = source.relative_to('/')
         target = destination / 'files' / relative
         if source.suffix in ('.sqlite', '.sqlite3', '.db'):
+            fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'rb') as stream:
+                header = stream.read(16)
+            if header != b'SQLite format 3\x00':
+                raise ValueError(
+                    f'Non-SQLite database: {source}; set server.kv-store.disabled: true '
+                    '(see docs/gateway-upgrade-8.0.79-2026-11-19.md). '
+                    'This file cannot be backed up by SQLite online backup.')
             info = sqlite_copy(source, target)
             method = 'sqlite-online-backup'
         else:

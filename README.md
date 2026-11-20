@@ -20,20 +20,20 @@ Only the human can:
 
 Prerequisites: Kubuntu on x86_64 (Linux amd64) with systemd, Python 3.11+, and Node.js 22 or a newer supported LTS at `/usr/bin/node` (the optional preview unit uses that path). Kubuntu packages: `git curl ca-certificates tar python3 python3-yaml python3-bcrypt nodejs gcc libc6-dev`; `openssh-client` for SSH access and `libglib2.0-bin` for desktop notices through `gdbus`. Install Codex CLI, Claude Code and T3 Code from their official distributions if those clients are wanted. Clone this repository and run the following commands from its root. Nightly tests also require the desktop user's `~/.local/bin/heavy` scheduler, which this repository does not supply. If it is unavailable, after step 4 run `systemctl --user disable --now personal-codex-router-nightly-tests.timer` until it is provisioned.
 
-1. **Install the gateway.** Download the Linux archive matching `uname -m` from the [official 8.0.47 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.47). Verify its SHA-256 against the checksum asset on that release page before extracting. This is the example version; dashboard sign-in is validated on 8.0.30, 8.0.43 and 8.0.47, not arbitrary newer releases.
+1. **Install the gateway.** Download the Linux archive matching `uname -m` from the [official 8.0.79 release](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.79). Verify its SHA-256 against the checksum asset on that release page before extracting. This is the example version; dashboard sign-in is validated on 8.0.30, 8.0.43, 8.0.47 and 8.0.79, not arbitrary newer releases. Keep `server.kv-store.disabled: true` from the example: session/date-pin/replay state stays in memory, avoiding a bbolt backup requirement ([decision](docs/gateway-upgrade-8.0.79-2026-11-19.md#decisions-and-material-risks)).
 
    On a new host, create the system user/group and directories:
 
    ```sh
    sudo useradd --system --user-group --home-dir /var/lib/cliproxyapi --shell /usr/sbin/nologin cliproxyapi
-   sudo install -d -o root -g root -m 755 /opt/cliproxyapi/8.0.47
+   sudo install -d -o root -g root -m 755 /opt/cliproxyapi/8.0.79
    sudo install -d -o root -g cliproxyapi -m 750 /etc/cliproxyapi
    sudo install -d -o cliproxyapi -g cliproxyapi -m 700 /var/lib/cliproxyapi /var/lib/cliproxyapi/auth
    sudo install -o root -g cliproxyapi -m 660 config/gateway.example.yaml /etc/cliproxyapi/config.yaml
    sudo install -o root -g root -m 644 config/cliproxyapi.example.service /etc/systemd/system/cliproxyapi.service
    ```
 
-   Install the extracted `cli-proxy-api` executable at `/opt/cliproxyapi/8.0.47/cli-proxy-api`, owned by root, mode 0755. Read the [example config](config/gateway.example.yaml) and [unit](config/cliproxyapi.example.service); keep the empty management secret for step 3. Config mode 0660 and the unit's `ReadWritePaths` let management save changes. Start this new service with `sudo systemctl daemon-reload` then `sudo systemctl enable --now cliproxyapi.service`. Do not overwrite an existing installation or restart an active gateway blindly.
+   Install the extracted `cli-proxy-api` executable at `/opt/cliproxyapi/8.0.79/cli-proxy-api`, owned by root, mode 0755. Read the [example config](config/gateway.example.yaml) and [unit](config/cliproxyapi.example.service); keep the empty management secret for step 3. Config mode 0660 and the unit's `ReadWritePaths` let management save changes. Start this new service with `sudo systemctl daemon-reload` then `sudo systemctl enable --now cliproxyapi.service`. Do not overwrite an existing installation or restart an active gateway blindly.
 
    Check: `systemctl is-active cliproxyapi.service` says `active`; `ss -ltn` shows only `127.0.0.1:8317` for this port. `/v1/models` refuses an unauthenticated request (401). Management routes are absent while the secret is empty.
 
@@ -128,7 +128,7 @@ Installation files and private state:
 | `~/.local/state/personal-codex-router/`, `/run/personal-codex-router-move-request/` | Private Claude operation state/socket and temporary conversation-move requests. |
 | `/var/lib/cliproxyapi-dashboard-backups/`, `/var/lib/personal-codex-router-backups/`, `docs/activation.json` | Activation/deployment backups and activation manifest. Backups contain secrets; keep them private and off the repo. |
 
-What has been tested: this setup runs daily on the original Kubuntu machine. The example was checked with CLIProxyAPI 8.0.47 as an unprivileged scratch process: loopback-only listener, authenticated model listing, unauthenticated inference refusal and inaccessible management with an empty secret; startup left the config unchanged. In-place management activation and client-key replacement hot-reloaded under the same PID. The example unit passed `systemd-analyze verify`. The minimal Codex provider snippet above produced a real reply through the running gateway from a throwaway Codex home. A clean-machine installation has not been run end to end. The installer requires Linux with systemd; Windows and macOS hosts are not supported by it.
+What has been tested: this setup runs daily on the original Kubuntu machine. The current example was checked with CLIProxyAPI 8.0.79 and local KV disabled as an unprivileged scratch process: loopback-only listener, authenticated model listing, unauthenticated inference refusal and inaccessible management with an empty secret; startup left the config unchanged. In-place management activation hot-reloaded under the same PID; strict nested-v8 PATCH passed without config warnings and no KV database was created. Client-key replacement hot reload was previously checked on 8.0.47. The example unit passed `systemd-analyze verify`. The minimal Codex provider snippet above produced a real reply through the running gateway from a throwaway Codex home. A clean-machine installation has not been run end to end. The installer requires Linux with systemd; Windows and macOS hosts are not supported by it.
 
 ## Update an existing installation
 
@@ -165,7 +165,7 @@ The upstream usage queue removes records when read. Records already collected pe
 
 | Component | Location / service |
 | --- | --- |
-| Separate model gateway | `cliproxyapi.service`, example CLIProxyAPI 8.0.47, loopback 8317 |
+| Separate model gateway | `cliproxyapi.service`, example CLIProxyAPI 8.0.79, loopback 8317 |
 | Dashboard backend and static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, loopback 8320 |
 | Usage collector | `personal-codex-router-usage.timer`, every 15 seconds; SQLite at `/var/lib/personal-codex-router/usage.sqlite3` |
 | Codex speed policy | Native `fast-mode-policy` plugin, included in the full install; [policy and deployment](docs/fast-mode-policy.md) |
@@ -266,7 +266,7 @@ Usage history starts with the collector’s first recorded request on September 
 
 | Component | Location / service |
 | --- | --- |
-| Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.30 live; 8.0.47 installed and staged ([preparation](docs/gateway-upgrade-8.0.47-2026-10-29.md)), `*:8317` behind the host firewall |
+| Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.47 live; 8.0.79 installed and staged, KV backup prerequisite resolved by disabling local KV ([preparation](docs/gateway-upgrade-8.0.79-2026-11-19.md)), `*:8317` behind the host firewall |
 | Overview backend + static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, Linux loopback 8320 |
 | Linux friendly address | `personal-codex-router-url.socket` and `.service`, loopback port 80 |
 | Claude gateway routing | Active for both subscriptions; T3 `claudeAgent` on Linux and Mac, Linux shell `claude` via `scripts/claude-gateway.py` ([routing](docs/claude-routing.md), [activation and acceptance](docs/claude-gateway-2026-10-15.md)) |
@@ -279,11 +279,11 @@ Usage history starts with the collector’s first recorded request on September 
 
 Per-account fast mode: [plugin policy, deployment and websocket limits](docs/fast-mode-policy.md).
 
-Codex WebSockets: [rollout with response steering kept off](docs/codex-websockets.md); planned after the 8.0.47 cutover.
+Codex WebSockets: [rollout with response steering kept off](docs/codex-websockets.md); response steering must remain explicitly off during the 8.0.79 upgrade.
 
 T3 usage hub: [read-only, separately keyed limits for T3 Code](docs/t3-usage-hub.md).
 
-Gateway upgrade, verification and rollback: [October 29 preparation for 8.0.47](docs/gateway-upgrade-8.0.47-2026-10-29.md). 8.0.47 is installed with an ignored staged drop-in; 8.0.30 remains live until the user chooses a restart window. The checkout validates sign-in and conversation moves on 8.0.30, 8.0.43 and 8.0.47; its dashboard changes are not deployed by this preparation. Dashboard Codex sign-in writes the new tokens under the gateway's own credential lock and verifies the runtime token ([details](docs/gateway-upgrade-8.0.30-2026-10-15.md#codex-sign-in-replacement)). It is allowed only on validated gateway builds: after an upgrade, re-run `tests/gateway_replace_integration.py` before extending the allowlist. Legacy 8.0.7 fails that harness and is excluded on purpose; dashboard sign-in would be unavailable on that build. 8.0.30 is the rollback target for the staged upgrade; see the [October 1 upgrade record](docs/gateway-upgrade-8.0.7-2026-10-01.md) for 8.0.7 history. The live config uses the nested v8 layout; see the [completed October 1 migration and repeat procedure](docs/gateway-config-v8-migration.md).
+Gateway upgrade, verification and rollback: [November 19 preparation for 8.0.79](docs/gateway-upgrade-8.0.79-2026-11-19.md). 8.0.79 is installed with an ignored staged drop-in; 8.0.47 remains live and is the rollback target. The backup prerequisite is resolved by disabling local KV, keeping session/date-pin/replay state in memory as on 8.0.47; the coordinator applies the safeguard during cutover. Rollback removes this key first because 8.0.47 strict PATCH rejects it. The checkout validates sign-in and conversation moves on 8.0.30, 8.0.43, 8.0.47 and 8.0.79, and marks account-add tested on 8.0.47/8.0.79. These dashboard changes are not deployed by preparation. Dashboard Codex sign-in uses the gateway credential lock and runtime confirmation; extend its exact-version allowlist only after `tests/gateway_replace_integration.py` passes. Legacy 8.0.7 remains excluded. The nested v8 config needs no schema migration; see the [migration history](docs/gateway-config-v8-migration.md).
 
 Verified 2026-10-27: `zz-gateway-8.0.30.conf` selects the live executable. `server.host` is empty, so inference listens on `*:8317`; nftables admits loopback and only the Mac over Tailscale. Management remains loopback-only (`management.allow-remote: false`). Mac inference connects directly to `http://100.64.0.10:8317`; management and the computer-only dashboard address use SSH forwards. Gateway retry policy is `request-retry: 5`, `max-retry-interval: 45` seconds and `max-retry-credentials: 2`. The Free Codex account's model listing excludes `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` and `gpt-5.6-sol`; see [model routes](docs/standard-management-setup.md#model-routes).
 

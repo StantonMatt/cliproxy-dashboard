@@ -58,6 +58,58 @@ def unconfigured(raw):
 
 
 class GatewayConfigTests(unittest.TestCase):
+    def test_disable_local_kv_preserves_comments_other_keys_and_inode(self):
+        variants = ('', '  kv-store:\n    path: /synthetic/custom.db # retain path\n',
+                    '  kv-store:\n    disabled: false # retain comment\n',
+                    '  kv-store: {disabled: false, path: /synthetic/custom.db} # retain flow\n')
+        for kv in variants:
+            with self.subTest(kv=kv), tempfile.TemporaryDirectory() as directory:
+                raw = ('# header\nconfig-version: 8\nserver:\n' + kv +
+                       '  host: 127.0.0.1 # retain host\nother: value # footer\n').encode()
+                expected = yaml.safe_load(raw)
+                expected['server'].setdefault('kv-store', {})['disabled'] = True
+                target = Path(directory) / 'config.yaml'
+                target.write_bytes(raw)
+                target.chmod(0o660)
+                before = target.stat()
+                candidate = config.disable_local_kv(raw)
+                config.write_same_inode(target, candidate, raw)
+                after = target.stat()
+                self.assertEqual((after.st_ino, after.st_uid, after.st_gid, after.st_mode),
+                                 (before.st_ino, before.st_uid, before.st_gid, before.st_mode))
+                self.assertEqual(yaml.safe_load(candidate), expected)
+                for line in raw.splitlines():
+                    if b'disabled:' not in line:
+                        self.assertIn(line, candidate)
+                    if b'# retain' in line:
+                        self.assertIn(line.split(b'#')[1], candidate)
+                self.assertEqual(config.disable_local_kv(candidate), candidate)
+
+    def test_disable_local_kv_rejects_ambiguous_or_unsafe_edits(self):
+        for raw in (b'server: {host: localhost}\n', b'server:\n  kv-store: null\n',
+                    b'server:\n  kv-store: {disabled: false, disabled: true}\n',
+                    b'server:\n  kv-store:\n    disabled: &shared false\nother: *shared\n',
+                    b'server:\n  host: a\nserver:\n  host: b\n',
+                    b'host: localhost\n'):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                config.disable_local_kv(raw)
+
+    def test_remove_local_kv_for_rollback_retains_other_keys_and_comment_lines(self):
+        for kv in ('  kv-store: {disabled: true}\n',
+                   '  kv-store:\n    # keep this comment\n    disabled: true\n'):
+            raw = ('config-version: 8\nserver:\n' + kv + '  host: localhost # keep host\n').encode()
+            expected = yaml.safe_load(raw)
+            del expected['server']['kv-store']
+            candidate = config.remove_local_kv(raw)
+            self.assertEqual(yaml.safe_load(candidate), expected)
+            self.assertIn(b'  host: localhost # keep host\n', candidate)
+            if b'# keep this comment' in raw:
+                self.assertIn(b'# keep this comment', candidate)
+            self.assertEqual(config.remove_local_kv(candidate), candidate)
+        raw = b'server:\n  kv-store: {disabled: true, path: custom.db}\n'
+        with self.assertRaisesRegex(ValueError, 'Unexpected KV settings'):
+            config.remove_local_kv(raw)
+
     def test_fixture_provenance_and_every_accessor(self):
         provenance = json.loads((FIXTURES / 'config-provenance.json').read_text())
         self.assertEqual(provenance['patch_count'], 1)
