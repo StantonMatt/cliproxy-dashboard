@@ -1,7 +1,18 @@
 # Gateway 8.0.79 upgrade preparation — 2026-11-19
 
-**8.0.47 remains live. 8.0.79 is installed and staged; no cutover was performed.**
-**The backup prerequisite is resolved by disabling local KV; the coordinator must apply the reviewed safeguard during cutover.**
+**Cut over on 2026-11-20 at 07:35 -03: 8.0.79 is live, with local KV disabled.**
+The runbook below ran as written. Fresh private backups were taken, the KV key was added
+in place (same owner, mode and inode), the scoped dashboard install deployed the allowlists,
+and the restart selected 8.0.79. Every post-restart check passed: management and inference
+answered 401 without a key, no `kv.db` appeared, one live request succeeded on each of the
+one Codex and two Claude accounts with routing metadata unchanged, the current-PID
+fast-mode plugin marker (v0.2.0, policy schema 2) was present, the dashboard reported every
+component healthy, collection and preference runs succeeded, the paused timers resumed, and
+the Mac reached inference over Tailscale. The new PID's log showed only expected 401/404
+access lines, the plugin's stale follow-up-turn warning, superseded model-registration
+notices, and a failed cleanup of the old v0.1.2 plugin file in read-only `/opt`.
+
+The preparation notes that follow describe the state before the cutover.
 The implementation worker did not review-loop, commit, push, deploy the dashboard,
 change live config, activate a drop-in, reload systemd, or signal/restart the live
 gateway. The coordinator must review the final changes and select an idle window.

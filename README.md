@@ -266,7 +266,7 @@ Usage history starts with the collector’s first recorded request on September 
 
 | Component | Location / service |
 | --- | --- |
-| Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.47 live; 8.0.79 installed and staged, KV backup prerequisite resolved by disabling local KV ([preparation](docs/gateway-upgrade-8.0.79-2026-11-19.md)), `*:8317` behind the host firewall |
+| Existing model gateway | `cliproxyapi.service`, stock CLIProxyAPI 8.0.79 live since 2026-11-20 with local KV disabled ([upgrade record](docs/gateway-upgrade-8.0.79-2026-11-19.md)); 8.0.47 is the rollback, `*:8317` behind the host firewall |
 | Overview backend + static site | `personal-codex-router-dashboard.service`, `/opt/personal-codex-router/dashboard`, Linux loopback 8320 |
 | Linux friendly address | `personal-codex-router-url.socket` and `.service`, loopback port 80 |
 | Claude gateway routing | Active for both subscriptions; T3 `claudeAgent` on Linux and Mac, Linux shell `claude` via `scripts/claude-gateway.py` ([routing](docs/claude-routing.md), [activation and acceptance](docs/claude-gateway-2026-10-15.md)) |
@@ -279,11 +279,11 @@ Usage history starts with the collector’s first recorded request on September 
 
 Per-account fast mode: [plugin policy, deployment and websocket limits](docs/fast-mode-policy.md).
 
-Codex WebSockets: [rollout with response steering kept off](docs/codex-websockets.md); response steering must remain explicitly off during the 8.0.79 upgrade.
+Codex WebSockets: [rollout with response steering kept off](docs/codex-websockets.md); response steering must remain explicitly off on 8.0.79.
 
 T3 usage hub: [read-only, separately keyed limits for T3 Code](docs/t3-usage-hub.md).
 
-Gateway upgrade, verification and rollback: [November 19 preparation for 8.0.79](docs/gateway-upgrade-8.0.79-2026-11-19.md). 8.0.79 is installed with an ignored staged drop-in; 8.0.47 remains live and is the rollback target. The backup prerequisite is resolved by disabling local KV, keeping session/date-pin/replay state in memory as on 8.0.47; the coordinator applies the safeguard during cutover. Rollback removes this key first because 8.0.47 strict PATCH rejects it. The checkout validates sign-in and conversation moves on 8.0.30, 8.0.43, 8.0.47 and 8.0.79, and marks account-add tested on 8.0.47/8.0.79. These dashboard changes are not deployed by preparation. Dashboard Codex sign-in uses the gateway credential lock and runtime confirmation; extend its exact-version allowlist only after `tests/gateway_replace_integration.py` passes. Legacy 8.0.7 remains excluded. The nested v8 config needs no schema migration; see the [migration history](docs/gateway-config-v8-migration.md).
+Gateway upgrade, verification and rollback: [8.0.79 upgrade](docs/gateway-upgrade-8.0.79-2026-11-19.md), live since 2026-11-20; 8.0.47 is the rollback target. Local KV is disabled (`server.kv-store.disabled: true`), keeping session/date-pin/replay state in memory as on 8.0.47, so backups need no bbolt support. Rollback removes this key first because 8.0.47 strict PATCH rejects it. The checkout validates sign-in and conversation moves on 8.0.30, 8.0.43, 8.0.47 and 8.0.79, and marks account-add tested on 8.0.47/8.0.79. Dashboard Codex sign-in uses the gateway credential lock and runtime confirmation; extend its exact-version allowlist only after `tests/gateway_replace_integration.py` passes. Legacy 8.0.7 remains excluded. The nested v8 config needs no schema migration; see the [migration history](docs/gateway-config-v8-migration.md).
 
 Verified 2026-10-27: `zz-gateway-8.0.30.conf` selects the live executable. `server.host` is empty, so inference listens on `*:8317`; nftables admits loopback and only the Mac over Tailscale. Management remains loopback-only (`management.allow-remote: false`). Mac inference connects directly to `http://100.64.0.10:8317`; management and the computer-only dashboard address use SSH forwards. Gateway retry policy is `request-retry: 5`, `max-retry-interval: 45` seconds and `max-retry-credentials: 2`. The Free Codex account's model listing excludes `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol` and `gpt-5.6-sol`; see [model routes](docs/standard-management-setup.md#model-routes).
 
