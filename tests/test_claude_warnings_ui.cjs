@@ -65,9 +65,10 @@ function harness(){
   h.data.gateway.claude_accounts=[{key:'a',auth_index:'a',email:a.email,near_limit:true},
     {key:'b',auth_index:'b',email:'b@example.test',routing_enabled:true,near_limit:false,runtime_available:true}];
   let state=h.c.claudeCardState(a,h.data);assert.equal(state.text,'Near limit');assert.match(state.title,/new sessions go to b@example.test/);assert.match(state.title,/Updated/);
-  h.data.gateway.claude_accounts[1].near_limit=true;
   h.data.gateway.claude_preference={status:'active',actual_priorities:{'a@example.test':100,'b@example.test':0}};
   h.data.gateway.claude_accounts[0].routing_enabled=true;
+  assert.match(h.c.claudeCardState(a,h.data).title,/new sessions still go here until it runs out/);
+  h.data.gateway.claude_accounts[1].near_limit=true;
   assert.match(h.c.claudeCardState(a,h.data).title,/All Claude accounts are near their limits/);
   delete h.data.gateway.claude_preference;
   assert.match(h.c.claudeCardState(a,h.data).title,/All Claude accounts are near their limits/);

@@ -33,10 +33,13 @@ time. The native T3 projection includes only these selected real windows.
 Single-window display evidence does not relax Codex's two-slot recovery guard.
 
 Claude primary header readings retain their `allowed`, `allowed_warning` or
-`rejected` status; endpoint readings carry no header status. In both automatic
-routing modes, eligible accounts with a still-valid `allowed_warning` window
+`rejected` status; endpoint readings carry no header status. In Higher remaining
+quota mode, eligible accounts with a still-valid `allowed_warning` window
 rank after all eligible unwarned accounts, bypassing the stability margin across
-that boundary. If all are warned, the usual ranking and margins apply. A newer
+that boundary. If all are warned, the usual ranking and margins apply. Earliest
+reset ignores warnings: its purpose is to spend the soonest-expiring allowance,
+so a warned account keeps new sessions until a window is exhausted, when the
+usual eligibility rules exclude it. A newer
 non-warning reading or that window's reset clears the warning; an elapsed reset
 still requires fresh allowance evidence before routing can proceed. Existing
 session affinity is unchanged. The Claude account projection exposes `near_limit`

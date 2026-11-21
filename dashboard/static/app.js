@@ -668,10 +668,13 @@ function claudeCardState(a,data) {
       targets=routes.filter(r=>priorities[r.email]===highest);
     }else if(preference.status==='active')targets=routes.filter(r=>r.email===preference.preferred_email);
     if(!targets.length){const unwarned=routes.filter(r=>!r.near_limit);targets=unwarned.length?unwarned:routes;}
-    targets=targets.filter(r=>!(r.key===a.key && r.auth_index===a.auth_index));
+    const isSelf=r=>r.key===a.key && r.auth_index===a.auth_index;
+    const stillHere=targets.length>0 && targets.every(isSelf);
+    targets=targets.filter(r=>!isSelf(r));
     const allWarned=routes.length>0 && routes.every(r=>r.near_limit);
     const target=targets.map(r=>r.email || r.key).join(' or ') || 'the next available Claude account';
-    return {text:'Near limit',tone:'warn',title:`${allWarned?'All Claude accounts are near their limits':`Anthropic reports this account is near its limit · new sessions go to ${target}`} · ${freshness}`};
+    const where=stillHere?'new sessions still go here until it runs out':`new sessions go to ${target}`;
+    return {text:'Near limit',tone:'warn',title:`${allWarned?'All Claude accounts are near their limits':`Anthropic reports this account is near its limit · ${where}`} · ${freshness}`};
   }
   return state;
 }

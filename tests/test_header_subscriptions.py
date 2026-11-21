@@ -694,8 +694,24 @@ class ClaudeWarningTests(unittest.TestCase):
         body['five_hour']['status'] = 'allowed_warning'
         self.assertTrue(all('status' not in w for w in usage.normalize_claude(body)['windows']))
 
-    def test_warned_best_account_is_demoted_in_both_modes_for_either_primary_window(self):
-        for mode, best in (('earliest-weekly-reset', 0), ('highest-remaining-quota', 1)):
+    def test_earliest_reset_keeps_warned_account_with_earliest_reset(self):
+        for slot in ('5h', '7d'):
+            for current in (None, *[r['email'] for r in self.rows]):
+                with self.subTest(slot=slot, current=current):
+                    self.now += 60
+                    for index in (0, 1):
+                        for window in ('5h', '7d'):
+                            self.warn(index, window, 'allowed')
+                    baseline = self.choose(self.overview(), 'earliest-weekly-reset', current)
+                    self.now += 60
+                    self.warn(0, slot)
+                    plan = self.choose(self.overview(), 'earliest-weekly-reset', current)
+                    self.assertEqual(plan['preferred_email'], self.rows[0]['email'])
+                    self.assertEqual(plan, baseline)
+                    self.assertNotIn('near its limit', plan['reason'] or '')
+
+    def test_warned_best_account_is_demoted_in_quota_mode_for_either_primary_window(self):
+        for mode, best in (('highest-remaining-quota', 1),):
             for slot in ('5h', '7d'):
                 for current in (None, self.rows[best]['email']):
                     with self.subTest(mode=mode, slot=slot, current=current):
@@ -731,12 +747,14 @@ class ClaudeWarningTests(unittest.TestCase):
         self.now += 60
         self.warn(0)
         warned = self.overview()
-        for mode in ('earliest-weekly-reset', 'highest-remaining-quota'):
+        for mode in ('highest-remaining-quota',):
             with self.subTest(mode=mode):
                 self.assertEqual(self.choose(baseline, mode, current)['preferred_email'], current)
                 plan = self.choose(warned, mode, current)
                 self.assertEqual(plan['preferred_email'], self.rows[1]['email'])
                 self.assertIn('near its limit', plan['reason'])
+        self.assertEqual(self.choose(warned, 'earliest-weekly-reset', current),
+                         self.choose(baseline, 'earliest-weekly-reset', current))
         self.now += 60
         self.warn(1)
         all_warned = self.overview()
@@ -744,18 +762,20 @@ class ClaudeWarningTests(unittest.TestCase):
             self.assertEqual(self.choose(all_warned, mode, current), self.choose(baseline, mode, current))
 
     def test_newer_allowed_reading_clears_warning_but_older_one_does_not(self):
-        self.warn(0)
+        # Warnings only reorder quota mode, whose best account is the second row.
+        mode = 'highest-remaining-quota'
+        self.warn(1)
         warned = self.overview()
-        self.assertEqual(self.choose(warned, 'earliest-weekly-reset')['preferred_email'], self.rows[1]['email'])
-        self.rows[0]['quota']['observed_at'] = usage.stamp(NOW - 1)
-        self.rows[0]['quota']['signals']['Anthropic-Ratelimit-Unified-5h-Status'] = 'allowed'
-        self.assertEqual(self.choose(self.overview(), 'earliest-weekly-reset')['preferred_email'], self.rows[1]['email'])
+        self.assertEqual(self.choose(warned, mode)['preferred_email'], self.rows[0]['email'])
+        self.rows[1]['quota']['observed_at'] = usage.stamp(NOW - 1)
+        self.rows[1]['quota']['signals']['Anthropic-Ratelimit-Unified-5h-Status'] = 'allowed'
+        self.assertEqual(self.choose(self.overview(), mode)['preferred_email'], self.rows[0]['email'])
         self.now += 60
-        self.warn(0, status='allowed')
+        self.warn(1, status='allowed')
         cleared = self.overview()
-        view = cleared['gateway']['claude_accounts'][0]['_gateway_usage']
+        view = cleared['gateway']['claude_accounts'][1]['_gateway_usage']
         self.assertEqual(usage.claude_near_limit_windows(view, self.now), [])
-        self.assertEqual(self.choose(cleared, 'earliest-weekly-reset')['preferred_email'], self.rows[0]['email'])
+        self.assertEqual(self.choose(cleared, mode)['preferred_email'], self.rows[1]['email'])
 
     def test_warning_expires_at_its_window_reset_without_inventing_allowance(self):
         for slot, kind, reset in (('5h', 'five_hour', NOW + 3000), ('7d', 'seven_day', NOW + 100000)):
@@ -774,7 +794,8 @@ class ClaudeWarningTests(unittest.TestCase):
     def test_newer_endpoint_reading_clears_warning_and_endpoint_only_ranking_is_unchanged(self):
         self.warn(0)
         data = self.overview()
-        self.assertEqual(self.choose(data, 'earliest-weekly-reset')['preferred_email'], self.rows[1]['email'])
+        # Earliest reset ignores the warning and keeps the earliest reset.
+        self.assertEqual(self.choose(data, 'earliest-weekly-reset')['preferred_email'], self.rows[0]['email'])
         self.now += 60
         # Even an endpoint payload's status field must not create header evidence.
         self.call.return_value['body']['five_hour']['status'] = 'allowed_warning'

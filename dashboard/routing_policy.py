@@ -331,7 +331,11 @@ def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='
         raise Hold('No account currently reports available allowance')
     # Never compare a weekly percentage with a longer window's percentage.
     candidates = {e: c for e, c in candidates.items() if not c['secondary']} or candidates
-    warned = {e for e, c in candidates.items() if c.get('near_limit')}
+    quota = mode == 'highest-remaining-quota'
+    # Earliest reset exists to spend the soonest-expiring allowance, so a
+    # near-limit warning only reorders accounts in quota mode. Exhausted
+    # accounts are already excluded above.
+    warned = {e for e, c in candidates.items() if quota and c.get('near_limit')}
     unwarned = {e: c for e, c in candidates.items() if e not in warned}
     reason = None
     if warned and unwarned:
@@ -340,7 +344,6 @@ def choose(overview, now, mode='earliest-weekly-reset', current=None, provider='
         # Apply ranking and stability only within the unwarned group. If all
         # accounts are warned, preserve the existing ranking and margins.
         candidates = unwarned
-    quota = mode == 'highest-remaining-quota'
     # An unused weekly allowance has no measured reset. Sort it after known
     # resets without manufacturing a date in the observation or published plan.
     rank = lambda email: (-candidates[email]['remaining'] if quota else
