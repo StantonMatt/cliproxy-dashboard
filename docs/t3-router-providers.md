@@ -49,64 +49,81 @@ First connect the Antigravity subscription account to CLIProxyAPI. Installing
 the agent in T3 and signing the upstream account into the gateway are separate
 operations.
 
-### Give the agent explicit gateway model names
+### Give the agent known model names
 
-Read the models available to the gateway's Antigravity account. Choose a primary
-model, a Flash model and a Flash Lite model supported by that account. The agent
-may use the smaller models for auxiliary work.
+The agent builds T3's model picker itself. When `AGY_LLM_GATEWAY_MODELS` lists
+model IDs the agent recognizes, such as `gemini-4-neon-low` through
+`gemini-4-neon-xhigh`, it groups them into one model with a friendly name
+(**Gemini 4 Neon**) and a separate **Thinking Level** option. It then calls the
+gateway with the bare family name (`gemini-4-neon`) and sends the level in the
+request. Unrecognized IDs, including any `antigravity/…` prefix, appear as raw
+IDs without thinking levels.
 
-Merge aliases into the existing gateway configuration under
-`oauth.model-alias.antigravity`. Replace `PRO_ID`, `FLASH_ID` and `FLASH_LITE_ID`
-below with actual model IDs from that account; they are placeholders, not model
-names to send to the provider.
+The gateway's Antigravity account exposes each family only at its default level
+(for example `gemini-4-neon-xhigh`), so add one bare-family alias per family
+under `oauth.model-alias.antigravity`. Keep existing aliases. `fork: true`
+keeps the original IDs available to other clients.
 
 ```yaml
 oauth:
   model-alias:
     antigravity:
-      - name: "PRO_ID"
-        alias: "antigravity/PRO_ID"
-        fork: true
-      - name: "FLASH_ID"
-        alias: "antigravity/FLASH_ID"
-        fork: true
-      - name: "FLASH_LITE_ID"
-        alias: "antigravity/FLASH_LITE_ID"
-        fork: true
+      - {"name": "gemini-4-neon-xhigh", "alias": "gemini-4-neon", "fork": true}
+      - {"name": "gemini-4-carbon-high", "alias": "gemini-4-carbon", "fork": true}
+      - {"name": "gemini-4-argon-high", "alias": "gemini-4-argon", "fork": true}
+      - {"name": "gemini-4-hydrogen-xhigh", "alias": "gemini-4-hydrogen", "fork": true}
+      - {"name": "gemini-3.8-flash-high", "alias": "gemini-3.8-flash", "fork": true}
 ```
 
-Keep existing OAuth settings and aliases. `fork: true` keeps the original model
-IDs available to other clients. The prefix avoids collisions with direct
-provider models and prevents Antigravity's known-name normalization from
-shortening the selected gateway IDs.
+Use the families the account actually offers. The upstream model honours the
+requested level: on one prompt, Neon used about 2,250, 3,314 and 8,423 thought
+tokens at Low, High and Extra.
 
-Persist changes using the gateway's supported management interface. If a private
-file edit is necessary, preserve the config's inode, owner and permissions and
-flush it to disk, as described in README step 6. Verify hot reload and check that
-the aliases appear in an authenticated `GET /v1beta/models`. Do not restart an
-active gateway just to add aliases.
+With the root-owned config of README step 6, the management API cannot save:
+`PATCH /v0/management/oauth-model-alias` returns 500 and still changes the
+running handler's copy. Edit the file privately instead, preserving its inode,
+owner and permissions (`scripts/gateway_config.write_same_inode`), as described
+in README step 6. Check that the watcher logs the reload and that an
+authenticated `GET /v1beta/models` lists `models/gemini-4-neon`. Do not restart
+an active gateway just to add aliases.
+
+These bare names would clash if another gateway provider ever exposed a model
+with the same ID.
 
 ### Configure the T3 instance
 
 In **Settings → Providers**, enable Antigravity and install its official managed
 runtime. Leave **Binary path** empty so T3 continues to own installation and
-updates. Configure these environment variables, replacing the same model
-placeholders as above:
+updates. Configure these environment variables:
 
 | Variable | Value |
 | --- | --- |
 | `GOOGLE_GEMINI_BASE_URL` | `http://127.0.0.1:8317` |
 | `AGY_LLM_GATEWAY_URL` | `http://127.0.0.1:8317` |
 | `AGY_LLM_GATEWAY_WIRE_PROTOCOL` | `genai` |
-| `AGY_LLM_GATEWAY_MODELS` | `antigravity/PRO_ID,antigravity/FLASH_ID,antigravity/FLASH_LITE_ID` |
-| `AGY_LLM_GATEWAY_TIER_PRO` | `antigravity/PRO_ID` |
-| `AGY_LLM_GATEWAY_TIER_FLASH` | `antigravity/FLASH_ID` |
-| `AGY_LLM_GATEWAY_TIER_FLASH_LITE` | `antigravity/FLASH_LITE_ID` |
+| `AGY_LLM_GATEWAY_MODELS` | see below |
+| `AGY_LLM_GATEWAY_TIER_PRO` | `gemini-4-neon-xhigh` |
+| `AGY_LLM_GATEWAY_TIER_FLASH` | `gemini-3.8-flash-high` |
+| `AGY_LLM_GATEWAY_TIER_FLASH_LITE` | `gemini-3.1-flash-lite` |
 | `NO_PROXY` | `127.0.0.1,localhost,::1` |
 
-Additional text models can be added to the explicit list after adding matching
-aliases. This list does not automatically track future account model changes.
-Exclude image-only models from the coding agent's list.
+`AGY_LLM_GATEWAY_MODELS` lists every level to offer, comma-separated:
+
+```text
+gemini-4-neon-low,gemini-4-neon-medium,gemini-4-neon-high,gemini-4-neon-xhigh,
+gemini-4-carbon-low,gemini-4-carbon-medium,gemini-4-carbon-high,
+gemini-4-argon-low,gemini-4-argon-medium,gemini-4-argon-high,
+gemini-4-hydrogen-low,gemini-4-hydrogen-medium,gemini-4-hydrogen-high,gemini-4-hydrogen-xhigh,
+gemini-3.8-flash-low,gemini-3.8-flash-medium,gemini-3.8-flash-high,gemini-3.1-flash-lite
+```
+
+Enter it as one line without spaces. The picker then shows six models: Neon and
+Hydrogen with Low/Medium/High/Extra, Carbon, Argon and 3.8 Flash with
+Low/Medium/High, and Gemini 3.1 Flash Lite. Leave Claude and other non-Gemini
+models out: the agent shows them as raw IDs, and Claude is better used through
+T3's Claude instance. Threads saved with a model ID that is no longer listed
+must select a model again. This list does not track future account model
+changes. Exclude image-only models.
 
 Choose **Gemini API key** as the sign-in method, enter the **gateway client key**
 created in README step 6, and choose **Connect**. This is the local key accepted
@@ -146,6 +163,8 @@ returned content. This exercises a tool turn as well as text generation.
 The integration was checked with CLIProxyAPI 8.0.79, Codex 0.171.0, Claude Code
 2.1.330, Antigravity 1.5.15 and T3 0.1.12-nightly.20261123.5151. Antigravity
 completed both a real response and a file-read tool turn through the gateway.
+The thinking-level picker setup above was checked with a Gemini 4 Neon Low
+request from T3 through the gateway.
 These observations describe a configured Linux installation, not an end-to-end
 clean-machine installer test or a guarantee for future releases. No account
 identifiers, credentials, logs or host settings are included here.
