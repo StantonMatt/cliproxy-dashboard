@@ -118,6 +118,8 @@ def t3_health(runtime_path=None, proc_root=Path('/proc')):
     try:
         runtime = json.loads(runtime_path.read_text())
         pid, port, host = runtime.get('pid'), runtime.get('port'), runtime.get('host')
+        # A server on every address is still reachable on this machine's loopback.
+        host = {'0.0.0.0': '127.0.0.1', '::': '::1'}.get(host, host) if isinstance(host, str) else host
         if (type(pid) is not int or pid <= 1 or type(port) is not int or
                 not 1 <= port <= 65535 or host not in ('127.0.0.1', 'localhost', '::1')):
             return result

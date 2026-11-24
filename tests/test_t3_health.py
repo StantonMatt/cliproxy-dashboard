@@ -72,6 +72,14 @@ class T3HealthTests(unittest.TestCase):
         self.assertEqual(written['codex'], {'status': 'healthy'})
         self.assertEqual(written['t3'], {'status': 'down', 'client': 't3'})
 
+    def test_server_on_every_address_is_checked_on_loopback(self):
+        for listen, loopback in (('0.0.0.0', '127.0.0.1'), ('::', '::1')):
+            with self.subTest(listen=listen):
+                self.runtime.write_text(json.dumps({'pid': 43210, 'host': listen, 'port': 3773}))
+                with patch.object(probe.os, 'kill'), patch.object(probe.socket, 'create_connection', return_value=Mock()) as connect:
+                    self.assertEqual(probe.t3_health(self.runtime, self.proc)['status'], 'healthy')
+                    connect.assert_called_once_with((loopback, 3773), timeout=2)
+
     def test_ipv6_loopback_is_accepted_and_the_ops_unit_allows_it(self):
         self.runtime.write_text(json.dumps({'pid': 43210, 'host': '::1', 'port': 3773}))
         with patch.object(probe.os, 'kill'), patch.object(probe.socket, 'create_connection', return_value=Mock()) as connect:
