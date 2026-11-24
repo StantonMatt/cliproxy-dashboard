@@ -115,6 +115,10 @@ assert.match(recentHTML,/Speed was Normal · still ran fast/);
 assert.match(source,/function renderAccounts\(gateway\) \{\n  if\(reorderHold\(\) \|\| speedHold\(\)\)return;\n  speedDeferred=false;/);
 assert.match(source,/routingRow\(a,gateway,speedRow\(a,gateway\),speedStatus\(a,gateway\)\)/);
 assert.match(source,/<label for="route-\$\{esc\(a\.id\)\}"><span class="route-use">Use for <\/span>routing<\/label>/);
+// The routing switch keeps its 18px row: no Routing/Speed headings or On/Off value labels on the cards.
+assert.doesNotMatch(source,/routeLabel|route-title|route-value|speed-heading|speed-note/);
+assert.doesNotMatch(css,/route-title|route-value|speed-heading|speed-note/);
+assert.match(css,/\.account-route\.reserved \.route-toggle\{height:18px\}/);
 assert.doesNotMatch(source,/fastRow|fastStatus|saveFastMode|data-fast-account|Allow fast mode/);
 // Ultrafast has no status line of its own any more (the question says what it applies to).
 assert.doesNotMatch(source,/speedScope|on other models|Ultrafast on \$\{/);
@@ -155,6 +159,7 @@ const context = vm.createContext({Date:FakeDate,console,JSON,Map,Set,Error,Numbe
   reconcileAccess(){},reconcileClaude(){},routingEpoch:0,loadDone:Promise.resolve(),layoutSaved:null,
   current:null,failed:false,busy:false,today:null,
   esc:s=>String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
+  icon:id=>`<svg aria-hidden="true"><use href="#${id}"/></svg>`,
   CSS:{escape:s=>s},
   $:id=>id==='account-grid'?grid:id==='speed-confirm'?pop:(nodes.get(id) || nodes.set(id,{textContent:''}).get(id)),
   accountEvents:{addEventListener(type,fn){(docListeners[type] ||= []).push(fn);}},
@@ -177,7 +182,7 @@ const html = () => context.speedRow(context.current.gateway.accounts[0],context.
 const last = () => renders.at(-1);
 const thumb = markup => ({value:markup.match(/ value="(\d)"/)[1],at:markup.match(/data-at="(\d)"/)[1],max:markup.match(/ max="(\d)"/)[1],
   text:markup.match(/aria-valuetext="([^"]+)"/)[1],on:markup.match(/<span class="on">([^<]+)<\/span>/)[1],two:/account-speed two/.test(markup),
-  line:(markup.match(/<div class="fast-usage[^"]*"[^>]*>(.*)<\/div>$/)||[])[1]||null,tone:(markup.match(/<div class="(fast-usage[^"]*)"/)||[])[1]||null,
+  line:(markup.match(/<div class="fast-usage[^"]*"[^>]*>(.*?)(?:<span class="visually-hidden">[^<]*<\/span>)?<\/div>$/)||[])[1]||null,tone:(markup.match(/<div class="(fast-usage[^"]*)"/)||[])[1]||null,
   busy:/aria-busy="true"/.test(markup),disabled:/ disabled/.test(markup),off:/class="ultra-off"/.test(markup),title:(markup.match(/ title="([^"]+)"><\/span>/)||[])[1]||null});
 
 // A known catalog without Fast shows only a muted Normal label, even with a saved higher level or failed enforcement.
@@ -234,18 +239,21 @@ for (const [level,name] of [['normal','Normal'],['fast','Fast']]) {
   assert.deepEqual([t.on,t.max,t.off,t.title,t.line],[name,'2',true,'Ultrafast needs a gateway plugin update',null]);
 }
 setAccount(view('ultrafast',{reason:'plugin_outdated'}));
-assert.deepEqual([thumb(html()).on,thumb(html()).off,thumb(html()).line,thumb(html()).tone],['Ultrafast',false,'Gateway plugin needs updating · running Fast','fast-usage warn']);
+assert.deepEqual([thumb(html()).on,thumb(html()).off,thumb(html()).line,thumb(html()).tone],['Ultrafast',false,'Ultrafast unavailable · running Fast','fast-usage warn']);
 // A gateway that can't enforce the setting says so at every stop.
 for (const level of ['normal','fast','ultrafast']) {
   setAccount(view(level,{reason:'plugin_not_enforced',enforcement:'unavailable'}));const t=thumb(html());
-  assert.deepEqual([t.line,t.tone],['Not enforced · gateway plugin not loaded','fast-usage warn'],level);
+  assert.deepEqual([t.line,t.tone],['Speed setting not applied','fast-usage warn'],level);
+  assert.match(html(),/role="status" title="Your speed choice is saved, but the router is not applying it/);
+  assert.match(html(),/aria-describedby="speed-one-status"/);
   assert.equal(t.off,level!=='ultrafast');
 }
-setAccount(view('fast',{enforcement:'unknown'}));assert.equal(thumb(html()).line,'Not enforced · gateway plugin not loaded');
+setAccount(view('fast',{enforcement:'unknown'}));assert.equal(thumb(html()).line,'Speed setting not verified');
+assert.doesNotMatch(html(),/plugin is not loaded/,'unknown enforcement must not claim a missing plugin');
 // The fallback for an account the overview couldn't match, and a pre-levels view, read as two stops.
 setAccount({allowed:true,level:'fast',changed_at:null,enforcement:'unknown',levels:['normal','fast'],ultrafast_available:false,
   ultrafast_unavailable_reason:'catalog_pending',ultrafast_models:[],plugin_policy_schema:null,plugin_supports_levels:false,catalog:{status:'pending',fetched_at:null,attempted_at:null}});
-assert.deepEqual([thumb(html()).two,thumb(html()).on,thumb(html()).line],[true,'Fast','Not enforced · gateway plugin not loaded']);
+assert.deepEqual([thumb(html()).two,thumb(html()).on,thumb(html()).line],[true,'Fast','Speed setting not verified']);
 setAccount({allowed:false,changed_at:null,enforcement:'active'});assert.deepEqual([thumb(html()).two,thumb(html()).on],[true,'Normal']);
 setAccount(undefined);assert.deepEqual([thumb(html()).two,thumb(html()).on],[true,'Fast']);
 // Read-only and unreachable dashboards: disabled, with the existing wording.
@@ -309,7 +317,7 @@ function checkRetryFocus() {
   assert.equal(document.activeElement,targets.get('[data-speed-retry="one"]'),'refresh preserves focus on the unused retry button');
   vm.runInContext("fastErrors.delete('one');fastFocus='one';renderAccounts(current.gateway)",focusContext);
   assert.equal(document.activeElement,targets.get('[data-speed-account="one"]'),'focus falls back to the slider when retry disappears');
-  assert.match(cardMarkup,/<input id="route-one"[^>]*aria-label="Use for routing"/,'the routing switch keeps its full name when narrow cards hide Use for');
+  assert.match(cardMarkup,/<input id="route-one"[^>]*aria-label="Use for routing"/,'the routing switch keeps its full accessible name');
 }
 
 // The Ultrafast question (speedCommit/speedAsk*): every move to Ultrafast asks first, whichever way it was made.
