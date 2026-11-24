@@ -103,9 +103,9 @@ def install(data_home):
     print(say('Router personal instalado y visible en la bandeja.', 'Router personal installed and shown in the tray.'))
 
 
-def uninstall(data_home):
+def uninstall(data_home, problems=None):
     """Remove what can be removed; a missing tray or tool never stops the other steps."""
-    problems = []
+    problems = list(problems or [])
     if shutil.which('qdbus6'):
         try:
             if not update_trays(True):
@@ -134,9 +134,15 @@ def main():
     config_home = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
     state_home = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
     data_home = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))
-    backup_config(config_home, state_home)
+    problems = []
+    try:
+        backup_config(config_home, state_home)
+    except OSError as error:
+        if not args.uninstall:
+            raise
+        problems.append(say('copia de configuración: ', 'configuration backup: ') + failure(error))
     if args.uninstall:
-        uninstall(data_home)
+        uninstall(data_home, problems)
     else:
         install(data_home)
 

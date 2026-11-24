@@ -75,6 +75,20 @@ class InstallerTests(unittest.TestCase):
             installer.uninstall(self.data)
         self.assertEqual(desktop.commands(), ['qdbus6', 'kpackagetool6 --remove'])
 
+    def test_uninstall_continues_and_reports_backup_failure_with_other_problems(self):
+        for tray_error in (None, RuntimeError('No such service')):
+            with self.subTest(tray_error=tray_error), FakeDesktop(tray_error=tray_error) as desktop:
+                with patch.object(installer.sys, 'argv', ['install.py', '--uninstall']), \
+                     patch.dict(installer.os.environ, {'XDG_DATA_HOME': str(self.data), 'LC_ALL': 'en_US.UTF-8'}), \
+                     patch.object(installer, 'backup_config', side_effect=PermissionError('State directory is read-only')):
+                    with self.assertRaises(RuntimeError) as raised:
+                        installer.main()
+                self.assertIn('Uninstall incomplete: configuration backup: State directory is read-only',
+                              str(raised.exception))
+                if tray_error:
+                    self.assertIn('tray: No such service', str(raised.exception))
+                self.assertEqual(desktop.commands(), ['qdbus6', 'kpackagetool6 --remove'])
+
     def test_uninstall_continues_when_plasma_cannot_update_the_tray(self):
         error = subprocess.CalledProcessError(1, 'qdbus6', stderr='No such service')
         with FakeDesktop(tray_error=error) as desktop:
