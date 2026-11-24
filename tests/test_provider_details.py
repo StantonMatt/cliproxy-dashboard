@@ -72,6 +72,26 @@ class AccountDetailsTests(unittest.TestCase):
         self.assertEqual(old['error'], 'http_429')
         self.assertIsNone(cache.view(dict(account(), auth_index='different'))['plan'])
 
+    def test_google_profile_success_does_not_skip_quota_failure_backoff(self):
+        elapsed = [0]
+        clocks = dict(clock=lambda: elapsed[0], wall_clock=lambda: NOW + elapsed[0], jitter=lambda: 0)
+        profiles, quota = subscriptions.Profiles(**clocks), usage.UsageCache(**clocks)
+        file = dict(account(), project_id='fixture-project')
+        quota_calls = []
+        def call(_, request):
+            if request['url'].endswith(':fetchAvailableModels'):
+                quota_calls.append(elapsed[0])
+                return dict(status_code=503)
+            return dict(status_code=200, body=profile())
+        # Quota failures back off 300 s, then 600 s; profile reads are due every 300 s.
+        for elapsed[0] in (0, 300, 600, 900):
+            profiles.fetch(file, call, quota)
+            try:
+                quota.fetch(file, call)
+            except usage.RefreshError:
+                pass
+        self.assertEqual(quota_calls, [0, 300, 900])
+
     def test_provider_details_bind_to_both_file_and_credential(self):
         info = dict(provider='antigravity', key=account()['name'], auth_index=account()['auth_index'],
                     plan='Google AI Pro', checked_at=usage.stamp(NOW), current=True)

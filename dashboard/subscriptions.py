@@ -94,7 +94,10 @@ class Profiles:
         usage_view = usage_cache.cached(file) or {}
         # A model block returning after a retry must not start a profile read either.
         self.cache.model_retries = usage_cache.model_retries
-        event_due = usage_cache.event_due(file)
+        # Only Claude reads its profile and usage as one event. Antigravity's
+        # profile and quota endpoints keep independent failure backoffs.
+        coupled = file['type'] == 'claude'
+        event_due = coupled and usage_cache.event_due(file)
         request = (dict(auth_index=file['auth_index'], method='POST', url=ANTIGRAVITY_PROFILE,
                         header={'Authorization': 'Bearer $TOKEN$', 'Content-Type': 'application/json',
                                 'User-Agent': 'antigravity'},
@@ -111,7 +114,7 @@ class Profiles:
         except usage.RefreshError:
             # An independently cooled profile must not prevent a usage refresh.
             return self.cache.cached(file)
-        if view.get('status') == 'ok' and view.get('attempted_at') != previous.get('attempted_at'):
+        if coupled and view.get('status') == 'ok' and view.get('attempted_at') != previous.get('attempted_at'):
             # One event reads profile first, then usage; the marker retains usage Retry-After.
             usage_cache.due_now(file)
         return view
