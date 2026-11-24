@@ -12,67 +12,31 @@ PLUGIN = 'org.kde.plasma.routerpersonal'
 HERE = Path(__file__).resolve().parent
 
 
+def spanish(environ=os.environ):
+    # The same order as gettext: the first non-empty variable decides.
+    for name in ('LC_ALL', 'LC_MESSAGES', 'LANG'):
+        if environ.get(name):
+            return environ[name].lower().startswith('es')
+    return False
+
+
+def say(es, en):
+    return es if spanish() else en
+
+
 def run(*args):
     return subprocess.run(args, check=True, text=True, capture_output=True, timeout=30).stdout.strip()
 
 
-def remove_browser_profile(data_home):
-    profile = data_home / 'router-personal-tray/browser'
-    if profile.exists():
-        shutil.rmtree(profile)
-    (data_home / 'router-personal-tray/open.lock').unlink(missing_ok=True)
+def failure(error):
+    detail = getattr(error, 'stderr', '') or str(error)
+    # TimeoutExpired keeps captured stderr as bytes even with text=True.
+    return (detail.decode('utf-8', errors='replace') if isinstance(detail, bytes) else detail).strip()
 
 
-RULE = 'router-personal-dashboard'
-# KWin applies rules before Plasma's task manager sees a new window, so the
-# dashboard never flashes there. Exact class match: only the dedicated window.
-RULE_KEYS = {'Description': 'Router personal: dashboard window', 'wmclass': 'chrome-127.0.0.1__-Default',
-             'wmclassmatch': '1', 'wmclasscomplete': 'false', 'skiptaskbar': 'true', 'skiptaskbarrule': '2',
-             'skipswitcher': 'true', 'skipswitcherrule': '2', 'skippager': 'true', 'skippagerrule': '2'}
-
-
-def set_window_rule(remove):
-    config = ('--file', 'kwinrulesrc')
-    names = [n for n in run('kreadconfig6', *config, '--group', 'General', '--key', 'rules').split(',')
-             if n and n != RULE]
-    if remove:
-        for key in RULE_KEYS:
-            run('kwriteconfig6', *config, '--group', RULE, '--key', key, '--delete')
-    else:
-        for key, value in RULE_KEYS.items():
-            run('kwriteconfig6', *config, '--group', RULE, '--key', key, value)
-        names.append(RULE)
-    run('kwriteconfig6', *config, '--group', 'General', '--key', 'rules', ','.join(names))
-    run('kwriteconfig6', *config, '--group', 'General', '--key', 'count', str(len(names)))
-    run('qdbus6', 'org.kde.KWin', '/KWin', 'org.kde.KWin.reconfigure')
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--uninstall', action='store_true')
-    args = parser.parse_args()
-    for tool in ('kpackagetool6', 'qdbus6', 'kreadconfig6', 'kwriteconfig6'):
-        if not shutil.which(tool):
-            parser.error(f'Falta {tool}; ejecuta este script en una sesión de Plasma 6.')
-    config_home = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
-    config = config_home / 'plasma-org.kde.plasma.desktop-appletsrc'
-    state_home = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
-    backup_dir = state_home / 'router-personal-tray/plasma-backup'
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_dir.chmod(0o700)
-    stamp = dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
-    if config.exists():
-        backup = backup_dir / (config.name + '.' + stamp)
-        shutil.copy2(config, backup)
-        print(f'Copia de configuración: {backup}')
-    data_home = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))
-    package = data_home / 'plasma/plasmoids' / PLUGIN
-    if not args.uninstall:
-        action = '--upgrade' if package.exists() else '--install'
-        print(run('kpackagetool6', '--type', 'Plasma/Applet', action, str(HERE / 'package')))
-    # Current Plasma embeds the tray containment; older Plasma 6 versions use
-    # SystrayContainmentId. Configure through its live scripting API in either case.
-    script = r'''
+# Current Plasma embeds the tray containment; older Plasma 6 versions use
+# SystrayContainmentId. Configure through its live scripting API in either case.
+TRAY_SCRIPT = r'''
 var count = 0;
 var id = "org.kde.plasma.routerpersonal";
 var remove = UNINSTALL;
@@ -100,23 +64,86 @@ panels().forEach(function(panel) {
         change(containmentId ? desktopById(containmentId) : widget);
     });
 });
-print("Bandejas actualizadas: " + count);
-if (!count) throw new Error("No se encontró una bandeja del sistema; añade una al panel.");
-'''.replace('UNINSTALL', 'true' if args.uninstall else 'false')
-    result = run('qdbus6', 'org.kde.plasmashell', '/PlasmaShell', 'org.kde.PlasmaShell.evaluateScript', script)
-    print(result)
-    if 'Error' in result or 'Bandejas actualizadas: 0' in result:
-        raise RuntimeError('Plasma no pudo actualizar la bandeja; no se reinició la sesión.')
-    set_window_rule(args.uninstall)
+print("TRAYS=" + count);
+'''
+
+
+def update_trays(remove):
+    """Return how many system trays were updated; raise if Plasma could not run the script."""
+    result = run('qdbus6', 'org.kde.plasmashell', '/PlasmaShell', 'org.kde.PlasmaShell.evaluateScript',
+                 TRAY_SCRIPT.replace('UNINSTALL', 'true' if remove else 'false'))
+    count = next((line.split('=', 1)[1] for line in result.splitlines() if line.startswith('TRAYS=')), None)
+    if 'Error' in result or count is None or not count.isdigit():
+        raise RuntimeError(result or say('Plasma no respondió', 'Plasma did not answer'))
+    return int(count)
+
+
+def backup_config(config_home, state_home):
+    config = config_home / 'plasma-org.kde.plasma.desktop-appletsrc'
+    backup_dir = state_home / 'router-personal-tray/plasma-backup'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir.chmod(0o700)
+    if config.exists():
+        backup = backup_dir / (config.name + '.' + dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+        shutil.copy2(config, backup)
+        print(say(f'Copia de configuración: {backup}', f'Configuration backup: {backup}'))
+
+
+def install(data_home):
+    for tool in ('kpackagetool6', 'qdbus6'):
+        if not shutil.which(tool):
+            raise RuntimeError(say(f'Falta {tool}; ejecuta este script en una sesión de Plasma 6.',
+                                   f'{tool} is missing; run this script in a Plasma 6 session.'))
+    package = data_home / 'plasma/plasmoids' / PLUGIN
+    action = '--upgrade' if package.exists() else '--install'
+    print(run('kpackagetool6', '--type', 'Plasma/Applet', action, str(HERE / 'package')))
+    if not update_trays(False):
+        raise RuntimeError(say('No se encontró una bandeja del sistema; añade una al panel.',
+                               'No system tray was found; add one to a panel.'))
+    print(say('Router personal instalado y visible en la bandeja.', 'Router personal installed and shown in the tray.'))
+
+
+def uninstall(data_home):
+    """Remove what can be removed; a missing tray or tool never stops the other steps."""
+    problems = []
+    if shutil.which('qdbus6'):
+        try:
+            if not update_trays(True):
+                print(say('No hay bandeja del sistema; no hay nada que quitar de ella.',
+                          'No system tray found; nothing to remove from it.'))
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+            problems.append(say('bandeja: ', 'tray: ') + failure(error))
+    else:
+        print(say('Falta qdbus6; se omite la bandeja.', 'qdbus6 is missing; skipping the tray.'))
+    if (data_home / 'plasma/plasmoids' / PLUGIN).exists():
+        try:
+            if not shutil.which('kpackagetool6'):
+                raise RuntimeError(say('falta kpackagetool6', 'kpackagetool6 is missing'))
+            print(run('kpackagetool6', '--type', 'Plasma/Applet', '--remove', PLUGIN))
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+            problems.append(say('paquete: ', 'package: ') + failure(error))
+    if problems:
+        raise RuntimeError(say('Desinstalación incompleta: ', 'Uninstall incomplete: ') + '; '.join(problems))
+    print(say('Router personal desinstalado.', 'Router personal uninstalled.'))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--uninstall', action='store_true')
+    args = parser.parse_args()
+    config_home = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
+    state_home = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
+    data_home = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))
+    backup_config(config_home, state_home)
     if args.uninstall:
-        print(run('kpackagetool6', '--type', 'Plasma/Applet', '--remove', PLUGIN))
-        remove_browser_profile(data_home)
-    print('Router personal desinstalado.' if args.uninstall else 'Router personal instalado y visible en la bandeja.')
+        uninstall(data_home)
+    else:
+        install(data_home)
 
 
 if __name__ == '__main__':
     try:
         main()
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
-        print(getattr(error, 'stderr', '') or str(error), file=sys.stderr)
+        print(failure(error), file=sys.stderr)
         sys.exit(1)
