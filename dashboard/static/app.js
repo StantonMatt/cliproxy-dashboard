@@ -747,8 +747,9 @@ function extraUsageHtml(a) {
   const checked=a.extra_usage_checked_at || a.checked_at, age=Date.now()-Date.parse(checked);
   const stale=!Number.isFinite(age) || age<0 || age>900000 || a.status==='error';
   const reason={out_of_credits:'No usage credits available',user_disabled:'Disabled by you',spend_limit_reached:'Spending limit reached'}[extra.disabled_reason] || '';
-  const detail=[reason,Number.isFinite(extra.used) ? currency(extra.used,extra.currency)+' used' : '',checked ? 'As of '+dateTime(checked) : ''].filter(Boolean).join(' · ');
-  return `<div class="reset-block"><span title="${esc(detail)}">Extra usage${stale ? ' · last known' : ''}</span><strong title="${esc(detail)}">${esc(extraUsageText(extra))}</strong></div>`;
+  // Staleness lives in the tooltip and a muted value so the label stays short enough to share the row.
+  const detail=[stale ? 'Last known' : '',reason,Number.isFinite(extra.used) ? currency(extra.used,extra.currency)+' used' : '',checked ? 'As of '+dateTime(checked) : ''].filter(Boolean).join(' · ');
+  return `<div class="reset-block${stale ? ' last-known' : ''}"><span title="${esc(detail)}">Extra usage</span><strong title="${esc(detail)}">${esc(extraUsageText(extra))}</strong></div>`;
 }
 function watchFor(id) { return (current?.watch_accounts || []).find(a => a.id === id) || providerData().find(p=>p.id==='claude')?.accounts.map(a=>({...a,id:a.watch_id || a.key})).find(a=>a.id===id); }
 function watchResets(a) { return a?.resets && typeof a.resets === 'object' ? a.resets : null; }

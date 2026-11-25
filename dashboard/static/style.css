@@ -365,6 +365,8 @@ a.status-item:focus-visible{outline-width:1.5px;outline-offset:1px;border-radius
 .account-dates .reset-block{white-space:nowrap}
 .account-dates:has(>.usage-credits){column-gap:16px}
 .usage-credits.renewal-soon strong{color:var(--amber)}
+.account-dates .credits-button{align-self:flex-start}
+.reset-block.last-known strong{color:var(--muted)}
 .account-bottom>.account-state{flex:1 1 100%;min-width:0;min-height:22px;margin:0;font-size:11px}
 .account-bottom>.account-state>.usage-refresh{margin-left:auto}
 .state-text{display:inline-flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;border-radius:5px;background:none;color:inherit;font:inherit;text-align:left;cursor:default}

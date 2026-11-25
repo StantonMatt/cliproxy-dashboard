@@ -44,7 +44,7 @@ test('confirmed Claude tier and extra-usage off are visible without inventing a 
   assert.equal(h.c.extraUsageHtml({...a,extra_usage:null}),'');
   assert.equal(h.c.extraUsageHtml({...a,extra_usage:{}}),'');
   a.extra_usage_checked_at=new FakeDate(clock-3600000).toISOString();
-  assert.match(h.c.extraUsageHtml(a),/Extra usage · last known/);
+  assert.match(h.c.extraUsageHtml(a),/class="reset-block last-known"><span title="Last known · [^"]*">Extra usage<\/span>/);
 });
 const faultCases=[
   ['gateway unavailable',a=>{a.runtime_available=false;},/One account ready/],
